@@ -1,0 +1,16 @@
+{
+  "name": "siagasos",
+  "private": true,
+  "packageManager": "pnpm@9.15.4",
+  "scripts": {
+    "dev:api": "pnpm --filter @siagasos/api dev",
+    "migrate": "pnpm --filter @siagasos/api migrate",
+    "build": "pnpm -r build",
+    "typecheck": "pnpm -r typecheck",
+    "test": "pnpm -r test",
+    "smoke": "pnpm --filter @siagasos/api smoke"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.3"
+  }
+}

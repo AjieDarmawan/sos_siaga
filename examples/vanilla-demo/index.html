@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>SiagaSOS — demo vanilla</title>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 420px; margin: 40px auto; padding: 0 16px; color: #101828; }
+    #sos { width: 160px; height: 160px; border-radius: 50%; border: 0; background: #d92d20; color: #fff; font-size: 32px; font-weight: 700; touch-action: none; user-select: none; }
+    #sos[disabled] { background: #475467; font-size: 14px; }
+    small { color: #475467; display: block; margin-top: 8px; }
+    input { width: 100%; padding: 6px; margin: 4px 0 12px; box-sizing: border-box; }
+  </style>
+</head>
+<body>
+  <h1>Demo SiagaSOS</h1>
+  <label>Publishable key <input id="key" placeholder="pk_test_..." /></label>
+  <label>API URL <input id="url" value="http://localhost:4000" /></label>
+  <button id="sos">SOS</button>
+  <p id="status">Tahan tombol 3 detik untuk mengirim laporan.</p>
+  <small id="recipient"></small>
+  <small><a href="tel:110">Darurat polisi? Telepon 110</a></small>
+
+  <!-- Tanpa bundler: build lokal (pnpm --filter @siagasos/js build) atau https://unpkg.com/@siagasos/js -->
+  <script src="../../packages/sdk-js/dist/index.global.js"></script>
+  <script>
+    const $ = (id) => document.getElementById(id);
+    $('key').value = localStorage.getItem('demo:key') || '';
+    let sos, holdTimer, countdown;
+
+    function client() {
+      localStorage.setItem('demo:key', $('key').value.trim());
+      if (sos) sos.destroy();
+      sos = SiagaSOS.SiagaSOS.init({ apiKey: $('key').value.trim(), baseUrl: $('url').value, sourceKey: 'vanilla-demo' });
+      sos.getConfig().then((c) => ($('recipient').textContent = c.recipient_text)).catch(() => {});
+      sos.on('status', (r) => {
+        $('status').textContent = `${r.status} — ${r.statusMessage ?? ''}`;
+        $('sos').disabled = !['resolved', 'cancelled', 'false_alarm'].includes(r.status);
+        if (!$('sos').disabled) $('sos').textContent = 'SOS';
+      });
+      sos.on('queued', () => ($('status').textContent = 'Offline — laporan disimpan dan akan dikirim otomatis.'));
+      return sos;
+    }
+
+    function start() {
+      const s = client();
+      let n = 3;
+      $('sos').textContent = n;
+      countdown = setInterval(() => ($('sos').textContent = --n > 0 ? n : '…'), 1000);
+      holdTimer = setTimeout(async () => {
+        clearInterval(countdown);
+        $('sos').disabled = true;
+        $('sos').textContent = 'Terkirim';
+        try { await s.trigger({ category: 'general', message: 'Demo vanilla' }); }
+        catch (e) { $('status').textContent = `Gagal: ${e.message}`; $('sos').disabled = false; $('sos').textContent = 'SOS'; }
+      }, 3000);
+    }
+    function stop() {
+      clearTimeout(holdTimer);
+      clearInterval(countdown);
+      if (!$('sos').disabled) $('sos').textContent = 'SOS';
+    }
+    $('sos').addEventListener('pointerdown', start);
+    ['pointerup', 'pointerleave', 'pointercancel'].forEach((e) => $('sos').addEventListener(e, stop));
+  </script>
+</body>
+</html>
