@@ -19,16 +19,16 @@ Verifikasi: `pnpm smoke` (59 cek end-to-end terhadap API sungguhan + Postgres + 
 | F-10 | Antrian offline + idempotency | ✔ IndexedDB → localStorage → memori | `sdk-js/src/queue.ts` |
 | F-11 | Status ke pengguna ≤ 5 dtk | ✔ polling 4 dtk | `sdk-js/src/index.ts` |
 | F-12 | Live location tiap 15 dtk, berhenti saat selesai | ✔ | SDK + `POST /v1/sdk/reports/:id/locations` |
-| F-13 | Daftar + peta realtime dengan bunyi | ◐ backend SSE siap (`/portal/reports/stream`); UI belum | `lib/realtime.ts` |
-| F-14 | Ubah status + catatan, timeline | ✔ API | `lib/reports.ts#changeReport` |
-| F-15 | Filter periode & ekspor CSV | ✔ API | `routes/portal/reports.ts` |
+| F-13 | Daftar + peta realtime dengan bunyi | ✔ SSE + Leaflet/OSM + alarm Web Audio (ulang tiap 20 dtk selama ada laporan Baru) + notifikasi browser | `apps/portal/src/pages/Dashboard.tsx` |
+| F-14 | Ubah status + catatan, timeline | ✔ API + UI panel detail | `lib/reports.ts#changeReport`, `Dashboard.tsx` |
+| F-15 | Filter periode & ekspor CSV | ✔ API + UI (24 jam/7/30 hari, live/test, ekspor) | `routes/portal/reports.ts`, `Dashboard.tsx` |
 | F-16 | Email + web push ≤ 10 dtk | ◐ email ✔, web push belum | `lib/notify.ts` |
 | F-17 | Webhook HMAC + retry 24 jam + log | ✔ worker di proses API | `lib/webhooks.ts` |
 | F-18 | `/v1/reports` dengan secret key | ✔ (OpenAPI belum) | `routes/v1.ts` |
 | F-19 | Admin menonaktifkan app | ✔ | `routes/admin.ts` |
 | F-20 | Landing page | ✘ M1-frontend | — |
-| F-21 | Formulir 3 langkah, draf otomatis | ◐ API ✔, draf disimpan di frontend | — |
-| F-22 | Halaman status + perkiraan waktu | ✔ API | `GET /portal/onboarding/status` |
+| F-21 | Formulir 3 langkah, draf otomatis | ✔ draf di localStorage (tanpa password), validasi saat blur | `apps/portal/src/pages/Register.tsx` |
+| F-22 | Halaman status + perkiraan waktu | ✔ API + UI (unggah/unggah ulang dokumen, ajukan) | `apps/portal/src/pages/Onboarding.tsx` |
 | F-23 | Antrean review terlama dulu, pratinjau, checklist | ✔ API | `routes/admin.ts` |
 | F-24 | Approve / revisi / tolak + alasan + audit | ✔ | `POST /admin/accounts/:id/decision` |
 | F-25 | Email tiap status berubah | ✔ | `lib/mailer.ts` |
@@ -48,11 +48,13 @@ Verifikasi: `pnpm smoke` (59 cek end-to-end terhadap API sungguhan + Postgres + 
 7. **Live tanpa `Origin` / `X-SOS-Bundle` ditolak.** Kunci test dengan `allowed_origins` kosong menerima semua origin, agar curl dan localhost langsung jalan.
 8. **Dokumen dienkripsi AES-256-GCM di storage lokal.** Antarmuka `putPrivate/getPrivate` siap diganti S3/GCS/MinIO.
 9. **Webhook worker berjalan di proses API** (`FOR UPDATE SKIP LOCKED`, aman multi-instance). BullMQ bisa menggantikannya saat volume naik.
+11. **Portal dan dashboard responder satu app** (`apps/portal`), bukan `apps/dashboard` terpisah: login JWT, origin, dan data sama. Responder otomatis diarahkan ke `/dashboard` dan tidak melihat menu App/Tim.
+12. **Peta memakai tile OSM standar** yang diredam lewat CSS filter (tanpa API key). Basemap CARTO kini butuh API key. Untuk produksi bervolume tinggi, ganti ke penyedia tile berbayar (kebijakan tile OSM).
 10. **Re-registrasi setelah ditolak** tidak menghapus akun lama. NIB/email lama diarsipkan agar riwayat review tetap ada untuk audit.
 
 ## Belum dikerjakan (urut prioritas)
 
-1. Frontend: landing (F-20), portal registrasi 3 langkah + kelola app/kunci, panel admin, dashboard responder dengan peta + bunyi (F-13). Semuanya di `apps/*` sebagai Vite + React.
+1. Frontend sisa: landing (F-20) dan panel admin UI (F-23, F-24). Portal + dashboard sudah ada di `apps/portal`.
 2. Web push untuk responder (F-16), dengan VAPID dan tabel `push_subscriptions`.
 3. OpenAPI spec untuk `/v1` (F-18) + quickstart per platform.
 4. Pemindaian antivirus (ClamAV) saat unggah dokumen, dan penghapusan otomatis dokumen akun ditolak setelah 90 hari.
