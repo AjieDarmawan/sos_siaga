@@ -8,6 +8,7 @@ import { publishableKeyAuth } from '../middleware/keyAuth.js';
 import { changeReport, loadReport, onReportCreated, publicReport } from '../lib/reports.js';
 import { publish } from '../lib/realtime.js';
 import { config } from '../config.js';
+import { completeMediaUpload, createMediaSchema, createMediaUpload } from '../lib/media.js';
 
 /** /v1/sdk — dipanggil @siagasos/js dan SDK native dengan publishable key. */
 export const sdkRouter = Router();
@@ -139,4 +140,23 @@ sdkRouter.post('/reports/:id/cancel', async (req, res) => {
     return changeReport(c, cur.id, { status: 'cancelled', note: reason ?? 'Dibatalkan pengguna' }, { kind: 'reporter', name: cur.reporter_name }, k.appId);
   });
   res.json(publicReport(r));
+});
+
+// Lampiran foto/video/suara. Langkah 1: minta presigned PUT; perangkat mengunggah langsung ke object storage.
+sdkRouter.post('/reports/:id/media', async (req, res) => {
+  const k = req.key!;
+  const body = parse(createMediaSchema, req.body);
+  await enforce(`media:${req.params.id}`, 20, 600);
+  const out = await withTenant(k.accountId, async (c) => createMediaUpload(c, await loadReport(c, req.params.id!, k.appId), body, 'reporter'));
+  res.status(201).json(out);
+});
+
+// Langkah 2: konfirmasi upload selesai → server cek objek, lalu media tampil realtime di dashboard.
+sdkRouter.post('/reports/:id/media/:mediaId/complete', async (req, res) => {
+  const k = req.key!;
+  const out = await withTenant(k.accountId, async (c) => {
+    const r = await loadReport(c, req.params.id!, k.appId);
+    return completeMediaUpload(c, r, String(req.params.mediaId), { kind: 'reporter', name: r.reporter_name });
+  });
+  res.json(out);
 });

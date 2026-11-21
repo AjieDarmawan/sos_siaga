@@ -26,11 +26,11 @@ Verifikasi: `pnpm smoke` (59 cek end-to-end terhadap API sungguhan + Postgres + 
 | F-17 | Webhook HMAC + retry 24 jam + log | ✔ worker di proses API | `lib/webhooks.ts` |
 | F-18 | `/v1/reports` dengan secret key | ✔ (OpenAPI belum) | `routes/v1.ts` |
 | F-19 | Admin menonaktifkan app | ✔ | `routes/admin.ts` |
-| F-20 | Landing page | ✘ M1-frontend | — |
+| F-20 | Landing page | ✔ 7 bagian, animasi CSS, Lighthouse 94/100/100/100 (prod build) | `apps/portal/src/pages/Landing.tsx` |
 | F-21 | Formulir 3 langkah, draf otomatis | ✔ draf di localStorage (tanpa password), validasi saat blur | `apps/portal/src/pages/Register.tsx` |
 | F-22 | Halaman status + perkiraan waktu | ✔ API + UI (unggah/unggah ulang dokumen, ajukan) | `apps/portal/src/pages/Onboarding.tsx` |
-| F-23 | Antrean review terlama dulu, pratinjau, checklist | ✔ API | `routes/admin.ts` |
-| F-24 | Approve / revisi / tolak + alasan + audit | ✔ | `POST /admin/accounts/:id/decision` |
+| F-23 | Antrean review terlama dulu, pratinjau, checklist | ✔ API + UI (pratinjau PDF/gambar via signed URL → blob) | `routes/admin.ts`, `apps/admin` |
+| F-24 | Approve / revisi / tolak + alasan + audit | ✔ API + UI | `POST /admin/accounts/:id/decision`, `apps/admin/src/pages/AccountDetail.tsx` |
 | F-25 | Email tiap status berubah | ✔ | `lib/mailer.ts` |
 | F-26 | Unggah ulang hanya dokumen yang ditandai | ✔ | `PATCH /admin/documents/:id` + onboarding |
 | F-27 | Pengingat review > 36 jam kerja | ◐ `sla_warning` di antrean; notifikasi aktif belum | `lib/businessTime.ts` |
@@ -49,12 +49,17 @@ Verifikasi: `pnpm smoke` (59 cek end-to-end terhadap API sungguhan + Postgres + 
 8. **Dokumen dienkripsi AES-256-GCM di storage lokal.** Antarmuka `putPrivate/getPrivate` siap diganti S3/GCS/MinIO.
 9. **Webhook worker berjalan di proses API** (`FOR UPDATE SKIP LOCKED`, aman multi-instance). BullMQ bisa menggantikannya saat volume naik.
 11. **Portal dan dashboard responder satu app** (`apps/portal`), bukan `apps/dashboard` terpisah: login JWT, origin, dan data sama. Responder otomatis diarahkan ke `/dashboard` dan tidak melihat menu App/Tim.
+13. **Panel admin app terpisah** (`apps/admin`, origin & token sendiri di sessionStorage) supaya XSS di portal klien tidak bisa mencuri sesi admin. Komponen UI dipakai bersama lewat alias `@portal`.
+14. **Landing & docs di dalam `apps/portal`** (route publik `/`, `/docs`), bukan `apps/landing` terpisah: satu deploy, header login konsisten, Lighthouse tetap ≥ 90.
+15. **Media laporan (foto/video/suara) diunggah langsung ke MinIO lewat presigned PUT**, bukan lewat API. `ContentLength` ikut ditandatangani (file lebih besar ditolak storage), `complete` memverifikasi objek dengan HEAD. Bucket `sos-siaga` privat; dibaca lewat presigned GET 15 menit. Jalur `POST /v1/sdk/reports` tetap tidak bergantung pada storage.
+16. **MinIO membalas 403 (bukan 404) untuk objek yang belum ada** dan kadang belum melihat objek sesaat setelah PUT. `headObject` menganggap 403/404 sebagai "belum ada" dan mencoba ulang ±3 dtk.
+17. **Tema** disimpan per browser (localStorage `siagasos.theme`) dan dipasang skrip inline sebelum render. Warna aksen tidak menawarkan merah (dicadangkan untuk darurat).
 12. **Peta memakai tile OSM standar** yang diredam lewat CSS filter (tanpa API key). Basemap CARTO kini butuh API key. Untuk produksi bervolume tinggi, ganti ke penyedia tile berbayar (kebijakan tile OSM).
 10. **Re-registrasi setelah ditolak** tidak menghapus akun lama. NIB/email lama diarsipkan agar riwayat review tetap ada untuk audit.
 
 ## Belum dikerjakan (urut prioritas)
 
-1. Frontend sisa: landing (F-20) dan panel admin UI (F-23, F-24). Portal + dashboard sudah ada di `apps/portal`.
+1. Isi PRD asli belum ada di repo: landing dibuat dengan 7 bagian usulan (hero, masalah + untuk siapa, cara kerja, fitur, developer, verifikasi & paket, FAQ + CTA). Cocokkan begitu PRD tersedia (simpan sebagai `docs/PRD.md`).
 2. Web push untuk responder (F-16), dengan VAPID dan tabel `push_subscriptions`.
 3. OpenAPI spec untuk `/v1` (F-18) + quickstart per platform.
 4. Pemindaian antivirus (ClamAV) saat unggah dokumen, dan penghapusan otomatis dokumen akun ditolak setelah 90 hari.

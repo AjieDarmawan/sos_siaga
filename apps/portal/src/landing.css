@@ -4,6 +4,10 @@
 .lp h2 { font-size: clamp(26px, 3.4vw, 40px); line-height: 1.15; letter-spacing: -0.025em; }
 .lp h3 { font-size: 17px; }
 
+/* hero: langsung terlihat (opacity tetap 1 agar LCP tidak tertunda), hanya bergeser naik saat dimuat */
+.lp .rise { animation: rise 800ms var(--ease) both; animation-delay: var(--d, 0ms); }
+@keyframes rise { from { transform: translateY(18px); } }
+
 /* reveal on scroll */
 .lp .reveal { opacity: 0; transform: translateY(22px); transition: opacity 700ms var(--ease), transform 700ms var(--ease); transition-delay: var(--d, 0ms); }
 .lp .reveal.in { opacity: 1; transform: none; }
@@ -274,6 +278,7 @@
 /* ---------------------------------------------------------------- reduced motion: tampilkan keadaan akhir */
 @media (prefers-reduced-motion: reduce) {
   .lp .reveal { opacity: 1; transform: none; }
+  .lp .rise { animation: none; }
   .sos-ring .prog { stroke-dashoffset: 0; animation: none; opacity: 1; }
   .ps-1, .ps-3 { opacity: 0 !important; } .ps-2 { opacity: 1 !important; animation: none; }
   .p-new, .st-open { opacity: 1 !important; transform: none !important; animation: none !important; }

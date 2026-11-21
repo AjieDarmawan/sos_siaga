@@ -24,6 +24,25 @@ export const config = {
   portalOrigins: (process.env.PORTAL_ORIGINS ?? '').split(',').map((s) => s.trim()).filter(Boolean),
   webhookWorker: (process.env.WEBHOOK_WORKER ?? 'true') === 'true',
 
+  /** Object storage S3-compatible (MinIO) untuk media laporan. Kosong = fitur media nonaktif (503 media_disabled). */
+  s3: {
+    endpoint: process.env.S3_ENDPOINT ?? '',
+    region: process.env.S3_REGION || 'us-east-1',
+    accessKey: process.env.S3_ACCESS_KEY ?? '',
+    secretKey: process.env.S3_SECRET_KEY ?? '',
+    bucket: process.env.S3_BUCKET ?? 'sos-siaga',
+    forcePathStyle: (process.env.S3_FORCE_PATH_STYLE ?? 'true') === 'true',
+  },
+  media: {
+    maxPerReport: 10,
+    /** Batas ukuran per jenis (byte). Video pendek TKP; kompres di perangkat untuk durasi lebih panjang. */
+    maxBytes: { image: 10 * 1024 * 1024, audio: 15 * 1024 * 1024, video: 60 * 1024 * 1024 } as Record<'image' | 'video' | 'audio', number>,
+    uploadUrlTtlS: 900,
+    viewUrlTtlS: 900,
+    /** Lampiran masih boleh ditambah sampai N menit setelah laporan mencapai status akhir. */
+    graceAfterCloseMin: 30,
+  },
+
   // Aturan bisnis (PRD). Bisa dipindah ke tabel plans saat billing masuk.
   testReportsPerDay: 50,
   keyCacheTtlMs: 30_000, // revoke/suspend berlaku ≤ 60 detik (F-05, F-28)

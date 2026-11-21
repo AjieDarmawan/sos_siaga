@@ -7,6 +7,7 @@ import { catLabel, fmtAgo, fmtDate, fmtTime, REPORT_STATUS } from '../lib/format
 import { playAlarm, unlock } from '../lib/sound';
 import type { Report, ReportDetail, ReportStatus } from '../lib/types';
 import { ReportMap } from '../components/ReportMap';
+import { MediaBadges, MediaGallery } from '../components/MediaGallery';
 import { Alert, Badge, Button, Empty, Spinner, useToast } from '../components/ui';
 
 type Group = 'active' | 'all' | 'closed';
@@ -21,7 +22,8 @@ const inGroup = (r: Report, g: Group) => (g === 'all' ? true : g === 'active' ? 
 
 type StreamEvent =
   | { type: 'report.created' | 'report.status_changed' | 'report.cancelled' | 'report.note_added'; data: { report: Report; actor?: { name: string | null } } }
-  | { type: 'report.location_updated'; data: { report_id: string; location: { lat: number; lng: number; accuracy_m?: number | null; recorded_at?: string } } };
+  | { type: 'report.location_updated'; data: { report_id: string; location: { lat: number; lng: number; accuracy_m?: number | null; recorded_at?: string } } }
+  | { type: 'report.media_added'; data: { report_id: string; media: { kind: 'image' | 'video' | 'audio' } } };
 
 export function DashboardPage() {
   const { me, can } = useAuth();
@@ -79,6 +81,18 @@ export function DashboardPage() {
     es.onmessage = (m) => {
       let ev: StreamEvent;
       try { ev = JSON.parse(m.data); } catch { return; }
+      if (ev.type === 'report.media_added') {
+        const { report_id, media } = ev.data;
+        setById((prev) => {
+          const r = prev.get(report_id);
+          if (!r) return prev;
+          const c = { image: 0, video: 0, audio: 0, ...(r.media_count ?? {}) };
+          c[media.kind] += 1;
+          return new Map(prev).set(report_id, { ...r, media_count: c });
+        });
+        if (selectedRef.current === report_id) void loadDetail(report_id);
+        return;
+      }
       if (ev.type === 'report.location_updated') {
         const { report_id, location } = ev.data;
         setById((prev) => {
@@ -94,7 +108,7 @@ export function DashboardPage() {
         return;
       }
       const r = ev.data.report;
-      setById((prev) => new Map(prev).set(r.id, r));
+      setById((prev) => new Map(prev).set(r.id, { ...r, media_count: prev.get(r.id)?.media_count ?? null }));
       if (ev.type === 'report.created') {
         setFresh((s) => new Set(s).add(r.id));
         setTimeout(() => setFresh((s) => { const n = new Set(s); n.delete(r.id); return n; }), 4000);
@@ -217,7 +231,7 @@ export function DashboardPage() {
           <ReportMap reports={reports} selected={selected} trail={detail?.locations ?? null} onSelect={setSelected} />
           {selected && selReport && (
             <DetailPanel report={selReport} detail={detail} onClose={() => setSelected(null)} onChanged={(r) => {
-              setById((prev) => new Map(prev).set(r.id, r));
+              setById((prev) => new Map(prev).set(r.id, { ...r, media_count: prev.get(r.id)?.media_count ?? null }));
               void loadDetail(r.id);
             }} />
           )}
@@ -255,6 +269,7 @@ function ReportItem({ r, active, isNew, onClick }: { r: Report; active: boolean;
           {r.reporter.name && <span className="row" style={{ gap: 3 }}><User size={12} />{r.reporter.name}</span>}
           {r.source_key && <span className="mono">{r.source_key}</span>}
           {!r.location && <span className="row" style={{ gap: 3 }}><MapPin size={12} />tanpa lokasi</span>}
+          <MediaBadges count={r.media_count} />
         </span>
         {r.message && <span className="small" style={{ display: 'block', marginTop: 4, color: 'var(--text-2)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.message}</span>}
       </span>
@@ -268,7 +283,7 @@ const NEXT: Partial<Record<ReportStatus, { to: ReportStatus; label: string; vari
   in_progress: [{ to: 'resolved', label: 'Tandai selesai', variant: 'primary' }, { to: 'false_alarm', label: 'Alarm palsu', variant: 'default' }],
 };
 
-const EVENT_LABEL: Record<string, string> = { created: 'Laporan dibuat', status_changed: 'Status diubah', cancelled: 'Dibatalkan pelapor', note: 'Catatan' };
+const EVENT_LABEL: Record<string, string> = { created: 'Laporan dibuat', status_changed: 'Status diubah', cancelled: 'Dibatalkan pelapor', note: 'Catatan', media: 'Lampiran' };
 
 function DetailPanel({ report: r, detail, onClose, onChanged }: { report: Report; detail: ReportDetail | null; onClose: () => void; onChanged: (r: Report) => void }) {
   const toast = useToast();
@@ -338,6 +353,9 @@ function DetailPanel({ report: r, detail, onClose, onChanged }: { report: Report
           ) : 'Tidak dibagikan'}</dd>
           {r.status_message && <><dt>Pesan ke pelapor</dt><dd>{r.status_message}</dd></>}
         </dl>
+
+        {detail ? <MediaGallery reportId={r.id} media={detail.media ?? []} onExpired={() => onChanged(r)} canUpload={!TERMINAL_STATUSES.includes(r.status)} />
+          : <div className="skeleton" style={{ height: 60 }} />}
 
         <form className="stack-sm" onSubmit={(e) => change(undefined, e)}>
           <label className="label" htmlFor="note">Catatan penanganan</label>

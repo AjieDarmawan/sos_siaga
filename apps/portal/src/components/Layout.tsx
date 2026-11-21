@@ -1,9 +1,10 @@
 import { Suspense, useEffect, useState } from 'react';
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
-import { Broadcast, ClipboardText, List, SignOut, SquaresFour, UsersThree } from '@phosphor-icons/react';
+import { BookOpen, Broadcast, ClipboardText, List, SignOut, SquaresFour, UsersThree } from '@phosphor-icons/react';
 import { useAuth } from '../lib/auth';
 import { ACCOUNT_STATUS } from '../lib/format';
 import { Badge, Spinner } from './ui';
+import { ThemeMenu } from './ThemeMenu';
 
 export function BrandMark({ size = 28 }: { size?: number }) {
   return (
@@ -28,6 +29,7 @@ export function Layout() {
     { to: '/apps', label: 'App & kunci API', icon: SquaresFour, show: can('owner', 'admin') },
     { to: '/team', label: 'Tim', icon: UsersThree, show: can('owner', 'admin') },
     { to: '/onboarding', label: 'Status verifikasi', icon: ClipboardText, show: can('owner', 'admin') },
+    { to: '/docs', label: 'Dokumentasi', icon: BookOpen, show: can('owner', 'admin') },
   ].filter((n) => n.show);
 
   return (
@@ -48,6 +50,7 @@ export function Layout() {
             <span className="muted">{me.account.legal_name}</span>
             <span style={{ marginTop: 6 }}><Badge tone={st.tone}>{st.label}</Badge></span>
           </div>
+          <ThemeMenu withLabel placement="up" />
           <button className="nav-link btn-ghost" style={{ border: 0, background: 'none', cursor: 'pointer', width: '100%' }} onClick={signOut}>
             <SignOut size={20} />Keluar
           </button>
@@ -58,7 +61,7 @@ export function Layout() {
         <div className="mobile-bar">
           <button className="btn btn-ghost btn-icon" onClick={() => setOpen(true)} aria-label="Buka menu"><List size={22} /></button>
           <span className="brand" style={{ padding: 0 }}><BrandMark size={24} />SiagaSOS</span>
-          <span style={{ width: 40 }} />
+          <ThemeMenu />
         </div>
         <main id="main" tabIndex={-1} style={{ outline: 'none', minHeight: 0, flex: 1 }}>
           <Suspense fallback={<Spinner />}><Outlet /></Suspense>

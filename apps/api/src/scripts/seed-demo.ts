@@ -93,7 +93,7 @@ async function ensureApps(owner: string) {
     web = (await call('POST', '/portal/apps', {
       token: owner,
       body: {
-        name: 'Aplikasi Karyawan (Web)', allowed_origins: [PORTAL, 'https://karyawan.demo-siaga.co.id'], webhook_url: 'https://httpbin.org/status/200',
+        name: 'Aplikasi Karyawan (Web)', allowed_origins: [PORTAL, 'http://localhost:5176', 'https://karyawan.demo-siaga.co.id'], webhook_url: 'https://httpbin.org/status/200',
         sdk_config: { categories: ['kriminal', 'medis', 'kebakaran', 'kecelakaan', 'general'], hold_seconds: 3, recipient_text: 'Laporan dikirim ke tim keamanan PT Demo Siaga', fallback_phone: '110' },
       },
     })).app;
@@ -101,6 +101,9 @@ async function ensureApps(owner: string) {
       await call('POST', `/portal/apps/${web.id}/sources`, { token: owner, body: { source_key, label, platform: 'web' } });
     }
     web = await call('GET', `/portal/apps/${web.id}`, { token: owner });
+  }
+  if (!web.allowed_origins.includes('http://localhost:5176')) {
+    web = { ...web, ...(await call('PATCH', `/portal/apps/${web.id}`, { token: owner, body: { allowed_origins: [...web.allowed_origins, 'http://localhost:5176'] } })), keys: web.keys };
   }
   if (!android) {
     android = (await call('POST', '/portal/apps', {
@@ -112,6 +115,47 @@ async function ensureApps(owner: string) {
     web: { live: pk(web, 'live'), test: pk(web, 'test'), headers: { Origin: PORTAL } },
     android: { live: pk(android, 'live'), test: pk(android, 'test'), headers: { 'X-SOS-Bundle': 'id.demosiaga.kurir' } },
   };
+}
+
+
+/** Perusahaan lain di berbagai tahap supaya panel admin punya antrean. Dilewati bila email sudah terdaftar. */
+const PROSPECTS = [
+  { name: 'PT Logistik Cepat Mandiri', type: 'pt', email: 'ops@logistikcepat.test', pic: 'Andi Wijaya', industry: 'Logistik', users: 3500, stage: 'submitted', daysAgo: 4, director: false },
+  { name: 'Yayasan Pendidikan Harapan Bangsa', type: 'yayasan', email: 'it.harapanbangsa@gmail.com', pic: 'Dewi Lestari', industry: 'Pendidikan', users: 2200, stage: 'submitted', daysAgo: 1, director: true },
+  { name: 'CV Kost Aman Sejahtera', type: 'cv', email: 'admin@kostaman.test', pic: 'Rahmat Hidayat', industry: 'Properti / kost', users: 400, stage: 'submitted', daysAgo: 0, director: true },
+  { name: 'PT Ritel Nusantara Jaya', type: 'pt', email: 'security@ritelnusantara.test', pic: 'Fitri Handayani', industry: 'Ritel', users: 8000, stage: 'drafting', daysAgo: 0, director: true },
+  { name: 'PT Armada Ojol Sentosa', type: 'pt', email: 'hse@armadaojol.test', pic: 'Bambang Susilo', industry: 'Transportasi', users: 15000, stage: 'pending_email', daysAgo: 0, director: true },
+] as const;
+
+async function ensureProspects() {
+  let made = 0;
+  for (const [i, p] of PROSPECTS.entries()) {
+    const exists = await pool.query(`SELECT 1 FROM users WHERE email = $1`, [p.email]);
+    if (exists.rows[0]) continue;
+    const nib = String(8100000000000 + Date.now() % 1_000_000_000 * 10 + i).slice(0, 13);
+    const reg = await call('POST', '/portal/auth/register', {
+      body: {
+        company: { legal_name: p.name, entity_type: p.type, nib, npwp: `02.${100 + i}.456.7-890.000`, address: `Jl. Contoh No. ${10 + i}, Jakarta`, phone: `021-55500${i}0`,
+          industry: p.industry, est_users: p.users, usage_plan: `Karyawan/pengguna ${p.industry.toLowerCase()} menekan SOS dari aplikasi, tim keamanan internal merespons.` },
+        pic: { full_name: p.pic, email: p.email, phone: `+62812000${i}111`, position: p.director ? 'Direktur Operasional' : 'Manajer Keamanan', is_director: p.director, password: 'demo12345' },
+        accept_terms: true,
+      },
+    });
+    made++;
+    if (p.stage === 'pending_email') continue;
+    const token = (await call('POST', '/portal/auth/verify-email', { body: { token: reg.dev_verification_token } })).token as string;
+    const docs = ['nib', 'npwp', 'ktp_pic', ...(['pt', 'yayasan'].includes(p.type) ? ['akta', 'sk_kemenkumham'] : []), ...(p.director ? [] : ['surat_kuasa'])];
+    for (const doc_type of p.stage === 'drafting' ? docs.slice(0, 2) : docs) {
+      const form = new FormData();
+      form.append('doc_type', doc_type);
+      form.append('file', pdf(), `${doc_type}.pdf`);
+      await call('POST', '/portal/onboarding/documents', { token, form });
+    }
+    if (p.stage !== 'submitted') continue;
+    await call('POST', '/portal/onboarding/submit', { token });
+    if (p.daysAgo) await pool.query(`UPDATE accounts SET submitted_at = submitted_at - make_interval(days => $2), created_at = created_at - make_interval(days => $2) WHERE id = $1`, [reg.account_id, p.daysAgo]);
+  }
+  if (made) console.log(`• ${made} perusahaan prospek dibuat (antrean review admin)`);
 }
 
 type Final = 'open' | 'acknowledged' | 'in_progress' | 'resolved' | 'false_alarm' | 'cancelled';
@@ -142,6 +186,19 @@ const SEEDS: Seed[] = [
 
 const PATH: Final[] = ['acknowledged', 'in_progress', 'resolved'];
 
+function printSummary(pkLive: string) {
+  console.log(`
+Selesai. Buka ${PORTAL}
+  Owner     : ${OWNER.email} / ${OWNER.password}
+  Responder : ${RESPONDER.email} / ${RESPONDER.password}
+Panel admin ${process.env.SEED_ADMIN_ORIGIN ?? 'http://localhost:5175'}
+  Superadmin: ${SUPERADMIN.email} / ${SUPERADMIN.password}  (kode 2FA: pnpm admin:otp, atau scan ${authenticator.keyuri(SUPERADMIN.email, 'SiagaSOS Admin (dev)', SUPERADMIN.totp)})
+Kirim SOS baru (muncul realtime + bunyi):
+  curl -X POST ${API}/v1/sdk/reports -H 'Content-Type: application/json' -H 'Origin: ${PORTAL}' \\
+    -H 'X-SOS-Key: ${pkLive}' -H "Idempotency-Key: $(uuidgen)" \\
+    -d '{"category":"kriminal","message":"Tes SOS","location":{"lat":-6.2,"lng":106.85},"reporter":{"name":"Demo"}}'`);
+}
+
 async function main() {
   if (process.env.NODE_ENV === 'production') throw new Error('seed:demo tidak boleh dijalankan di produksi');
   console.log(`API ${API}`);
@@ -154,8 +211,15 @@ async function main() {
   await ensureResponder(owner);
   const responder = (await login(RESPONDER.email, RESPONDER.password))!;
   const keys = await ensureApps(owner);
+  await ensureProspects();
   const me = await call('GET', '/portal/me', { token: owner });
 
+  const existing = await withTenant(me.account.id, (c) => c.query(`SELECT count(*)::int AS n FROM reports`));
+  if (existing.rows[0].n >= SEEDS.length && !process.env.SEED_MORE_REPORTS) {
+    console.log(`• laporan demo sudah ada (${existing.rows[0].n}), dilewati. SEED_MORE_REPORTS=1 untuk menambah.`);
+    printSummary(keys.web.live);
+    return pool.end();
+  }
   const created: { id: string; s: Seed }[] = [];
   for (const s of SEEDS) {
     const k = keys[s.app];
@@ -213,16 +277,7 @@ async function main() {
     }
   });
 
-  console.log(`
-Selesai. Buka ${PORTAL}
-  Owner     : ${OWNER.email} / ${OWNER.password}
-  Responder : ${RESPONDER.email} / ${RESPONDER.password}
-Panel admin ${process.env.SEED_ADMIN_ORIGIN ?? 'http://localhost:5175'}
-  Superadmin: ${SUPERADMIN.email} / ${SUPERADMIN.password}  (kode 2FA: pnpm admin:otp, atau scan ${authenticator.keyuri(SUPERADMIN.email, 'SiagaSOS Admin (dev)', SUPERADMIN.totp)})
-Kirim SOS baru (muncul realtime + bunyi):
-  curl -X POST ${API}/v1/sdk/reports -H 'Content-Type: application/json' -H 'Origin: ${PORTAL}' \\
-    -H 'X-SOS-Key: ${keys.web.live}' -H "Idempotency-Key: $(uuidgen)" \\
-    -d '{"category":"kriminal","message":"Tes SOS","location":{"lat":-6.2,"lng":106.85},"reporter":{"name":"Demo"}}'`);
+  printSummary(keys.web.live);
   await pool.end();
 }
 

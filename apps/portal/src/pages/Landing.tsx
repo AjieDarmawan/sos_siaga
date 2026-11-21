@@ -6,6 +6,7 @@ import {
 } from '@phosphor-icons/react';
 import { useAuth } from '../lib/auth';
 import { BrandMark } from '../components/Layout';
+import { ThemeMenu } from '../components/ThemeMenu';
 import '../landing.css';
 
 /**
@@ -60,6 +61,7 @@ function CountUp({ to, suffix = '', decimals = 0 }: { to: number; suffix?: strin
 }
 
 const NAV = [['#cara-kerja', 'Cara kerja'], ['#fitur', 'Fitur'], ['#developer', 'Developer'], ['#harga', 'Harga'], ['#faq', 'FAQ']];
+const DocsLink = () => <Link to="/docs">Dokumentasi</Link>;
 
 export function LandingPage() {
   const { me } = useAuth();
@@ -82,8 +84,10 @@ export function LandingPage() {
           <Link to="/" className="lp-brand" aria-label="SiagaSOS beranda"><BrandMark size={30} /><span>SiagaSOS</span></Link>
           <nav className="lp-links" aria-label="Navigasi">
             {NAV.map(([h, l]) => <a key={h} href={h}>{l}</a>)}
+            <DocsLink />
           </nav>
           <div className="lp-nav-cta">
+            <ThemeMenu variant="dark" />
             {me ? <Link to="/dashboard" className="lp-btn lp-btn-light">Buka dashboard<ArrowRight size={16} weight="bold" /></Link> : (
               <>
                 <Link to="/login" className="lp-btn lp-btn-ghost">Masuk</Link>
@@ -98,6 +102,7 @@ export function LandingPage() {
         {menu && (
           <div className="lp-mobile-menu" onClick={() => setMenu(false)}>
             {NAV.map(([h, l]) => <a key={h} href={h}>{l}</a>)}
+            <DocsLink />
             {!me && <Link to="/login">Masuk</Link>}
           </div>
         )}
@@ -125,21 +130,21 @@ function Hero({ loggedIn }: { loggedIn: boolean }) {
       <div className="lp-hero-bg" aria-hidden><span className="g1" /><span className="g2" /><span className="grid" /></div>
       <div className="lp-wrap lp-hero-in">
         <div className="lp-hero-copy">
-          <p className="lp-eyebrow reveal"><span className="dot" />SOS-as-a-Service untuk perusahaan di Indonesia</p>
-          <h1 id="hero-title" className="reveal" style={{ ['--d' as string]: '80ms' }}>
+          <p className="lp-eyebrow rise"><span className="dot" />SOS-as-a-Service untuk perusahaan di Indonesia</p>
+          <h1 id="hero-title" className="rise" style={{ ['--d' as string]: '80ms' }}>
             Tombol darurat untuk aplikasi Anda, <span className="hl">aktif dalam hitungan menit.</span>
           </h1>
-          <p className="lp-lead reveal" style={{ ['--d' as string]: '160ms' }}>
+          <p className="lp-lead rise" style={{ ['--d' as string]: '160ms' }}>
             Pasang SDK, karyawan atau pengguna Anda menahan tombol SOS, dan tim keamanan menerima laporan lengkap dengan lokasi live di dashboard,
             tanpa membangun pusat komando sendiri.
           </p>
-          <div className="lp-hero-cta reveal" style={{ ['--d' as string]: '240ms' }}>
+          <div className="lp-hero-cta rise" style={{ ['--d' as string]: '240ms' }}>
             <Link to={loggedIn ? '/dashboard' : '/register'} className="lp-btn lp-btn-sos lp-btn-lg">
               {loggedIn ? 'Buka dashboard' : 'Mulai gratis dengan kunci test'}<ArrowRight size={18} weight="bold" />
             </Link>
             <a href="#cara-kerja" className="lp-btn lp-btn-outline lp-btn-lg">Lihat cara kerja</a>
           </div>
-          <ul className="lp-hero-points reveal" style={{ ['--d' as string]: '320ms' }}>
+          <ul className="lp-hero-points rise" style={{ ['--d' as string]: '320ms' }}>
             <li><CheckCircle size={18} weight="fill" />Tanpa kartu kredit</li>
             <li><CheckCircle size={18} weight="fill" />Kunci test langsung aktif</li>
             <li><CheckCircle size={18} weight="fill" />Data di server Indonesia</li>
@@ -154,7 +159,7 @@ function Hero({ loggedIn }: { loggedIn: boolean }) {
 /** Animasi alur SOS: tahan tombol di HP → sinyal → laporan muncul di dashboard → diterima. Murni CSS, loop 9 detik. */
 function HeroScene() {
   return (
-    <div className="scene reveal" style={{ ['--d' as string]: '200ms' }} role="img"
+    <div className="scene rise" style={{ ['--d' as string]: '200ms' }} role="img"
       aria-label="Ilustrasi: pengguna menahan tombol SOS di ponsel, laporan muncul di dashboard tim keamanan lengkap dengan lokasi, lalu statusnya berubah menjadi diterima.">
       <div className="phone">
         <div className="phone-notch" />
@@ -348,6 +353,7 @@ function Developer() {
           <p className="lp-kicker">Untuk developer</p>
           <h2 id="dev-title">Integrasi tiga baris. Ganti <code>pk_test_</code> ke <code>pk_live_</code> saat siap.</h2>
           <p>SDK tanpa dependency, bekerja di React, JavaScript biasa, dan segera Android. Mode test memakai data terpisah, jadi tim Anda bisa mencoba alur lengkap sebelum dokumen perusahaan selesai diverifikasi.</p>
+          <Link to="/docs" className="lp-btn lp-btn-outline" style={{ justifySelf: 'start' }}>Baca dokumentasi<ArrowRight size={16} weight="bold" /></Link>
           <dl className="lp-stats">
             <div><dt><CountUp to={3.2} decimals={1} suffix=" KB" /></dt><dd>ukuran SDK (gzip)</dd></div>
             <div><dt>≤ <CountUp to={5} suffix=" dtk" /></dt><dd>status sampai ke pelapor</dd></div>
@@ -355,10 +361,12 @@ function Developer() {
           </dl>
         </div>
         <div className="code-card reveal" style={{ ['--d' as string]: '120ms' }}>
-          <div className="code-tabs" role="tablist" aria-label="Contoh kode">
-            {Object.keys(SNIPPETS).map((k) => (
-              <button key={k} role="tab" aria-selected={tab === k} onClick={() => setTab(k)}>{k}</button>
-            ))}
+          <div className="code-tabs">
+            <div role="tablist" aria-label="Contoh kode" style={{ display: 'flex', gap: 4 }}>
+              {Object.keys(SNIPPETS).map((k) => (
+                <button key={k} role="tab" aria-selected={tab === k} onClick={() => setTab(k)}>{k}</button>
+              ))}
+            </div>
             <button className="code-copy" aria-label="Salin kode" onClick={async () => {
               await navigator.clipboard?.writeText(SNIPPETS[tab]!).catch(() => {});
               setCopied(true);
@@ -482,6 +490,7 @@ function Footer() {
         </div>
         <nav aria-label="Tautan footer">
           {NAV.map(([h, l]) => <a key={h} href={h}>{l}</a>)}
+          <DocsLink />
           <Link to="/login">Masuk</Link>
         </nav>
         <p className="lp-emergency"><Siren size={16} weight="fill" /><span>Dalam bahaya sekarang? Hubungi <a href="tel:110">110</a> (polisi) atau <a href="tel:112">112</a>.</span></p>

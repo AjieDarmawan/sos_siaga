@@ -10,3 +10,11 @@ Token ada di [`apps/portal/src/styles.css`](../apps/portal/src/styles.css) (`:ro
 - **Aksesibilitas:** focus ring 3 px, skip link, label pada semua input, error per field saat blur, `aria-live` untuk status realtime/draf, target sentuh ≥ 40 px, `prefers-reduced-motion` mematikan animasi.
 - **Layout:** sidebar 232 px; di bawah 880 px jadi drawer. Dashboard: daftar 340–420 px + peta; di bawah 960 px peta di atas, panel detail jadi bottom sheet. Grid memakai `minmax(0, 1fr)` supaya konten lebar (tabel, kunci) tidak membuat halaman scroll horizontal.
 - **Bunyi:** Web Audio (tanpa aset), butuh satu klik pengguna per sesi. Preferensi disimpan di localStorage.
+
+## Landing & docs
+
+- Hero gelap (`--night` #0a1020) dengan glow merah/biru, sisanya mengikuti token terang/gelap.
+- Animasi: CSS + IntersectionObserver (tanpa GSAP) demi Lighthouse. Elemen hero memakai `.rise` (hanya transform, opacity tetap 1 supaya LCP tidak tertunda); bagian lain `.reveal` (fade + naik) dengan fallback scroll untuk loncatan anchor.
+- Scene hero: loop 9 dtk (tahan tombol → sinyal → laporan masuk + alarm → diterima). `prefers-reduced-motion` menampilkan keadaan akhir statis.
+- Tidak ada testimoni/logo klien fiktif; angka di landing berasal dari kode (SDK 3,2 KB, status ≤ 5 dtk, retry 24 jam).
+- Panel admin memakai token yang sama, aksen ikon perisai merah di atas slate.

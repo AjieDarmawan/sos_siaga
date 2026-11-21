@@ -2,9 +2,9 @@ import {
   createContext, useCallback, useContext, useEffect, useMemo, useRef, useState,
   type CSSProperties, type ReactNode,
 } from 'react';
-import { SiagaSOS, SiagaSOSError, type ActiveReport, type SiagaSOSOptions, type TriggerInput, type SdkConfig } from '@siagasos/js';
+import { SiagaSOS, SiagaSOSError, type ActiveReport, type AttachOptions, type MediaPublic, type SiagaSOSOptions, type TriggerInput, type SdkConfig } from '@siagasos/js';
 
-export type { ActiveReport, TriggerInput, SdkConfig } from '@siagasos/js';
+export type { ActiveReport, TriggerInput, SdkConfig, MediaPublic, AttachOptions } from '@siagasos/js';
 export { SiagaSOSError } from '@siagasos/js';
 
 type Status = ActiveReport['status'] | 'idle' | 'sending';
@@ -18,6 +18,18 @@ interface SOSContextValue {
   trigger: (input?: TriggerInput) => Promise<ActiveReport | null>;
   cancel: (reason?: string) => Promise<void>;
   reset: () => void;
+  /** Lampirkan foto/video/suara ke laporan aktif. Progres tersedia di `attachments`. */
+  attach: (file: Blob, opts?: Omit<AttachOptions, 'onProgress'> & { name?: string }) => Promise<MediaPublic | null>;
+  attachments: Attachment[];
+}
+
+export interface Attachment {
+  key: string;
+  name: string;
+  kind: 'image' | 'video' | 'audio';
+  progress: number;
+  state: 'uploading' | 'done' | 'error';
+  error?: string;
 }
 
 const Ctx = createContext<SOSContextValue | null>(null);
@@ -32,6 +44,7 @@ export function SOSProvider({ children, ...options }: SOSProviderProps) {
   const [activeReport, setActive] = useState<ActiveReport | null>(null);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<SiagaSOSError | null>(null);
+  const [attachments, setAttachments] = useState<Attachment[]>([]);
   const key = JSON.stringify(options);
 
   useEffect(() => {
@@ -78,11 +91,27 @@ export function SOSProvider({ children, ...options }: SOSProviderProps) {
     }
   }, [client, activeReport]);
 
+  const attach = useCallback(async (file: Blob, opts: Omit<AttachOptions, 'onProgress'> & { name?: string } = {}) => {
+    if (!client || !activeReport) return null;
+    const k = Math.random().toString(36).slice(2);
+    const kind = file.type.startsWith('video') ? 'video' : file.type.startsWith('audio') ? 'audio' : 'image';
+    const patch = (p: Partial<Attachment>) => setAttachments((xs) => xs.map((x) => (x.key === k ? { ...x, ...p } : x)));
+    setAttachments((xs) => [...xs, { key: k, name: opts.name ?? (file as File).name ?? kind, kind, progress: 0, state: 'uploading' }]);
+    try {
+      const m = await client.attach(activeReport.id ?? activeReport.localId, file, { ...opts, onProgress: (progress) => patch({ progress }) });
+      patch({ state: 'done', progress: 1 });
+      return m;
+    } catch (e) {
+      patch({ state: 'error', error: (e as Error).message });
+      return null;
+    }
+  }, [client, activeReport]);
+
   const value = useMemo<SOSContextValue>(() => ({
-    client, config, activeReport, error, trigger, cancel,
+    client, config, activeReport, error, trigger, cancel, attach, attachments,
     status: sending ? 'sending' : activeReport?.status ?? 'idle',
-    reset: () => { setActive(null); setError(null); },
-  }), [client, config, activeReport, error, trigger, cancel, sending]);
+    reset: () => { setActive(null); setError(null); setAttachments([]); },
+  }), [client, config, activeReport, error, trigger, cancel, sending, attach, attachments]);
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }
@@ -202,6 +231,120 @@ export function SOSButton({
         <a href={`tel:${config?.fallback_phone ?? '110'}`} style={{ color: '#475467', fontSize: 13 }}>
           Darurat polisi? Telepon {config?.fallback_phone ?? '110'}
         </a>
+      )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------- <SOSAttach>
+
+export interface SOSAttachProps {
+  /** Jenis lampiran yang ditawarkan. Default semua. */
+  allow?: ('image' | 'video' | 'audio')[];
+  /** Durasi maksimal rekaman suara (detik). Default 60. */
+  maxAudioSeconds?: number;
+  color?: string;
+  className?: string;
+  style?: CSSProperties;
+}
+
+const ICON: Record<'image' | 'video' | 'audio', string> = {
+  image: 'M4 8h3l2-3h6l2 3h3v11H4z M12 17a4 4 0 1 0 0-8 4 4 0 0 0 0 8z',
+  video: 'M3 7h12v10H3z M15 10l6-3v10l-6-3z',
+  audio: 'M12 3a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V6a3 3 0 0 0-3-3z M5 11a7 7 0 0 0 14 0 M12 18v3',
+};
+const Icon = ({ d }: { d: string }) => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d={d} /></svg>
+);
+
+const btnStyle = (color: string): CSSProperties => ({
+  flex: 1, minHeight: 48, borderRadius: 12, border: `1.5px solid ${color}`, background: 'transparent', color,
+  fontWeight: 700, fontSize: 14, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '0 10px',
+});
+
+/**
+ * Tombol lampiran setelah SOS terkirim: ambil foto, rekam video (kamera belakang), atau rekam suara.
+ * Hanya tampil selama ada laporan aktif.
+ */
+export function SOSAttach({ allow = ['image', 'video', 'audio'], maxAudioSeconds = 60, color = '#dc2626', className, style }: SOSAttachProps) {
+  const { activeReport, attach, attachments } = useSOS();
+  const photo = useRef<HTMLInputElement>(null);
+  const video = useRef<HTMLInputElement>(null);
+  const rec = useRef<{ mr: MediaRecorder; t0: number; timer: ReturnType<typeof setTimeout> } | null>(null);
+  const [recording, setRecording] = useState(0);
+  const [recErr, setRecErr] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!recording) return;
+    const t = setInterval(() => setRecording(Math.max(1, Math.round((Date.now() - rec.current!.t0) / 1000))), 500);
+    return () => clearInterval(t);
+  }, [recording > 0]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  if (!activeReport || ['resolved', 'cancelled', 'false_alarm'].includes(activeReport.status)) return null;
+
+  const pick = (e: React.ChangeEvent<HTMLInputElement>) => {
+    for (const f of Array.from(e.target.files ?? [])) void attach(f, { name: f.name });
+    e.target.value = '';
+  };
+
+  async function toggleRecord() {
+    if (rec.current) { rec.current.mr.stop(); return; }
+    setRecErr(null);
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const type = ['audio/webm', 'audio/mp4', 'audio/ogg'].find((t) => MediaRecorder.isTypeSupported(t));
+      const mr = new MediaRecorder(stream, type ? { mimeType: type } : undefined);
+      const chunks: Blob[] = [];
+      mr.ondataavailable = (ev) => ev.data.size && chunks.push(ev.data);
+      mr.onstop = () => {
+        const cur = rec.current!;
+        clearTimeout(cur.timer);
+        stream.getTracks().forEach((tr) => tr.stop());
+        const durationS = Math.round((Date.now() - cur.t0) / 1000);
+        rec.current = null;
+        setRecording(0);
+        const blob = new Blob(chunks, { type: (mr.mimeType || type || 'audio/webm').split(';')[0] });
+        if (blob.size) void attach(blob, { durationS, name: `Rekaman ${durationS} dtk` });
+      };
+      mr.start();
+      rec.current = { mr, t0: Date.now(), timer: setTimeout(() => mr.state === 'recording' && mr.stop(), maxAudioSeconds * 1000) };
+      setRecording(1);
+    } catch {
+      setRecErr('Mikrofon tidak bisa dipakai. Periksa izin mikrofon di browser.');
+    }
+  }
+
+  const label = { image: 'Foto', video: 'Video', audio: recording ? `Stop ${recording}s` : 'Suara' };
+  return (
+    <div className={className} style={{ display: 'grid', gap: 10, ...style }} aria-label="Tambah lampiran laporan">
+      <div style={{ fontSize: 13, fontWeight: 600, color: '#475569' }}>Tambahkan bukti untuk petugas</div>
+      <div style={{ display: 'flex', gap: 8 }}>
+        {allow.includes('image') && <button type="button" style={btnStyle(color)} onClick={() => photo.current?.click()}><Icon d={ICON.image} />{label.image}</button>}
+        {allow.includes('video') && <button type="button" style={btnStyle(color)} onClick={() => video.current?.click()}><Icon d={ICON.video} />{label.video}</button>}
+        {allow.includes('audio') && typeof MediaRecorder !== 'undefined' && (
+          <button type="button" style={{ ...btnStyle(color), ...(recording ? { background: color, color: '#fff' } : {}) }} onClick={toggleRecord} aria-pressed={!!recording}>
+            <Icon d={ICON.audio} />{label.audio}
+          </button>
+        )}
+      </div>
+      <input ref={photo} type="file" accept="image/*" capture="environment" multiple hidden onChange={pick} />
+      <input ref={video} type="file" accept="video/*" capture="environment" hidden onChange={pick} />
+      {recErr && <div role="alert" style={{ color: '#b91c1c', fontSize: 13 }}>{recErr}</div>}
+      {attachments.length > 0 && (
+        <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'grid', gap: 6 }} aria-live="polite">
+          {attachments.map((a) => (
+            <li key={a.key} style={{ fontSize: 13, display: 'grid', gap: 4 }}>
+              <span style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
+                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{a.name}</span>
+                <span style={{ color: a.state === 'error' ? '#b91c1c' : a.state === 'done' ? '#15803d' : '#475569', fontWeight: 600 }}>
+                  {a.state === 'done' ? 'Terkirim' : a.state === 'error' ? 'Gagal' : `${Math.round(a.progress * 100)}%`}
+                </span>
+              </span>
+              {a.state === 'uploading' && <span style={{ height: 4, borderRadius: 2, background: '#e2e8f0', overflow: 'hidden' }}><span style={{ display: 'block', height: '100%', width: `${a.progress * 100}%`, background: color, transition: 'width 200ms' }} /></span>}
+              {a.error && <span style={{ color: '#b91c1c' }}>{a.error}</span>}
+            </li>
+          ))}
+        </ul>
       )}
     </div>
   );

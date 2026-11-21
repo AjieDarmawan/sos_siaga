@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { CheckCircle } from '@phosphor-icons/react';
 import { BrandMark } from './Layout';
+import { ThemeMenu } from './ThemeMenu';
 
 export function AuthLayout({ children, wide }: { children: ReactNode; wide?: boolean }) {
   return (
@@ -18,7 +19,8 @@ export function AuthLayout({ children, wide }: { children: ReactNode; wide?: boo
         </div>
         <p className="small" style={{ color: '#94a3b8' }}>Dalam keadaan darurat langsung, hubungi 110 / 112.</p>
       </aside>
-      <div className="auth-main">
+      <div className="auth-main" style={{ position: 'relative' }}>
+        <div style={{ position: 'absolute', top: 16, right: 16 }}><ThemeMenu /></div>
         <div className={`auth-card ${wide ? 'wide' : ''}`}>{children}</div>
       </div>
     </div>
