@@ -46,24 +46,30 @@ adminRouter.get('/files/:token', async (req, res) => {
 
 adminRouter.use(requireAdmin);
 
-// F-23: antrean review, terlama dulu, dengan peringatan SLA (F-27)
+// F-23: antrean review, terlama dulu, dengan peringatan SLA (F-27). status=all = semua perusahaan terdaftar.
 adminRouter.get('/accounts', async (req, res) => {
-  const f = parse(z.object({ status: z.enum(ACCOUNT_STATUSES).default('pending_review'), search: z.string().max(100).optional() }), req.query);
+  const f = parse(z.object({ status: z.enum([...ACCOUNT_STATUSES, 'all']).default('pending_review'), search: z.string().trim().max(100).optional() }), req.query);
   const { rows } = await q(
     `SELECT a.id, a.legal_name, a.entity_type, a.nib, a.industry, a.est_users, a.status, a.risk_flags, a.submitted_at, a.created_at,
-            u.full_name AS pic_name, u.email AS pic_email
+            a.approved_at, u.full_name AS pic_name, u.email AS pic_email
      FROM accounts a LEFT JOIN LATERAL (SELECT full_name, email FROM users WHERE account_id = a.id AND role = 'owner' ORDER BY created_at LIMIT 1) u ON true
-     WHERE a.status = $1 AND ($1 <> 'pending_review' OR a.submitted_at IS NOT NULL)
-       AND ($2::text IS NULL OR a.legal_name ILIKE '%' || $2 || '%' OR a.nib = $2)
-     ORDER BY coalesce(a.submitted_at, a.created_at) ASC LIMIT 200`,
-    [f.status, f.search ?? null],
+     WHERE a.nib NOT LIKE '%:archived:%'
+       AND ($1 = 'all' OR a.status = $1) AND ($1 <> 'pending_review' OR a.submitted_at IS NOT NULL)
+       AND ($2::text IS NULL OR a.legal_name ILIKE '%' || $2 || '%' OR a.nib = $2 OR u.email ILIKE '%' || $2 || '%')
+     ORDER BY CASE WHEN $1 = 'all' THEN a.created_at END DESC, coalesce(a.submitted_at, a.created_at) ASC LIMIT 200`,
+    [f.status, f.search || null],
   );
+  // jumlah per status untuk tab; pending_review dipisah: sudah diajukan (antrean) vs masih melengkapi dokumen
+  const counts = (await q(
+    `SELECT CASE WHEN status = 'pending_review' AND submitted_at IS NULL THEN 'drafting' ELSE status END AS k, count(*)::int AS n
+     FROM accounts WHERE nib NOT LIKE '%:archived:%' GROUP BY 1`)).rows;
   const now = new Date();
   res.json({
     data: rows.map((r) => {
-      const hours = r.submitted_at ? businessHoursBetween(new Date(r.submitted_at), now) : null;
+      const hours = r.status === 'pending_review' && r.submitted_at ? businessHoursBetween(new Date(r.submitted_at), now) : null;
       return { ...r, waiting_business_hours: hours && Math.round(hours * 10) / 10, sla_warning: hours != null && hours > config.reviewSlaWarnHours };
     }),
+    counts: Object.fromEntries(counts.map((c) => [c.k, c.n])),
   });
 });
 

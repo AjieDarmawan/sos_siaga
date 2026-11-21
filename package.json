@@ -8,7 +8,11 @@
     "build": "pnpm -r build",
     "typecheck": "pnpm -r typecheck",
     "test": "pnpm -r test",
-    "smoke": "pnpm --filter @siagasos/api smoke"
+    "smoke": "pnpm --filter @siagasos/api smoke",
+    "seed:demo": "pnpm --filter @siagasos/api seed:demo",
+    "dev:portal": "pnpm --filter @siagasos/portal dev",
+    "dev:admin": "pnpm --filter @siagasos/admin dev",
+    "admin:otp": "pnpm --silent --filter @siagasos/api admin:otp"
   },
   "devDependencies": {
     "typescript": "^5.6.3"

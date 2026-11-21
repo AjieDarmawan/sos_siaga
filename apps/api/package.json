@@ -10,6 +10,8 @@
     "migrate": "tsx --env-file=.env src/migrate.ts",
     "create-admin": "tsx --env-file=.env src/scripts/create-admin.ts",
     "smoke": "tsx --env-file=.env src/scripts/smoke.ts",
+    "seed:demo": "tsx --env-file=.env src/scripts/seed-demo.ts",
+    "admin:otp": "tsx --env-file=.env src/scripts/admin-otp.ts",
     "typecheck": "tsc --noEmit",
     "test": "vitest run"
   },

@@ -51,7 +51,9 @@ export function createApp() {
   app.use('/portal/apps', portalCors, appsRouter);
   app.use('/portal/reports', portalCors, reportsRouter);
   app.use('/portal/team', portalCors, teamRouter);
-  app.get('/portal/me', portalCors, requireUser, meHandler);
+  // app.use (bukan app.get) supaya preflight OPTIONS dari browser juga dijawab CORS.
+  app.use('/portal/me', portalCors);
+  app.get('/portal/me', requireUser, meHandler);
   app.use('/admin', portalCors, adminRouter);
 
   app.use(notFoundHandler);

@@ -34,6 +34,17 @@ pnpm --filter @siagasos/api create-admin reviewer@siagasos.id 'password-min-12' 
 
 Di mode non-production, `register` dan undangan mengembalikan `dev_verification_token` / `dev_invite_token`, dan email ditulis ke log (bukan dikirim) bila `SMTP_URL` kosong.
 
+### Portal & dashboard (`apps/portal`)
+
+```bash
+pnpm dev:api                 # :4000
+pnpm dev:portal              # :5174 (Vite), VITE_API_URL default http://localhost:4000
+pnpm seed:demo               # data demo: akun approved, 2 app, responder, 16 laporan
+```
+
+Login demo: `demo@siagasos.test` / `demo12345` (owner), `satpam@siagasos.test` / `demo12345` (responder).
+Halaman: registrasi 3 langkah, verifikasi email, status verifikasi + unggah dokumen, App & kunci API (rotasi/cabut, origin, webhook, tampilan tombol, source, log webhook), Tim, dan Dashboard laporan (daftar + peta realtime + bunyi alert + timeline).
+
 ## Tiga kelompok API
 
 | Prefix | Auth | Dipanggil oleh |

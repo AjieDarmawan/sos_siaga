@@ -10,17 +10,17 @@ Legenda: ✅ selesai & teruji · 🟡 sebagian · ⬜ belum
 
 ## Posisi saat ini
 
-- **Fase:** M1 (backend inti) ✅ + M2 (SDK web) 🟡. Kodenya selesai, tapi belum dipublish ke npm.
-- **Berikutnya:** frontend di `apps/*`, dimulai dari portal (registrasi 3 langkah + kelola app/kunci) dan dashboard responder (daftar + peta realtime + bunyi).
+- **Fase:** M1 backend ✅, M2 SDK web 🟡 (belum publish npm), M3 portal + dashboard responder ✅ (web push belum).
+- **Berikutnya:** panel admin UI (`apps/admin`: antrean review, pratinjau dokumen, keputusan), lalu landing page, lalu web push.
 - **Branch:** `main`. Commit pertama `49bbba3`.
 
 ## Milestone (dari PRD)
 
 | Milestone | Status | Catatan |
 |---|---|---|
-| M1: Backend inti (minggu 1–3) | 🟡 | API ✅, landing page ⬜, panel admin UI ⬜ (API admin sudah ✅) |
+| M1: Backend inti (minggu 1–3) | 🟡 | API ✅, portal registrasi ✅, landing page ⬜, panel admin UI ⬜ (API admin sudah ✅) |
 | M2: SDK web (minggu 3–5) | 🟡 | `@siagasos/js` + `@siagasos/react` ✅, publish npm ⬜, demo React ⬜ (demo vanilla ✅) |
-| M3: Dashboard & notifikasi (minggu 5–7) | 🟡 | SSE + email ✅, UI dashboard ⬜, web push ⬜ |
+| M3: Dashboard & notifikasi (minggu 5–7) | 🟡 | SSE + email ✅, UI dashboard ✅ (peta + bunyi + notifikasi browser), web push ⬜ |
 | M4: SDK Android (minggu 7–9) | ⬜ | |
 | M5: Pilot (minggu 10–12) | ⬜ | Uji beban, dokumentasi, 2–3 klien pilot |
 
@@ -62,11 +62,13 @@ Legenda: ✅ selesai & teruji · 🟡 sebagian · ⬜ belum
 - ⬜ Demo React (`examples/react-demo`)
 - ⬜ SDK Android, iOS, Flutter, React Native
 
-### Frontend (semua ⬜)
+### Frontend
 - ⬜ `apps/landing`: 7 bagian PRD, Lighthouse ≥ 90 (F-20)
-- ⬜ `apps/portal`: registrasi 3 langkah + autosave draf, halaman status, unggah ulang, kelola app/kunci/source/tim, webhook log (F-21, F-22)
+- ✅ `apps/portal` (Vite + React 18 + TS, :5174): registrasi 3 langkah + autosave draf, verifikasi email, status + unggah/unggah ulang dokumen + ajukan, App & kunci (buat, rotasi dengan masa tenggang, cabut, secret tampil sekali), pengaturan origin/bundle/webhook/tampilan tombol, source, log webhook, tim (undang, ubah peran, nonaktifkan) (F-21, F-22)
+- ✅ Dashboard responder di `apps/portal` `/dashboard`: daftar + peta Leaflet realtime (SSE), bunyi alert Web Audio + pengingat 20 dtk, banner & judul tab, notifikasi browser, ubah status, catatan, timeline, jejak lokasi live, filter periode/mode/status, ekspor CSV (F-13, F-14, F-15)
+- ✅ `pnpm seed:demo`: data demo lewat API sungguhan
 - ⬜ `apps/admin`: antrean review, pratinjau dokumen, checklist, keputusan (F-23, F-24)
-- ⬜ `apps/dashboard`: daftar + peta realtime + bunyi alert, ubah status, timeline, filter, ekspor (F-13, F-14, F-15)
+- ⬜ Test E2E Playwright di repo (sementara hanya skrip ad-hoc di luar repo)
 
 ### Infra / ops
 - ✅ `docker-compose.yml` (postgres :5455 + role `siagasos_app`, redis :6380)
@@ -83,6 +85,8 @@ docker compose up -d            # atau Postgres.app; lihat catatan di bawah
 cp apps/api/.env.example apps/api/.env
 pnpm install && pnpm migrate
 pnpm dev:api                    # :4000
+pnpm dev:portal                 # :5174
+pnpm seed:demo                  # demo@siagasos.test / demo12345
 pnpm smoke                      # API harus sedang jalan
 pnpm --filter @siagasos/js test
 pnpm -r typecheck
@@ -91,10 +95,13 @@ pnpm -r typecheck
 ## Catatan penting / jebakan
 
 - **API wajib konek sebagai `siagasos_app`** (non-superuser, `NOBYPASSRLS`). Superuser selalu melewati RLS, jadi isolasi tenant diam-diam tidak berlaku.
-- **Mesin dev ini tidak punya Docker.** Postgres.app (v17) ada di `/Applications/Postgres.app/Contents/Versions/latest/bin`. Port 5433/5434 milik project lain, jangan dipakai. Saat uji, cluster sementara dibuat dengan `initdb` di port 5455, pakai `-k ''` karena path socket terlalu panjang.
+- **Mesin dev ini tidak punya Docker. DB dev = server Postgres.app utama di :5433** (`var-17`, dipakai bersama KaryawanAI & sekolahkita), database `siagasos`, role `siagasos_app` (non-superuser, `NOBYPASSRLS`). Superuser `postgres` hanya untuk membuat role/DB, jangan dipakai API. Port 5434 milik `commerceos`, jangan disentuh. `docker-compose.yml` / `.env.example` tetap memakai :5455 untuk mesin dengan Docker.
 - **Redis lokal (:6379) dipakai bersama project lain**, jadi `.env` dev memakai `redis://localhost:6379/9`. Pub/sub tidak terpisah per DB index, tapi channel `rt:acc:*` cukup unik.
 - Konteks tenant: semua akses ke tabel ber-RLS harus lewat `withTenant(accountId, fn)`. Admin/job lintas tenant memakai `withPlatform(fn)`.
 - Cache kunci in-process 30 detik. `invalidateKeyCache()` hanya membersihkan instance lokal; instance lain mengikuti TTL (tetap ≤ 60 detik sesuai PRD).
+- **Port 5173 dipakai project lain (`sekolahkita`)**, jadi portal jalan di :5174. Saat dev, jalankan API dengan `PORTAL_URL=http://localhost:5174` supaya tautan verifikasi/undangan benar.
+- **Route portal baru harus di-mount dengan `app.use(path, portalCors)`**, bukan hanya `app.get(..., portalCors, ...)`, karena preflight OPTIONS dari browser tidak ter-handle (bug ini sempat terjadi di `/portal/me`). Smoke test via fetch Node tidak mendeteksinya.
+- Tile peta: OSM standar + CSS filter. CARTO butuh API key.
 - Express 5: `req.params.x` bertipe `string | string[]`, bungkus dengan `String()`.
 - Bila mengubah perilaku API, jalankan ulang `pnpm smoke`, lalu perbarui README (daftar endpoint) dan `docs/STATUS.md`.
 
@@ -109,3 +116,11 @@ pnpm -r typecheck
 - Bug yang ditemukan & diperbaiki: subscriber Redis gagal `psubscribe` saat startup karena offline queue dimatikan; `access_token` SSE tercatat di log (sekarang URL dicatat tanpa query).
 - Keputusan desain (RLS per `account_id`, rate limit fail-open, cancel hanya saat `open`, dll.) dicatat di `docs/STATUS.md`.
 - Belum: frontend, web push, OpenAPI, publish npm, CI, SDK Android.
+
+### 2026-11-21 — Session 2: portal + dashboard responder (UI)
+- Design system dari skill `ui-ux-pro-max` → [docs/DESIGN.md](docs/DESIGN.md) (Plus Jakarta Sans, merah hanya untuk darurat, a11y, light/dark).
+- Baru: `apps/portal` (satu app untuk portal + dashboard; keputusan dicatat di `docs/STATUS.md`), `apps/api/src/scripts/seed-demo.ts` (`pnpm seed:demo`).
+- Bug API diperbaiki: preflight CORS `/portal/me` tidak dijawab (route dipasang dengan `app.get`), jadi login dari browser gagal.
+- Diuji: smoke 59/59 ✅, `pnpm -r typecheck` ✅, `vite build` ✅ (bundle utama 74 KB gzip, Leaflet di-lazy-load), E2E Playwright + Chrome headless (registrasi → verifikasi → unggah → app/kunci → SOS realtime → terima + catatan → undang tim, plus 375 px dark mode) tanpa error konsol dan tanpa scroll horizontal.
+- Belum: panel admin UI, landing, web push, test E2E di repo/CI, publish npm.
+- DB dev dipindah dari cluster sementara :5455 ke Postgres.app :5433 (pg_dump/pg_restore, data demo ikut). Smoke 59/59 ✅ di :5433.
