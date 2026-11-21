@@ -1,4 +1,4 @@
-import { lazy, type ReactNode } from 'react';
+import { lazy, Suspense, type ReactNode } from 'react';
 import { BrowserRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { AuthProvider, useAuth } from './lib/auth';
 import type { Role } from './lib/types';
@@ -15,6 +15,7 @@ const OnboardingPage = lazy(() => import('./pages/Onboarding').then((m) => ({ de
 const AppsPage = lazy(() => import('./pages/Apps').then((m) => ({ default: m.AppsPage })));
 const AppDetailPage = lazy(() => import('./pages/AppDetail').then((m) => ({ default: m.AppDetailPage })));
 const DashboardPage = lazy(() => import('./pages/Dashboard').then((m) => ({ default: m.DashboardPage })));
+const DocsPage = lazy(() => import('./pages/Docs').then((m) => ({ default: m.DocsPage })));
 const TeamPage = lazy(() => import('./pages/Team').then((m) => ({ default: m.TeamPage })));
 
 function Protected({ children, roles }: { children: ReactNode; roles?: Role[] }) {
@@ -33,6 +34,7 @@ export function App() {
         <AuthProvider>
           <Routes>
             <Route path="/" element={<LandingPage />} />
+            <Route path="/docs" element={<Suspense fallback={<Spinner />}><DocsPage /></Suspense>} />
             <Route path="/login" element={<LoginPage />} />
             <Route path="/register" element={<RegisterPage />} />
             <Route path="/verify-email" element={<VerifyEmailPage />} />

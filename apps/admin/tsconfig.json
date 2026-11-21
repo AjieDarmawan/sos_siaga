@@ -4,5 +4,5 @@
     "noEmit": true, "jsx": "react-jsx", "declaration": false, "types": ["vite/client"],
     "paths": { "@portal/*": ["../portal/src/*"] }
   },
-  "include": ["src", "vite.config.ts", "../portal/src/components/ui.tsx", "../portal/src/lib/format.ts", "../portal/src/lib/types.ts"]
+  "include": ["src", "vite.config.ts", "../portal/src/components/ui.tsx", "../portal/src/lib/format.ts", "../portal/src/lib/types.ts", "../portal/src/lib/theme.ts", "../portal/src/components/ThemeMenu.tsx"]
 }

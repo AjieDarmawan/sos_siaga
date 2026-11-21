@@ -7,6 +7,7 @@ import { attachClient } from '../../lib/realtime.js';
 import { changeReport, fullReport, loadReport } from '../../lib/reports.js';
 import { listQuerySchema, listReports } from '../../lib/reportQuery.js';
 import { requireRole, requireUser } from '../../middleware/portalAuth.js';
+import { completeMediaUpload, createMediaSchema, createMediaUpload, listReadyMedia, mediaCounts } from '../../lib/media.js';
 
 export const reportsRouter = Router();
 reportsRouter.use(requireUser);
@@ -17,7 +18,11 @@ const modeScope = (limited: boolean) => (limited ? ({ forceMode: 'test' } as con
 reportsRouter.get('/', async (req, res) => {
   const u = req.user!;
   const f = parse(listQuerySchema, req.query);
-  res.json(await withTenant(u.accountId, (c) => listReports(c, f, modeScope(u.limited))));
+  res.json(await withTenant(u.accountId, async (c) => {
+    const page = await listReports(c, f, modeScope(u.limited));
+    const counts = await mediaCounts(c, page.data.map((r) => r.id));
+    return { ...page, data: page.data.map((r) => ({ ...r, media_count: counts.get(r.id) ?? null })) };
+  }));
 });
 
 // Ekspor CSV (F-15). Batas 10.000 baris per ekspor; persempit filter tanggal untuk data lebih banyak.
@@ -69,7 +74,7 @@ reportsRouter.get('/:id', async (req, res) => {
       `SELECT lat, lng, accuracy_m, recorded_at FROM report_locations WHERE report_id = $1 ORDER BY recorded_at`,
       [r.id],
     );
-    return { ...fullReport(r), timeline: events.rows, locations: locations.rows };
+    return { ...fullReport(r), timeline: events.rows, locations: locations.rows, media: await listReadyMedia(c, r.id) };
   });
   // audit log setiap akses detail laporan (UU PDP)
   await audit({ accountId: u.accountId, actorKind: 'user', actorId: u.id, action: 'report.viewed', targetType: 'report', targetId: out.id, ip: req.ip });
@@ -85,4 +90,26 @@ reportsRouter.patch('/:id', async (req, res) => {
     return changeReport(c, cur.id, body, { kind: 'user', id: u.id, name: u.fullName });
   });
   res.json(fullReport(r));
+});
+
+// Petugas juga bisa melampirkan foto/video/suara (mis. dokumentasi di lokasi). Alurnya sama dengan SDK.
+reportsRouter.post('/:id/media', async (req, res) => {
+  const u = req.user!;
+  const body = parse(createMediaSchema, req.body);
+  const out = await withTenant(u.accountId, async (c) => {
+    const r = await loadReport(c, req.params.id!);
+    if (u.limited && r.mode !== 'test') throw notFound('Laporan');
+    return createMediaUpload(c, r, body, 'user');
+  });
+  res.status(201).json(out);
+});
+
+reportsRouter.post('/:id/media/:mediaId/complete', async (req, res) => {
+  const u = req.user!;
+  const out = await withTenant(u.accountId, async (c) => {
+    const r = await loadReport(c, req.params.id!);
+    if (u.limited && r.mode !== 'test') throw notFound('Laporan');
+    return completeMediaUpload(c, r, String(req.params.mediaId), { kind: 'user', id: u.id, name: u.fullName });
+  });
+  res.json(out);
 });

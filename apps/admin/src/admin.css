@@ -1,0 +1,22 @@
+.admin-mark { background: #0f172a; color: #f87171; }
+:root[data-theme='dark'] .admin-mark { background: #1e293b; }
+.admin-tag { font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--sos); border: 1px solid currentColor; border-radius: 99px; padding: 0 7px; margin-left: 2px; }
+.stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; }
+.stat { padding: 18px 20px; display: grid; gap: 4px; }
+.stat .n { font-size: 30px; font-weight: 800; letter-spacing: -0.02em; line-height: 1.1; }
+.stat .l { color: var(--text-3); font-size: 13px; font-weight: 500; }
+.stat a { font-size: 13px; font-weight: 600; margin-top: 6px; }
+.otp { letter-spacing: 0.5em; font-family: var(--mono); font-size: 22px; text-align: center; }
+.doc-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px 16px; padding: 14px 20px; border-bottom: 1px solid var(--border); align-items: center; }
+.doc-row:last-child { border-bottom: 0; }
+.doc-row.old { opacity: 0.55; }
+.doc-actions { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+.preview { width: 100%; height: min(70vh, 720px); border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface-2); }
+.preview img { max-width: 100%; max-height: 100%; display: block; margin: auto; }
+.detail-grid { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(300px, 1fr); gap: 20px; align-items: start; }
+.sticky-col { position: sticky; top: 16px; display: grid; gap: 16px; }
+@media (max-width: 1100px) { .detail-grid { grid-template-columns: minmax(0, 1fr); } .sticky-col { position: static; } }
+.bar { display: flex; height: 10px; border-radius: 99px; overflow: hidden; background: var(--surface-2); }
+.bar span { display: block; height: 100%; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 13px; color: var(--text-2); }
+.legend i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 6px; vertical-align: -1px; }

@@ -103,6 +103,30 @@ async function main() {
   const loc = await call('POST', `/v1/sdk/reports/${r1.data.id}/locations`, { headers: sdkH(pkTest), body: { lat: -6.209, lng: 106.846, accuracy_m: 8 } });
   ok(loc.status === 200 && loc.data.accepted === true, 'update live location');
 
+  // ---------------------------------------------------------------- media (foto/video/suara → object storage)
+  if (process.env.S3_ENDPOINT) {
+    const png = Buffer.from('89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c4890000000d4944415478da63f8cfc0f01f0005000201a5f6d5e70000000049454e44ae426082', 'hex');
+    const mUp = await call('POST', `/v1/sdk/reports/${r1.data.id}/media`, { headers: sdkH(pkTest), body: { content_type: 'image/png', size_bytes: png.length } });
+    ok(mUp.status === 201 && mUp.data.media.status === 'pending' && mUp.data.upload.url, 'media: presigned PUT diberikan');
+    const put = await fetch(mUp.data.upload.url, { method: 'PUT', headers: mUp.data.upload.headers, body: png });
+    ok(put.status === 200, 'media: unggah langsung ke object storage');
+    const mDone = await call('POST', `/v1/sdk/reports/${r1.data.id}/media/${mUp.data.media.id}/complete`, { headers: sdkH(pkTest) });
+    ok(mDone.status === 200 && mDone.data.status === 'ready', 'media: complete → ready (HEAD diverifikasi)');
+    const exe = await call('POST', `/v1/sdk/reports/${r1.data.id}/media`, { headers: sdkH(pkTest), body: { content_type: 'application/x-msdownload', size_bytes: 10 } });
+    ok(exe.status === 415, 'media: tipe file tidak didukung ditolak');
+    const huge = await call('POST', `/v1/sdk/reports/${r1.data.id}/media`, { headers: sdkH(pkTest), body: { content_type: 'video/mp4', size_bytes: 10 ** 9 } });
+    ok(huge.status === 413, 'media: file terlalu besar ditolak');
+    const ghost = await call('POST', `/v1/sdk/reports/${r1.data.id}/media`, { headers: sdkH(pkTest), body: { content_type: 'image/jpeg', size_bytes: 100 } });
+    const ghostDone = await call('POST', `/v1/sdk/reports/${r1.data.id}/media/${ghost.data.media.id}/complete`, { headers: sdkH(pkTest) });
+    ok(ghostDone.status === 409 && ghostDone.data.error.code === 'upload_missing', 'media: complete tanpa file ditolak');
+    const md = await call('GET', `/portal/reports/${r1.data.id}`, { token: A.token });
+    const shown = md.data.media?.[0];
+    ok(md.data.media?.length === 1 && shown.kind === 'image' && (await fetch(shown.url)).status === 200, 'media: tampil di detail portal + URL baca berfungsi');
+    ok((await fetch(shown.url.split('?')[0])).status === 403, 'media: bucket privat (tanpa tanda tangan 403)');
+  } else {
+    console.log('… media dilewati (S3_ENDPOINT kosong)');
+  }
+
   // ---------------------------------------------------------------- dashboard
   const list = await call('GET', '/portal/reports?mode=test', { token: A.token });
   ok(list.data.data.length === 1 && list.data.data[0].source_key === 'gedung-a-web', 'laporan muncul di dashboard + source otomatis dibuat');
@@ -113,7 +137,8 @@ async function main() {
   const cancelLate = await call('POST', `/v1/sdk/reports/${r1.data.id}/cancel`, { headers: sdkH(pkTest), body: {} });
   ok(cancelLate.status === 409, 'pengguna tidak bisa batal setelah petugas merespons');
   const detail = await call('GET', `/portal/reports/${r1.data.id}`, { token: A.token });
-  ok(detail.data.timeline.length === 2 && detail.data.locations.length === 2, 'timeline (created, status_changed) + riwayat lokasi');
+  const tl = detail.data.timeline.filter((e: any) => e.type !== 'media').map((e: any) => e.type).join(',');
+  ok(tl === 'created,status_changed' && detail.data.locations.length === 2, 'timeline (created, status_changed) + riwayat lokasi');
   const resolved = await call('PATCH', `/portal/reports/${r1.data.id}`, { token: A.token, body: { status: 'resolved' } });
   ok(resolved.data.resolved_at, 'resolved_at terisi');
   const locAfter = await call('POST', `/v1/sdk/reports/${r1.data.id}/locations`, { headers: sdkH(pkTest), body: { lat: -6.2, lng: 106.8 } });

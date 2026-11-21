@@ -1,0 +1,8 @@
+User-agent: *
+Allow: /
+Disallow: /dashboard
+Disallow: /apps
+Disallow: /team
+Disallow: /onboarding
+Disallow: /verify-email
+Disallow: /accept-invite

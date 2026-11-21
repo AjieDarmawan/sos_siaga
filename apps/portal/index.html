@@ -2,6 +2,16 @@
 <html lang="id">
   <head>
     <meta charset="UTF-8" />
+    <script>
+      /* Pasang tema sebelum render pertama supaya tidak berkedip (lihat src/lib/theme.ts). */
+      (function () {
+        var d = document.documentElement, dark = matchMedia('(prefers-color-scheme: dark)').matches, p = {};
+        try { p = JSON.parse(localStorage.getItem('siagasos.theme') || '{}'); } catch (e) {}
+        var m = p.mode || 'system';
+        d.dataset.theme = m === 'dark' || (m === 'system' && dark) ? 'dark' : 'light';
+        if (p.accent && p.accent !== 'slate') d.dataset.accent = p.accent;
+      })();
+    </script>
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#0f172a" />
     <title>SiagaSOS — Tombol darurat siap pakai untuk aplikasi Anda</title>

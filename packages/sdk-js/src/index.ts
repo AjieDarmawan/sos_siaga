@@ -39,6 +39,24 @@ export interface ActiveReport {
   createdAt: string;
 }
 
+export interface AttachOptions {
+  /** Durasi video/suara (detik), hanya untuk tampilan di dashboard. */
+  durationS?: number;
+  /** Progres upload 0..1. */
+  onProgress?: (ratio: number) => void;
+  /** Batas tunggu laporan terkirim bila masih di antrian offline (ms). Default 120000. */
+  waitTimeoutMs?: number;
+}
+
+/** Lampiran yang sudah tersimpan dan tampil di dashboard responder. */
+export interface MediaPublic {
+  id: string;
+  kind: 'image' | 'video' | 'audio';
+  content_type: string;
+  size_bytes: number;
+  status: 'pending' | 'ready';
+}
+
 export class SiagaSOSError extends Error {
   constructor(public status: number, public code: string, message: string) {
     super(message);
@@ -321,6 +339,42 @@ export class SiagaSOS {
     const id = entry?.id ?? idOrLocalId;
     const r = await this.request<ReportPublic>('POST', `/v1/sdk/reports/${id}/cancel`, { reason });
     return this.update(entry?.localId ?? id, r);
+  }
+
+  /**
+   * Lampirkan foto, video, atau rekaman suara ke laporan. File diunggah langsung ke storage (presigned URL),
+   * lalu muncul realtime di dashboard. Bila laporan masih di antrian offline, upload menunggu laporan terkirim.
+   */
+  async attach(idOrLocalId: string, file: Blob, opts: AttachOptions = {}): Promise<MediaPublic> {
+    const id = await this.waitForServerId(idOrLocalId, opts.waitTimeoutMs ?? 120_000);
+    const type = (file.type || 'application/octet-stream').split(';')[0]!;
+    const out = await this.request<{ media: MediaPublic; upload: { url: string; headers: Record<string, string> } }>(
+      'POST', `/v1/sdk/reports/${id}/media`, { content_type: type, size_bytes: file.size, duration_s: opts.durationS },
+    );
+    await new Promise<void>((resolve, reject) => {
+      const x = new XMLHttpRequest();
+      x.open('PUT', out.upload.url);
+      for (const [k, v] of Object.entries(out.upload.headers)) x.setRequestHeader(k, v);
+      x.upload.onprogress = (e) => e.lengthComputable && opts.onProgress?.(e.loaded / e.total);
+      x.onload = () => (x.status < 300 ? resolve() : reject(new SiagaSOSError(x.status, 'upload_failed', `Upload gagal (${x.status})`)));
+      x.onerror = () => reject(new SiagaSOSError(0, 'network_error', 'Upload gagal: koneksi terputus'));
+      x.send(file);
+    });
+    opts.onProgress?.(1);
+    return this.request<MediaPublic>('POST', `/v1/sdk/reports/${id}/media/${out.media.id}/complete`);
+  }
+
+  private waitForServerId(idOrLocalId: string, timeoutMs: number): Promise<string> {
+    const find = () => [...this.reports.values()].find((r) => r.id === idOrLocalId || r.localId === idOrLocalId);
+    const now = find();
+    if (now?.id) return Promise.resolve(now.id);
+    if (!now) return Promise.resolve(idOrLocalId); // id server dari sesi lain
+    return new Promise((resolve, reject) => {
+      const t = setTimeout(() => { off(); reject(new SiagaSOSError(0, 'not_sent', 'Laporan belum terkirim; lampiran dibatalkan')); }, timeoutMs);
+      const off = this.on('sent', (r) => {
+        if (r.localId === now.localId && r.id) { clearTimeout(t); off(); resolve(r.id); }
+      });
+    });
   }
 
   /** Ambil status terbaru sebuah laporan dari server. */

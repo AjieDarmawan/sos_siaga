@@ -31,11 +31,21 @@ export interface Report {
   reporter: { ref: string | null; name: string | null; phone: string | null };
   device: Record<string, unknown> | null; metadata: Record<string, unknown> | null;
   client_created_at: string | null; created_at: string; acknowledged_at: string | null; resolved_at: string | null; updated_at: string;
+  /** Jumlah lampiran siap per jenis (hanya di daftar portal). */
+  media_count?: Record<MediaKind, number> | null;
+}
+
+export type MediaKind = 'image' | 'video' | 'audio';
+export interface ReportMedia {
+  id: string; kind: MediaKind; content_type: string; size_bytes: number; duration_s: number | null;
+  status: 'pending' | 'ready'; uploaded_by: 'reporter' | 'user' | 'server'; created_at: string; uploaded_at: string | null;
+  url: string | null; url_expires_in: number;
 }
 
 export interface ReportDetail extends Report {
   timeline: { id: string; type: string; actor_kind: string; from_status: string | null; to_status: string | null; note: string | null; created_at: string; actor_name: string | null }[];
   locations: { lat: number; lng: number; accuracy_m: number | null; recorded_at: string }[];
+  media: ReportMedia[];
 }
 
 export interface OnboardingStatus {

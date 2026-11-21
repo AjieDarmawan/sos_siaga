@@ -13,7 +13,8 @@ Platform tombol darurat siap pasang. Perusahaan mendaftar, diverifikasi admin (1
 | `packages/sdk-js` | `@siagasos/js`: core tanpa framework, 3,2 KB gzip | M2 0.1.0 |
 | `packages/sdk-react` | `@siagasos/react`: `<SOSProvider>`, `<SOSButton>`, `useSOS()` | M2 0.1.0 |
 | `examples/vanilla-demo` | Demo HTML tanpa bundler | ✔ |
-| `apps/landing`, `apps/portal`, `apps/admin`, `apps/dashboard` | Frontend React | belum (M3) |
+| `apps/portal` | Landing page (`/`), dokumentasi (`/docs`), portal klien, dashboard responder (Vite + React) | ✅ |
+| `apps/admin` | Panel admin platform: review pendaftaran, keputusan, app (Vite + React, :5175) | ✅ |
 | `packages/sdk-android` | Kotlin, Maven Central | belum (M4) |
 
 Pemetaan F-ID ke kode, dan apa yang belum dikerjakan, ada di [`docs/STATUS.md`](docs/STATUS.md).
@@ -34,15 +35,25 @@ pnpm --filter @siagasos/api create-admin reviewer@siagasos.id 'password-min-12' 
 
 Di mode non-production, `register` dan undangan mengembalikan `dev_verification_token` / `dev_invite_token`, dan email ditulis ke log (bukan dikirim) bila `SMTP_URL` kosong.
 
-### Portal & dashboard (`apps/portal`)
+### Frontend
 
 ```bash
 pnpm dev:api                 # :4000
-pnpm dev:portal              # :5174 (Vite), VITE_API_URL default http://localhost:4000
-pnpm seed:demo               # data demo: akun approved, 2 app, responder, 16 laporan
+pnpm dev:portal              # :5174  landing /, docs /docs, portal & dashboard
+pnpm dev:admin               # :5175  panel admin
+pnpm seed:demo               # data demo (idempoten): akun approved + 16 laporan, responder, 5 perusahaan di antrean, superadmin
+pnpm admin:otp               # kode 2FA superadmin dev saat ini
+pnpm --filter @siagasos/react-demo dev   # :5176 contoh aplikasi pelapor (SOS + foto/video/suara)
 ```
 
-Login demo: `demo@siagasos.test` / `demo12345` (owner), `satpam@siagasos.test` / `demo12345` (responder).
+| Login demo | Email | Password |
+|---|---|---|
+| Owner (portal) | `demo@siagasos.test` | `demo12345` |
+| Responder (portal) | `satpam@siagasos.test` | `demo12345` |
+| Superadmin (admin, + kode `pnpm admin:otp`) | `admin@siagasos.test` | `admin-demo-12345` |
+Tema: terang / gelap / ikut sistem + 5 warna aksen (menu "Tampilan" di semua aplikasi).
+Media laporan disimpan di MinIO/S3 (`S3_*` di `apps/api/.env`, bucket privat `sos-siaga`).
+
 Halaman: registrasi 3 langkah, verifikasi email, status verifikasi + unggah dokumen, App & kunci API (rotasi/cabut, origin, webhook, tampilan tombol, source, log webhook), Tim, dan Dashboard laporan (daftar + peta realtime + bunyi alert + timeline).
 
 ## Tiga kelompok API
@@ -61,6 +72,8 @@ Halaman: registrasi 3 langkah, verifikasi email, status verifikasi + unggah doku
 | GET | `/v1/sdk/reports/:id` | status untuk pengguna |
 | POST | `/v1/sdk/reports/:id/locations` | live location; balasan `accepted:false` = berhenti |
 | POST | `/v1/sdk/reports/:id/cancel` | batal, hanya selama `open` |
+| POST | `/v1/sdk/reports/:id/media` | minta presigned PUT untuk foto/video/suara (`content_type`, `size_bytes`) |
+| POST | `/v1/sdk/reports/:id/media/:mediaId/complete` | konfirmasi upload; server HEAD objek lalu tampil realtime |
 
 ### Server klien
 `GET /v1/reports`, `GET|PATCH /v1/reports/:id`, `POST /v1/webhooks/test`. Kunci test hanya melihat data test.
@@ -69,11 +82,11 @@ Halaman: registrasi 3 langkah, verifikasi email, status verifikasi + unggah doku
 - Auth: `POST /portal/auth/{register,verify-email,resend-verification,login,accept-invite}`, `GET /portal/me`
 - Onboarding: `GET /portal/onboarding/status`, `POST /portal/onboarding/documents` (multipart `doc_type` + `file`), `POST /portal/onboarding/submit`
 - App & kunci: `/portal/apps` (CRUD), `/portal/apps/:id/keys` (buat, `/:keyId/rotate`, `/:keyId/revoke`), `/portal/apps/:id/sources`, `/portal/apps/:id/webhooks`
-- Laporan: `GET /portal/reports`, `GET|PATCH /portal/reports/:id`, `GET /portal/reports/export.csv`, `GET /portal/reports/stream` (SSE, `?access_token=`)
+- Laporan: `GET /portal/reports` (+ `media_count`), `GET|PATCH /portal/reports/:id` (+ `media[]` dengan URL baca 15 menit), `POST /portal/reports/:id/media` + `/:mediaId/complete` (lampiran petugas), `GET /portal/reports/export.csv`, `GET /portal/reports/stream` (SSE, `?access_token=`)
 - Tim: `GET /portal/team`, `POST /portal/team/invites`, `PATCH /portal/team/:userId`
 
 ### Admin
-`POST /admin/auth/login`, `GET /admin/accounts?status=pending_review`, `GET /admin/accounts/:id`, `GET /admin/documents/:id/url` (signed URL 5 menit), `PATCH /admin/documents/:id`, `POST /admin/accounts/:id/decision`, `POST /admin/apps/:id/{disable,enable}`, `GET /admin/stats`.
+`POST /admin/auth/login`, `GET /admin/accounts?status=pending_review|all|…&search=` (+ `counts` per status, `drafting` = belum mengajukan), `GET /admin/accounts/:id`, `GET /admin/documents/:id/url` (signed URL 5 menit), `PATCH /admin/documents/:id`, `POST /admin/accounts/:id/decision`, `POST /admin/apps/:id/{disable,enable}`, `GET /admin/stats`.
 
 ## Pemakaian SDK
 

@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { listReadyMedia } from '../lib/media.js';
 import { updateReportSchema } from '@siagasos/shared';
 import { q, withTenant } from '../db.js';
 import { ApiError, notFound, parse } from '../lib/errors.js';
@@ -28,8 +29,9 @@ serverRouter.get('/reports/:id', async (req, res) => {
   const k = req.key!;
   const r = await withTenant(k.accountId, (c) => loadReport(c, req.params.id!, k.appId));
   if (r.mode !== k.mode) throw notFound('Laporan');
+  const media = await withTenant(k.accountId, (c) => listReadyMedia(c, r.id));
   await audit({ accountId: k.accountId, actorKind: 'server', action: 'report.read', targetType: 'report', targetId: r.id, detail: { key_id: k.keyId } });
-  res.json(fullReport(r));
+  res.json({ ...fullReport(r), media });
 });
 
 serverRouter.patch('/reports/:id', async (req, res) => {

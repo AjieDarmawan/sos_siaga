@@ -14,5 +14,6 @@ SiagaSOS: platform tombol darurat (SOS-as-a-Service). Monorepo pnpm: `apps/api` 
 
 ## Aturan arsitektur
 - Tabel ber-RLS hanya diakses lewat `withTenant()` / `withPlatform()` (`src/db.ts`). API konek sebagai `siagasos_app`, jangan pernah superuser.
-- Jalur SOS (`/v1/sdk/reports`) tidak boleh bergantung pada Redis, email, atau webhook. Semuanya async atau fail-open.
+- Jalur SOS (`/v1/sdk/reports`) tidak boleh bergantung pada Redis, email, webhook, atau object storage (MinIO). Semuanya async atau fail-open; media punya endpoint sendiri.
+- Byte file media tidak pernah lewat API: presigned PUT/GET ke bucket privat (`src/lib/objectStorage.ts`). Jangan jadikan bucket public-read.
 - SDK core tanpa dependency runtime, < 10 KB gzip (`pnpm --filter @siagasos/js size`). Impor dari `@siagasos/shared` hanya `import type`.
