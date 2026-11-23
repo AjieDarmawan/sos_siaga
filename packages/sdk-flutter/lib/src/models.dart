@@ -206,6 +206,99 @@ class ReportRecord {
   static DateTime? _date(Object? v) => v is String ? DateTime.tryParse(v)?.toLocal() : null;
 }
 
+/// Satu baris riwayat status di detail laporan ([SiagaSOS.reportDetail]).
+class ReportTimelineEntry {
+  const ReportTimelineEntry({required this.type, required this.actor, required this.createdAt, this.toStatus, this.note});
+  /// created | status_changed | cancelled | note | media | whatsapp
+  final String type;
+  /// "Anda", nama petugas, "Petugas", atau "Sistem".
+  final String actor;
+  final SosStatus? toStatus;
+  final String? note;
+  final DateTime createdAt;
+
+  factory ReportTimelineEntry.fromJson(Map<String, dynamic> j) => ReportTimelineEntry(
+        type: j['type'] as String? ?? '',
+        actor: j['actor'] as String? ?? 'Sistem',
+        toStatus: j['to_status'] == null ? null : sosStatusFromApi(j['to_status'] as String),
+        note: j['note'] as String?,
+        createdAt: DateTime.tryParse(j['created_at'] as String? ?? '')?.toLocal() ?? DateTime.now(),
+      );
+}
+
+/// Lampiran di detail laporan. [url] = URL baca sementara (± 15 menit); minta ulang detail bila kedaluwarsa.
+class ReportMediaItem {
+  const ReportMediaItem({required this.id, required this.kind, required this.contentType, required this.uploadedBy, this.url, this.durationS});
+  final String id;
+  final MediaKind kind;
+  final String contentType;
+  /// reporter (pelapor) | user (petugas) | server
+  final String uploadedBy;
+  final String? url;
+  final double? durationS;
+
+  factory ReportMediaItem.fromJson(Map<String, dynamic> j) => ReportMediaItem(
+        id: j['id'] as String,
+        kind: MediaKind.values.firstWhere((k) => k.name == j['kind'], orElse: () => MediaKind.image),
+        contentType: j['content_type'] as String? ?? '',
+        uploadedBy: j['uploaded_by'] as String? ?? 'reporter',
+        url: j['url'] as String?,
+        durationS: (j['duration_s'] as num?)?.toDouble(),
+      );
+}
+
+/// Detail laporan untuk halaman "Riwayat laporan": status, uraian, lokasi, riwayat status, dan lampiran.
+class ReportDetail {
+  const ReportDetail({
+    required this.id,
+    required this.kind,
+    required this.category,
+    required this.status,
+    required this.createdAt,
+    this.statusMessage,
+    this.message,
+    this.location,
+    this.acknowledgedAt,
+    this.resolvedAt,
+    this.timeline = const [],
+    this.media = const [],
+  });
+  final String id;
+  final ReportKind kind;
+  final String category;
+  final SosStatus status;
+  final String? statusMessage;
+  final String? message;
+  final SosLocation? location;
+  final DateTime createdAt;
+  final DateTime? acknowledgedAt;
+  final DateTime? resolvedAt;
+  final List<ReportTimelineEntry> timeline;
+  final List<ReportMediaItem> media;
+
+  static DateTime? _d(Object? v) => v is String ? DateTime.tryParse(v)?.toLocal() : null;
+
+  factory ReportDetail.fromJson(Map<String, dynamic> j) {
+    final loc = j['location'] as Map<String, dynamic>?;
+    return ReportDetail(
+      id: j['id'] as String,
+      kind: j['kind'] == 'pengaduan' ? ReportKind.pengaduan : ReportKind.sos,
+      category: j['category'] as String? ?? '',
+      status: sosStatusFromApi(j['status'] as String? ?? 'open'),
+      statusMessage: j['status_message'] as String?,
+      message: j['message'] as String?,
+      location: loc == null
+          ? null
+          : SosLocation(lat: (loc['lat'] as num).toDouble(), lng: (loc['lng'] as num).toDouble(), accuracyM: (loc['accuracy_m'] as num?)?.toDouble()),
+      createdAt: _d(j['created_at']) ?? DateTime.now(),
+      acknowledgedAt: _d(j['acknowledged_at']),
+      resolvedAt: _d(j['resolved_at']),
+      timeline: [for (final e in (j['timeline'] as List? ?? const [])) ReportTimelineEntry.fromJson(e as Map<String, dynamic>)],
+      media: [for (final m in (j['media'] as List? ?? const [])) ReportMediaItem.fromJson(m as Map<String, dynamic>)],
+    );
+  }
+}
+
 class SdkConfig {
   const SdkConfig({
     required this.appName,

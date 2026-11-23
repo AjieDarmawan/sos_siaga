@@ -9,7 +9,7 @@ import { changeReport, loadReport, onReportCreated, publicReport } from '../lib/
 import { publish } from '../lib/realtime.js';
 import { dispatchSosWhatsApp } from '../lib/sosRecipients.js';
 import { config } from '../config.js';
-import { completeMediaUpload, createMediaSchema, createMediaUpload } from '../lib/media.js';
+import { completeMediaUpload, createMediaSchema, createMediaUpload, listReadyMedia } from '../lib/media.js';
 
 /** /v1/sdk — dipanggil @siagasos/js dan SDK native dengan publishable key. */
 export const sdkRouter = Router();
@@ -117,6 +117,59 @@ sdkRouter.get('/reports/:id', async (req, res) => {
   const k = req.key!;
   const r = await withTenant(k.accountId, (c) => loadReport(c, req.params.id!, k.appId));
   res.set('Cache-Control', 'no-store').json(publicReport(r));
+});
+
+/**
+ * Detail untuk "Riwayat laporan" di perangkat pelapor: uraian, lokasi, timeline, dan media (URL baca 15 menit).
+ * Tanpa data pribadi lain: nomor HP/device/IP pelapor tidak dikirim, hasil WhatsApp hanya diringkas (nomor penerima
+ * SOS tidak dibuka ke pelapor). Hanya pemegang id laporan (UUID acak dari respons POST) yang bisa membacanya.
+ */
+sdkRouter.get('/reports/:id/detail', async (req, res) => {
+  const k = req.key!;
+  const out = await withTenant(k.accountId, async (c) => {
+    const r = await loadReport(c, req.params.id!, k.appId);
+    const ev = await c.query(
+      `SELECT e.type, e.actor_kind, e.to_status, e.note, e.created_at, u.full_name AS actor_name
+       FROM report_events e LEFT JOIN users u ON u.id = e.actor_id
+       WHERE e.report_id = $1 ORDER BY e.created_at, e.id`,
+      [r.id],
+    );
+    const timeline: { type: string; actor: string; to_status: string | null; note: string | null; created_at: string }[] = [];
+    let wa: { sent: number; failed: number; at: string } | null = null;
+    for (const e of ev.rows) {
+      if (e.type === 'whatsapp') {
+        wa ??= { sent: 0, failed: 0, at: e.created_at };
+        if (/: terkirim$/.test(e.note ?? '')) wa.sent++;
+        else if (/: gagal/.test(e.note ?? '')) wa.failed++;
+        continue;
+      }
+      timeline.push({
+        type: e.type,
+        actor: e.actor_kind === 'reporter' ? 'Anda' : e.actor_kind === 'user' ? (e.actor_name ?? 'Petugas') : e.actor_kind === 'server' ? 'Petugas' : 'Sistem',
+        to_status: e.to_status,
+        note: e.note,
+        created_at: e.created_at,
+      });
+    }
+    if (wa && (wa.sent || wa.failed)) {
+      timeline.push({
+        type: 'whatsapp', actor: 'Sistem', to_status: null, created_at: wa.at,
+        note: `WhatsApp terkirim ke ${wa.sent} penerima${wa.failed ? `, ${wa.failed} gagal` : ''}`,
+      });
+      timeline.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+    }
+    const media = (await listReadyMedia(c, r.id)).map((m) => ({
+      id: m.id, kind: m.kind, content_type: m.content_type, duration_s: m.duration_s, uploaded_by: m.uploaded_by, created_at: m.created_at, url: m.url,
+    }));
+    return {
+      ...publicReport(r),
+      message: r.message ?? null,
+      location: r.lat == null ? null : { lat: r.lat, lng: r.lng, accuracy_m: r.accuracy_m },
+      timeline,
+      media,
+    };
+  });
+  res.set('Cache-Control', 'no-store').json(out);
 });
 
 sdkRouter.post('/reports/:id/locations', async (req, res) => {

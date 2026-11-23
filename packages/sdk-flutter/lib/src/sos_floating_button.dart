@@ -144,7 +144,6 @@ class SOSFloatingButton extends StatefulWidget {
 }
 
 const double _kEdge = 12;
-const double _kActionWidth = 172;
 
 class _SOSFloatingButtonState extends State<SOSFloatingButton> with SingleTickerProviderStateMixin {
   late final AnimationController _hold = AnimationController(vsync: this);
@@ -337,8 +336,10 @@ class _SOSFloatingButtonState extends State<SOSFloatingButton> with SingleTicker
                     right: onLeft ? null : _kEdge,
                     top: openUp ? null : pos.dy + widget.size + 10,
                     bottom: openUp ? box.maxHeight - pos.dy + 10 : null,
-                    width: (box.maxWidth - _kEdge * 2).clamp(0, _kActionWidth),
-                    child: _actions(context, onLeft: onLeft, openUp: openUp),
+                    child: ConstrainedBox(
+                      constraints: BoxConstraints(maxWidth: (box.maxWidth - _kEdge * 2).clamp(0, double.infinity)),
+                      child: _actions(context, onLeft: onLeft, openUp: openUp),
+                    ),
                   ),
                 AnimatedPositioned(
                   duration: _dragPos == null ? const Duration(milliseconds: 220) : Duration.zero,
@@ -460,49 +461,31 @@ class _SOSFloatingButtonState extends State<SOSFloatingButton> with SingleTicker
     final cfg = _cfg;
     final first = cfg?.fallbackPhone ?? '110';
     final second = widget.secondaryPhone != null && widget.secondaryPhone != first ? widget.secondaryPhone : null;
-    final complaint = widget.complaint
-        ? _ActionButton(
-            key: const ValueKey('siagasos-complaint'),
-            label: 'Pengaduan',
-            icon: Icons.campaign_rounded,
-            colors: const [Color(0xFFFDBA74), Color(0xFFFB923C), Color(0xFFEA580C)],
-            onTap: _openComplaint,
-          )
-        : null;
-    final history = widget.history
-        ? _ActionButton(
-            key: const ValueKey('siagasos-history'),
-            label: 'Riwayat laporan',
-            icon: Icons.history_rounded,
-            colors: const [Color(0xFF94A3B8), Color(0xFF64748B), Color(0xFF475569)],
-            onTap: _openHistory,
-          )
-        : null;
-    final contacts = widget.emergencyContacts
-        ? _ActionButton(
-            key: const ValueKey('siagasos-contacts'),
-            label: 'Nomor darurat',
-            icon: Icons.contact_phone_rounded,
-            colors: const [Color(0xFF4ADE80), Color(0xFF22C55E), Color(0xFF15803D)],
-            onTap: _openContacts,
-          )
-        : null;
-    final subOptions = [if (contacts != null) _openContacts, if (history != null) _openHistory, if (complaint != null) _openComplaint];
+    final complaint = widget.complaint;
+    final history = widget.history;
+    final contacts = widget.emergencyContacts;
+    final subOptions = [if (contacts) _openContacts, if (history) _openHistory, if (complaint) _openComplaint];
+    if (_reportMenu) {
+      return _Pop(
+        key: const ValueKey('siagasos-report-panel'),
+        index: 0,
+        child: _ReportPanel(
+          onBack: () => setState(() => _reportMenu = false),
+          rows: [
+            if (complaint) const _PanelRow(ValueKey('siagasos-complaint'), 'Pengaduan', Icons.campaign_rounded, Color(0xFFEA580C)),
+            if (history) const _PanelRow(ValueKey('siagasos-history'), 'Riwayat laporan', Icons.history_rounded, Color(0xFF475569)),
+            if (contacts) const _PanelRow(ValueKey('siagasos-contacts'), 'Nomor darurat', Icons.contact_phone_rounded, Color(0xFF2563EB)),
+          ],
+          onTap: (key) => switch (key) {
+            const ValueKey('siagasos-complaint') => _openComplaint(),
+            const ValueKey('siagasos-history') => _openHistory(),
+            _ => _openContacts(),
+          },
+        ),
+      );
+    }
     // Urutan daftar = dari tombol bulat ke luar (dibalik saat menu membuka ke atas).
-    final items = _reportMenu
-        ? <Widget>[
-            _ActionButton(
-              key: const ValueKey('siagasos-back'),
-              label: 'Kembali',
-              icon: Icons.arrow_back_rounded,
-              colors: const [Color(0xFF64748B), Color(0xFF475569), Color(0xFF334155)],
-              onTap: () => setState(() => _reportMenu = false),
-            ),
-            if (contacts != null) contacts,
-            if (history != null) history,
-            if (complaint != null) complaint,
-          ]
-        : <Widget>[
+    final items = <Widget>[
             if (subOptions.isNotEmpty)
               _ActionButton(
                 key: const ValueKey('siagasos-report'),
@@ -535,10 +518,10 @@ class _SOSFloatingButtonState extends State<SOSFloatingButton> with SingleTicker
               onTap: _fire,
               label: widget.sosLabel ?? (cfg?.buttonText.isNotEmpty == true ? 'Kirim ${cfg!.buttonText}' : 'Kirim SOS'),
             ),
-          ];
+    ];
+    // Hanya pesan penting: status SOS aktif cukup ditandai titik di tombol bulat.
     final note = <String>[
       if (_notice != null) _notice!,
-      if (_active) 'SOS aktif: $_statusText. Batalkan lewat Laporan → Riwayat.',
       if (widget.client.mode == SosMode.test) 'MODE TEST',
     ];
     final ordered = openUp ? items.reversed.toList() : items;
@@ -550,17 +533,29 @@ class _SOSFloatingButtonState extends State<SOSFloatingButton> with SingleTicker
             child: Text(note.join(' · '),
                 style: TextStyle(color: _notice != null ? const Color(0xFFFCA5A5) : Colors.white, fontSize: 11.5, height: 1.3)),
           );
+    // Lebar = label terpanjang (tanpa ruang kosong), semua tombol sama lebar supaya rapi.
+    // Keterangan (error / MODE TEST) di luar IntrinsicWidth supaya tidak ikut melebarkan tombol.
+    final buttons = IntrinsicWidth(
+      key: const ValueKey('siagasos-actions'),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          for (var i = 0; i < ordered.length; i++) ...[
+            if (i > 0) const SizedBox(height: 6),
+            _Pop(index: openUp ? ordered.length - 1 - i : i, child: ordered[i]),
+          ],
+        ],
+      ),
+    );
+    if (caption == null) return buttons;
     return Column(
-      key: ValueKey(_reportMenu), // animasi muncul diputar ulang saat ganti sub-menu
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: onLeft ? CrossAxisAlignment.start : CrossAxisAlignment.end,
       children: [
-        if (openUp && caption != null) ...[caption, const SizedBox(height: 8)],
-        for (var i = 0; i < ordered.length; i++) ...[
-          if (i > 0) const SizedBox(height: 6),
-          _Pop(index: openUp ? ordered.length - 1 - i : i, child: ordered[i]),
-        ],
-        if (!openUp && caption != null) ...[const SizedBox(height: 8), caption],
+        if (openUp) ...[ConstrainedBox(constraints: const BoxConstraints(maxWidth: 220), child: caption), const SizedBox(height: 8)],
+        buttons,
+        if (!openUp) ...[const SizedBox(height: 8), ConstrainedBox(constraints: const BoxConstraints(maxWidth: 220), child: caption)],
       ],
     );
   }
@@ -579,7 +574,7 @@ BoxDecoration _actionDecoration(List<Color> colors) => BoxDecoration(
 
 /// Muncul bertahap saat menu dibuka.
 class _Pop extends StatelessWidget {
-  const _Pop({required this.index, required this.child});
+  const _Pop({super.key, required this.index, required this.child});
   final int index;
   final Widget child;
   @override
@@ -592,6 +587,88 @@ class _Pop extends StatelessWidget {
       );
 }
 
+/// Lingkaran putih transparan di belakang ikon tombol aksi.
+class _IconChip extends StatelessWidget {
+  const _IconChip(this.icon);
+  final IconData icon;
+  @override
+  Widget build(BuildContext context) => Container(
+        width: 30,
+        height: 30,
+        decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.22), shape: BoxShape.circle),
+        child: Icon(icon, color: Colors.white, size: 17),
+      );
+}
+
+class _PanelRow {
+  const _PanelRow(this.key, this.label, this.icon, this.color);
+  final ValueKey<String> key;
+  final String label;
+  final IconData icon;
+  final Color color;
+}
+
+/// Sub-menu "Laporan": satu kartu putih ringkas (judul ← Laporan, lalu baris pilihan), lebar mengikuti isi.
+class _ReportPanel extends StatelessWidget {
+  const _ReportPanel({required this.onBack, required this.rows, required this.onTap});
+  final VoidCallback onBack;
+  final List<_PanelRow> rows;
+  final void Function(ValueKey<String> key) onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    const ink = Color(0xFF1F2937);
+    Widget row({Key? key, required Widget leading, required String label, required VoidCallback onTap, TextStyle? style}) => InkWell(
+          key: key,
+          onTap: () {
+            HapticFeedback.lightImpact();
+            onTap();
+          },
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(10, 8, 18, 8),
+            child: Row(mainAxisSize: MainAxisSize.min, children: [
+              leading,
+              const SizedBox(width: 10),
+              Flexible(child: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, style: style)),
+            ]),
+          ),
+        );
+    return IntrinsicWidth(
+      child: Material(
+        color: Colors.white,
+        elevation: 8,
+        shadowColor: Colors.black.withValues(alpha: 0.25),
+        borderRadius: BorderRadius.circular(16),
+        clipBehavior: Clip.antiAlias,
+        child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          row(
+            key: const ValueKey('siagasos-back'),
+            leading: const SizedBox(width: 30, child: Icon(Icons.arrow_back_rounded, size: 20, color: ink)),
+            label: 'Laporan',
+            onTap: onBack,
+            style: const TextStyle(color: ink, fontSize: 14, fontWeight: FontWeight.w800),
+          ),
+          const Divider(height: 1, thickness: 1, color: Color(0xFFE5E7EB)),
+          for (final r in rows)
+            row(
+              key: r.key,
+              leading: Container(
+                width: 30,
+                height: 30,
+                decoration: BoxDecoration(color: r.color.withValues(alpha: 0.12), shape: BoxShape.circle),
+                child: Icon(r.icon, size: 17, color: r.color),
+              ),
+              label: r.label,
+              onTap: () => onTap(r.key),
+              style: const TextStyle(color: ink, fontSize: 14, fontWeight: FontWeight.w600),
+            ),
+          const SizedBox(height: 4),
+        ]),
+      ),
+    );
+  }
+}
+
 /// Tombol aksi gradien (gaya menu SOS tata-warga).
 class _ActionButton extends StatelessWidget {
   const _ActionButton({super.key, required this.label, required this.icon, required this.colors, required this.onTap});
@@ -602,7 +679,6 @@ class _ActionButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => SizedBox(
-        width: _kActionWidth,
         height: _kActionHeight,
         child: DecoratedBox(
           decoration: _actionDecoration(colors),
@@ -616,11 +692,11 @@ class _ActionButton extends StatelessWidget {
                 onTap();
               },
               child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 12),
-                child: Row(children: [
-                  Icon(icon, color: Colors.white, size: 19),
-                  const SizedBox(width: 8),
-                  Expanded(child: Text(label, overflow: TextOverflow.ellipsis, style: _kActionText)),
+                padding: const EdgeInsets.fromLTRB(6, 0, 16, 0),
+                child: Row(mainAxisSize: MainAxisSize.min, children: [
+                  _IconChip(icon),
+                  const SizedBox(width: 10),
+                  Flexible(child: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, style: _kActionText)),
                 ]),
               ),
             ),
@@ -673,26 +749,35 @@ class _HoldToSend extends StatelessWidget {
         child: AnimatedBuilder(
           animation: hold,
           builder: (context, _) => Container(
-            width: _kActionWidth,
             height: _kActionHeight,
             decoration: _actionDecoration(colors),
             clipBehavior: Clip.antiAlias,
             child: Stack(children: [
-              FractionallySizedBox(widthFactor: hold.value, child: Container(color: Colors.black.withValues(alpha: 0.22))),
+              // Positioned: lapisan progres tidak ikut menentukan lebar tombol (IntrinsicWidth di menu).
+              Positioned.fill(
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: FractionallySizedBox(widthFactor: hold.value, heightFactor: 1, child: Container(color: Colors.black.withValues(alpha: 0.22))),
+                ),
+              ),
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 12),
-                child: Row(children: [
+                padding: const EdgeInsets.fromLTRB(6, 0, 16, 0),
+                child: Row(mainAxisSize: MainAxisSize.min, children: [
                   sending
-                      ? const SizedBox.square(dimension: 20, child: CircularProgressIndicator(strokeWidth: 2.4, color: Colors.white))
-                      : const Icon(Icons.warning_amber_rounded, color: Colors.white, size: 19),
-                  const SizedBox(width: 8),
-                  Expanded(
+                      ? const SizedBox.square(
+                          dimension: 30,
+                          child: Padding(padding: EdgeInsets.all(6), child: CircularProgressIndicator(strokeWidth: 2.2, color: Colors.white)),
+                        )
+                      : const _IconChip(Icons.warning_amber_rounded),
+                  const SizedBox(width: 10),
+                  Flexible(
                     child: Text(
                       sending
                           ? 'Mengirim…'
                           : hold.value > 0
                               ? 'Tahan… ${(seconds * (1 - hold.value)).ceil()}'
                               : label,
+                      maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: _kActionText.copyWith(fontWeight: FontWeight.w700),
                     ),

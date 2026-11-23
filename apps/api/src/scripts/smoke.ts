@@ -266,6 +266,13 @@ async function main() {
   }
   ok(wa.length === 2 && wa.some((n) => n.includes('Pos Satpam (6280011112222)')) && wa.some((n) => n.includes('Istri (6280033334444, kontak pelapor)')) && wa.every((n) => n.includes('nomor uji 0800')),
     'SOS live → WhatsApp ke penerima SOS + kontak darurat (nomor ganda sekali), tercatat di timeline');
+  // Detail untuk "Riwayat laporan" di perangkat: timeline + ringkasan WA, tanpa nomor HP pelapor / penerima.
+  const det = await call('GET', `/v1/sdk/reports/${liveRep.data.id}/detail`, { headers: sdkH(pkLive) });
+  const detText = JSON.stringify(det.data);
+  ok(det.status === 200 && det.data.location && Array.isArray(det.data.timeline) && det.data.timeline[0]?.type === 'created' && Array.isArray(det.data.media),
+    'detail laporan untuk riwayat di perangkat (lokasi, timeline, media)');
+  ok(!detText.includes('6280011112222') && !detText.includes('6280033334444') && !('reporter' in det.data),
+    'detail perangkat tidak membuka nomor penerima SOS / kontak / data pelapor');
   for (let i = 0; i < 2; i++) await call('POST', '/v1/sdk/reports', { headers: sdkH(pkLive, { 'Idempotency-Key': uuid() }), body: { reporter: { ref: 'user_999' } } });
   const spam = await call('POST', '/v1/sdk/reports', { headers: sdkH(pkLive, { 'Idempotency-Key': uuid() }), body: { reporter: { ref: 'user_999' } } });
   ok(spam.status === 429 && spam.data.error.code === 'reporter_rate_limited', 'rate limit 3 laporan / 10 menit per reporter_ref');

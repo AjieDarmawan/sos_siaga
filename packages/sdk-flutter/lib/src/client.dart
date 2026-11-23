@@ -403,6 +403,9 @@ class SiagaSOS {
 
   Future<Map<String, dynamic>> getReport(String id) => _request('GET', '/v1/sdk/reports/$id');
 
+  /// Detail laporan untuk halaman riwayat: uraian, lokasi, riwayat status (termasuk catatan petugas) dan lampiran.
+  Future<ReportDetail> reportDetail(String id) async => ReportDetail.fromJson(await _request('GET', '/v1/sdk/reports/$id/detail'));
+
   /// Catatan pelapor untuk petugas (mis. keterangan rekaman TKP). Tampil di timeline dashboard.
   /// Bila laporan masih di antrian offline, menunggu sampai terkirim (maks. [waitTimeout]).
   Future<void> addNote(String idOrLocalId, String note, {Duration waitTimeout = const Duration(minutes: 2)}) async {

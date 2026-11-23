@@ -67,7 +67,7 @@ void main() {
     // Seperti tata-warga: menu tetap sama selama SOS aktif (tanpa mode "AKTIF"/panel status);
     // status di keterangan menu + titik kecil di tombol bulat.
     expect(find.byKey(const ValueKey('siagasos-hold')), findsOneWidget);
-    expect(find.textContaining('SOS aktif: Terkirim. Menunggu petugas'), findsOneWidget);
+    expect(find.textContaining('SOS aktif'), findsNothing); // tanpa keterangan panjang; cukup titik di tombol bulat
     expect(find.byKey(const ValueKey('siagasos-fab-active')), findsOneWidget);
     expect(find.text('AKTIF'), findsNothing);
 
@@ -213,6 +213,7 @@ void main() {
       builder: (context, child) => SOSFloatingButton(
         client: sos,
         onCall: (_) {},
+        holdSeconds: 0, // seperti POS: sekali ketuk, tanpa label "tahan"
         sosLabel: 'EWS Alert',
         callLabel: 'Call',
         child: child!,
@@ -224,6 +225,13 @@ void main() {
     expect(find.text('EWS Alert'), findsOneWidget);
     expect(find.text('Call 110'), findsOneWidget);
     expect(find.text('Call 112'), findsOneWidget);
+    // Tombol sama lebar = label terpanjang (bukan lebar tetap), tidak memenuhi layar.
+    final widths = ['EWS Alert', 'Call 110', 'Call 112', 'Laporan']
+        .map((t) => tester.getSize(find.ancestor(of: find.text(t), matching: find.byType(DecoratedBox)).first).width)
+        .toSet();
+    expect(widths.length, 1);
+    // Font tes (Ahem) jauh lebih lebar dari Plus Jakarta Sans; di HP ±135 px.
+    expect(widths.single, lessThan(200));
     // Urutan atas → bawah: EWS Alert, Call 110, Call 112, Laporan, tombol bulat.
     final ys = ['EWS Alert', 'Call 110', 'Call 112', 'Laporan'].map((t) => tester.getCenter(find.text(t)).dy).toList();
     for (var i = 1; i < ys.length; i++) {
