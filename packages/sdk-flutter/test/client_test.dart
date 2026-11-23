@@ -265,7 +265,7 @@ void main() {
       requests.add(req);
       final p = req.url.path;
       if (p == '/v1/sdk/responder/otp') return http.Response(jsonEncode({'sent': false, 'expires_in_s': 300, 'dev_code': '123456'}), 200);
-      if (p == '/v1/sdk/responder/verify') {
+      if (p == '/v1/sdk/responder/verify' || p == '/v1/sdk/responder/login') {
         return http.Response(jsonEncode({'token': 'rsp_abc', 'responder': {'phone': '6281211112222', 'name': 'Pak Budi (Satpam)'}}), 201);
       }
       final rep = {'id': 'r1', 'status': 'open', 'mode': 'live', 'category': 'kriminal', 'reporter_name': 'Kasir Satu',
@@ -282,6 +282,10 @@ void main() {
     expect(r.token, 'rsp_abc');
     expect((jsonDecode(requests.last.body) as Map)['device'], containsPair('fcm_token', 'fcm-1'));
     expect(requests.first.headers.containsKey('X-SOS-Responder'), isFalse);
+
+    final direct = SiagaSOSResponder(apiKey: key, bundleId: 'com.demo.app', baseUrl: 'https://api.test', httpClient: c);
+    expect((await direct.login('081211112222')).name, 'Pak Budi (Satpam)');
+    expect(direct.token, 'rsp_abc');
 
     final list = await r.reports();
     expect(list.single.reporterName, 'Kasir Satu');

@@ -43,7 +43,7 @@ function outcome(t: WaTarget, r: WaResult | 'limited' | 'test'): string {
 export async function dispatchSosWhatsApp(report: any, appName: string): Promise<void> {
   if (report.kind === 'pengaduan') return;
   try {
-    const { recipients, sourceLabel } = await withTenant(report.account_id, async (c) => {
+    const { recipients, sourceName, sourceLabel } = await withTenant(report.account_id, async (c) => {
       const rec = await c.query(
         `SELECT name, phone, source_id FROM sos_recipients
          WHERE app_id = $1 AND active AND (source_id IS NULL OR source_id = $2)
@@ -51,7 +51,11 @@ export async function dispatchSosWhatsApp(report: any, appName: string): Promise
         [report.app_id, report.source_id ?? null],
       );
       const src = report.source_id ? await c.query(`SELECT label, source_key FROM sources WHERE id = $1`, [report.source_id]) : { rows: [] };
-      return { recipients: rec.rows, sourceLabel: (src.rows[0]?.label || src.rows[0]?.source_key || null) as string | null };
+      return {
+        recipients: rec.rows,
+        sourceName: (src.rows[0]?.label || null) as string | null,
+        sourceLabel: (src.rows[0]?.label || src.rows[0]?.source_key || null) as string | null,
+      };
     });
     const targets = mergeTargets(recipients, (report.emergency_contacts ?? []) as { name?: string; phone: string }[]);
     if (!targets.length) return;
@@ -62,7 +66,11 @@ export async function dispatchSosWhatsApp(report: any, appName: string): Promise
     } else {
       const reporter = report.reporter_name || 'Pelapor';
       const place = [appName, sourceLabel].filter(Boolean).join(' · ');
-      const params: [string, string, string] = [reporter, place || 'Lokasi tidak diketahui', mapsLink(report.lat, report.lng)];
+      // Source bernama (mis. kios POS) → baris pertama WA cukup nama tempatnya, seperti template mkasir
+      // ({{1}} nama kios, {{2}} lokasi). Tanpa label → format lama: pelapor 'app · source_key.
+      const params: [string, string, string] = sourceName
+        ? [sourceName, reporter, mapsLink(report.lat, report.lng)]
+        : [reporter, place || 'Lokasi tidak diketahui', mapsLink(report.lat, report.lng)];
       const results = await Promise.all(targets.map(async (t) => {
         if (isTestNumber(t.phone)) return outcome(t, 'test');
         const r = await hit(`wa:${t.phone}`, PER_NUMBER_LIMIT, 3600);

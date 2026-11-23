@@ -106,13 +106,12 @@ class ResponderReport {
 /// Status yang boleh diberikan satpam.
 enum ResponderAction { acknowledged, inProgress, resolved, falseAlarm }
 
-/// Klien untuk app satpam / penerima darurat. Login dengan nomor WhatsApp yang tercantum di Nomor Darurat pelapor
+/// Klien untuk app satpam / penerima darurat. Login ([login], atau OTP lewat [requestOtp] + [verify]) dengan nomor WhatsApp yang tercantum di Nomor Darurat pelapor
 /// ([SiagaSOS.setEmergencyContacts]), lalu menerima push alarm FCM setiap SOS yang menyebut nomornya.
 ///
 /// ```dart
 /// final r = SiagaSOSResponder(apiKey: 'pk_live_...', bundleId: 'com.perusahaan.app');
-/// await r.requestOtp('0812xxxx');
-/// final me = await r.verify('0812xxxx', '123456', fcmToken: await FirebaseMessaging.instance.getToken());
+/// final me = await r.login('0812xxxx', fcmToken: await FirebaseMessaging.instance.getToken());
 /// saveSomewhereSecure(r.token);
 /// ```
 ///
@@ -159,6 +158,18 @@ class SiagaSOSResponder {
       throw SiagaSOSError(res.statusCode, err['code'] as String? ?? 'http_error', err['message'] as String? ?? 'HTTP ${res.statusCode}');
     }
     return data;
+  }
+
+  /// Login langsung dengan nomor WhatsApp (tanpa OTP). 404 `responder_not_registered` bila nomor tidak ada di
+  /// Nomor Darurat mana pun. [fcmToken] = token FCM perangkat untuk push alarm.
+  Future<ResponderProfile> login(String phone, {String? fcmToken}) async {
+    final d = await _request('POST', '/v1/sdk/responder/login', auth: false, body: {
+      'phone': phone,
+      'device': {'platform': _platform(), if (fcmToken != null && fcmToken.isNotEmpty) 'fcm_token': fcmToken},
+    });
+    token = d['token'] as String;
+    final r = d['responder'] as Map<String, dynamic>;
+    return ResponderProfile(phone: r['phone'] as String, name: r['name'] as String);
   }
 
   /// Kirim kode OTP ke WhatsApp [phone]. 404 `responder_not_registered` bila nomor tidak ada di Nomor Darurat mana pun.

@@ -33,6 +33,7 @@ class SiagaSOS {
     required this.apiKey,
     required this.bundleId,
     this.sourceKey,
+    this.sourceLabel,
     this.user,
     String baseUrl = 'https://api.siagasos.id',
     this.liveLocation = true,
@@ -69,6 +70,8 @@ class SiagaSOS {
   /// Package name (Android) / bundle identifier (iOS). Harus terdaftar di allowed_bundle_ids app.
   final String bundleId;
   final String? sourceKey;
+  /// Nama tampilan [sourceKey] (mis. nama kios). Disimpan sebagai label source; dipakai di pesan WA SOS.
+  final String? sourceLabel;
   final SosUser? user;
   final String baseUrl;
   final bool liveLocation;
@@ -172,6 +175,7 @@ class SiagaSOS {
         'category': category,
         if (message != null) 'message': message,
         if (sourceKey != null) 'source_key': sourceKey,
+        if (sourceKey != null && (sourceLabel?.trim().isNotEmpty ?? false)) 'source_label': sourceLabel!.trim(),
         if (loc != null) 'location': loc.toJson(),
         if (user != null) 'reporter': user!.toJson(),
         if (metadata != null) 'metadata': metadata,
@@ -270,8 +274,9 @@ class SiagaSOS {
       out.add(EmergencyContact(name: c.name.trim(), phone: n, role: role == null || role.isEmpty ? null : role, active: c.active));
     }
     await _contacts.save(out.map((c) => c.toJson()).toList());
-    await _contactsSync.save([{'state': 'dirty'}]);
     try {
+      // Gagal menandai / sinkron tidak boleh menggagalkan simpan lokal.
+      await _contactsSync.save([{'state': 'dirty'}]);
       return await syncEmergencyContacts();
     } catch (_) {
       return false;

@@ -229,7 +229,7 @@ function SettingsTab({ app, onSaved }: { app: App; onSaved: (a: App) => void }) 
   const manage = can('owner', 'admin');
   const [f, setF] = useState({
     name: app.name, allowed_origins: app.allowed_origins, allowed_bundle_ids: app.allowed_bundle_ids,
-    webhook_url: app.webhook_url ?? '', auto_create_sources: app.auto_create_sources,
+    webhook_url: app.webhook_url ?? '', auto_create_sources: app.auto_create_sources, retention_days: app.retention_days ?? null,
   });
   const cfg0: SdkConfig = app.sdk_config ?? {};
   const [cfg, setCfg] = useState({
@@ -300,6 +300,22 @@ function SettingsTab({ app, onSaved }: { app: App; onSaved: (a: App) => void }) 
                   }}><Key size={14} />Tampilkan webhook secret</Button>}
             </div>
             <p className="small muted">Verifikasi header <code>X-SOS-Signature: t=&lt;unix&gt;,v1=&lt;hex&gt;</code> dengan HMAC-SHA256(secret, "&lt;t&gt;.&lt;raw body&gt;").</p>
+          </div>
+        </div>
+
+        <div className="card">
+          <div className="card-head"><div><h2>Penyimpanan data</h2><p>Sesuai UU PDP, simpan data pribadi pelapor (lokasi, foto, rekaman) hanya selama diperlukan.</p></div></div>
+          <div className="card-body">
+            <Field label="Hapus laporan setelah ditutup" htmlFor="retention"
+              hint="Laporan live yang sudah selesai / dibatalkan dihapus permanen beserta lokasi, timeline, dan media. Laporan yang masih aktif tidak pernah dihapus. Laporan test selalu dihapus 30 hari setelah ditutup.">
+              <select id="retention" className="select" value={f.retention_days ?? ''}
+                onChange={(e) => setF({ ...f, retention_days: e.target.value ? Number(e.target.value) : null })}>
+                <option value="">Simpan tanpa batas</option>
+                {[30, 90, 180, 365, 730, 1825].map((d) => <option key={d} value={d}>{d < 365 ? `${d} hari` : `${d / 365} tahun`}</option>)}
+                {f.retention_days != null && ![30, 90, 180, 365, 730, 1825].includes(f.retention_days) && <option value={f.retention_days}>{f.retention_days} hari</option>}
+              </select>
+            </Field>
+            <p className="small muted">Permintaan hapus data seorang pengguna: panggil <code>DELETE /v1/reporters/:ref</code> dari server Anda (secret key).</p>
           </div>
         </div>
 

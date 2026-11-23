@@ -27,11 +27,14 @@ cp apps/api/.env.example apps/api/.env      # isi secret; lihat komentar di file
 pnpm install
 pnpm migrate
 pnpm dev:api                                # http://localhost:4000
-pnpm smoke                                  # 59 cek end-to-end (API harus sedang jalan)
+pnpm smoke                                  # 102 cek end-to-end (API harus sedang jalan)
+pnpm --filter @siagasos/api test            # unit test API (vitest, tanpa DB/Redis)
 pnpm --filter @siagasos/api create-admin reviewer@siagasos.id 'password-min-12' superadmin
 ```
 
 > API **wajib** konek sebagai role non-superuser tanpa `BYPASSRLS`. Superuser Postgres selalu melewati Row Level Security, sehingga isolasi tenant tidak berlaku.
+
+API juga menjalankan job pembersihan tiap 10 menit (`MAINTENANCE_WORKER=true`, aman multi-instance): media `pending` yang tidak di-complete > 75 menit dihapus dari bucket & DB, laporan tertutup melewati retensi app dihapus, OTP responder kedaluwarsa dibuang.
 
 Di mode non-production, `register` dan undangan mengembalikan `dev_verification_token` / `dev_invite_token`, dan email ditulis ke log (bukan dikirim) bila `SMTP_URL` kosong.
 
@@ -74,11 +77,19 @@ Halaman: registrasi 3 langkah, verifikasi email, status verifikasi + unggah doku
 | POST | `/v1/sdk/reports/:id/cancel` | batal, hanya selama `open` |
 | GET | `/v1/sdk/reports/:id/detail` | detail untuk riwayat di perangkat: uraian, lokasi, timeline (catatan petugas, ringkasan WA), media + URL baca 15 menit; tanpa data pribadi pelapor / nomor penerima |
 | POST | `/v1/sdk/reports/:id/notes` | catatan pelapor `{note}` (mis. keterangan rekaman TKP) → timeline `note`; 409 bila laporan sudah ditutup |
+| GET/PUT | `/v1/sdk/contacts` | Nomor Darurat pelapor (`?reporter_ref=` / `{reporter, source_key?, contacts[]}`, ganti total). Nomor di sini yang boleh login sebagai satpam |
+| POST | `/v1/sdk/responder/otp` | `{phone}` → OTP WhatsApp (template `METADEV_OTP_TEMPLATE_NAME`). 404 `responder_not_registered` bila nomor tidak ada di Nomor Darurat. Kunci test / server dev: `dev_code` |
+| POST | `/v1/sdk/responder/verify` | `{phone, code, device:{platform, fcm_token}}` → `{token: rsp_..., responder}` |
+| GET | `/v1/sdk/responder/me` · `/reports` · `/reports/:id` | header `X-SOS-Responder`. SOS 7 hari terakhir yang mencantumkan nomor satpam |
+| POST | `/v1/sdk/responder/reports/:id/status` | `{status: acknowledged\|in_progress\|resolved\|false_alarm, note?}` → timeline actor `responder` |
+| PUT/POST | `/v1/sdk/responder/device` · `/logout` | perbarui token FCM · akhiri sesi |
 | POST | `/v1/sdk/reports/:id/media` | minta presigned PUT untuk foto/video/suara (`content_type`, `size_bytes`) |
 | POST | `/v1/sdk/reports/:id/media/:mediaId/complete` | konfirmasi upload; server HEAD objek lalu tampil realtime |
 
 ### Server klien
-`GET /v1/reports` (`?kind=sos|pengaduan`), `GET|PATCH /v1/reports/:id`, `POST /v1/webhooks/test`. Kunci test hanya melihat data test.
+`GET /v1/reports` (`?kind=sos|pengaduan`), `GET|PATCH /v1/reports/:id`, `POST /v1/webhooks/test`, `DELETE /v1/reporters/:ref` (hapus permanen semua laporan + Nomor Darurat satu pengguna akhir, UU PDP; → `{deleted:{reports,media,emergency_contacts}}`, 30/jam per app). Kunci test hanya melihat/menghapus data test.
+
+Retensi: `PATCH /portal/apps/:id {retention_days: 30..3650 | null}`. Job pembersihan menghapus laporan live yang sudah ditutup lebih lama dari itu, dan laporan test 30 hari setelah ditutup.
 
 ### Portal
 - Auth: `POST /portal/auth/{register,verify-email,resend-verification,login,accept-invite}`, `GET /portal/me`

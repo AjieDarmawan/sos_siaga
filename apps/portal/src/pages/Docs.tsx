@@ -423,7 +423,7 @@ Idempotency-Key: 6f2c...
           <section id="lokasi">
             <h2>Lokasi & privasi</h2>
             <p>Browser meminta izin lokasi saat tombol pertama kali ditekan. Bila ditolak atau GPS lambat (&gt; 8 detik), laporan tetap terkirim tanpa lokasi. Selama laporan aktif, lokasi dikirim berkala (default 15 detik, diatur di portal) dan berhenti otomatis saat laporan mencapai status akhir.</p>
-            <Note tone="warn">Sesuai UU PDP, beri tahu pengguna sebelum mereka memakai tombol bahwa lokasi akan dibagikan ke tim responder Anda, dan cantumkan di kebijakan privasi aplikasi. Setiap kali petugas membuka detail laporan, aksesnya tercatat di audit log.</Note>
+            <Note tone="warn">Sesuai UU PDP, beri tahu pengguna sebelum mereka memakai tombol bahwa lokasi akan dibagikan ke tim responder Anda, dan cantumkan di kebijakan privasi aplikasi. Setiap kali petugas membuka detail laporan, aksesnya tercatat di audit log. Atur lama penyimpanan laporan di <b>App → Pengaturan → Penyimpanan data</b>, dan teruskan permintaan hapus data pengguna ke <code>DELETE /v1/reporters/:ref</code>.</Note>
           </section>
 
           <section id="lampiran">
@@ -604,6 +604,7 @@ $event = json_decode($raw, true);`}</Code>
               ['GET /v1/reports/:id', 'detail', 'Detail satu laporan beserta timeline.'],
               ['PATCH /v1/reports/:id', 'update', 'Ubah status dan/atau tambah catatan: { "status": "acknowledged", "note": "..." }'],
               ['POST /v1/webhooks/test', 'test', 'Kirim event uji ke webhook URL app.'],
+              ['DELETE /v1/reporters/:ref', 'hapus data', 'Hapus permanen semua laporan (lokasi, timeline, media) dan Nomor Darurat milik satu pengguna akhir (permintaan hapus data, UU PDP).'],
             ]} />
             <Code lang="bash">{`curl ${api}/v1/reports?status=open,acknowledged \\
   -H "Authorization: Bearer sk_test_..."

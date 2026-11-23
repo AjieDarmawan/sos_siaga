@@ -121,6 +121,28 @@ responderRouter.post('/verify', async (req, res) => {
   res.status(201).json({ token: out.token, responder: { phone: body.phone, name: out.name } });
 });
 
+const loginSchema = z.object({ phone: phoneSchema, device: verifySchema.shape.device });
+
+/**
+ * Login langsung tanpa OTP (keputusan produk POS: satpam cukup memasukkan nomornya). Syaratnya hanya nomor ada di
+ * Nomor Darurat app ini. Konsekuensinya siapa pun yang tahu nomor itu bisa masuk sebagai satpam, jadi dibatasi
+ * rate limit per IP & nomor. /otp + /verify tetap tersedia bila nanti ingin diperketat lagi.
+ */
+responderRouter.post('/login', async (req, res) => {
+  const k = req.key!;
+  const body = parse(loginSchema, req.body);
+  await enforce(`rsp-login-ip:${req.ip}`, 20, 3600);
+  await enforce(`rsp-login:${k.appId}:${body.phone}`, 10, 600);
+  const out = await withTenant(k.accountId, async (c) => {
+    const name = await registeredName(c, k.appId, body.phone);
+    if (!name) {
+      throw new ApiError(404, 'responder_not_registered', 'Nomor ini belum terdaftar di Nomor Darurat kasir mana pun. Minta kasir menambahkannya dulu.');
+    }
+    return { name, token: await createSession(c, k, body.phone, body.device) };
+  });
+  res.status(201).json({ token: out.token, responder: { phone: body.phone, name: out.name } });
+});
+
 responderRouter.use(responderAuth);
 
 /** Profil + daftar kasir/outlet yang mencantumkan nomor ini. */

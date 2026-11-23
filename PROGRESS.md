@@ -19,7 +19,8 @@ Legenda: ✅ selesai & teruji · 🟡 sebagian · ⬜ belum
      ketuk → menu **Kirim SOS** (tahan N dtk) / **Telepon 110** / **Telepon 112** (nomor & teks dari `/v1/sdk/config`);
      setelah terkirim → panel status + tombol **Foto / Video / Suara** (rekam TKP singkat, mirip `sos_tkp_page.dart`). Pasang sekali di root app → tampil di semua halaman. Tombol besar `SOSButton` tetap ada.
   3. Contoh app mobile (Flutter `example/`) + uji di emulator Android (AVD `Pixel_7_API_35` tersedia).
-  4. Baru lanjut daftar penting: (1) web push responder, (2) consent lokasi/kamera/mikrofon (UU PDP) di semua SDK, (3) cron bersihkan media `pending` + retensi media, (4) kompresi video di perangkat sebelum upload.
+  4. Baru lanjut daftar penting: (1) web push responder, (2) consent lokasi/kamera/mikrofon (UU PDP) di semua SDK, (3) ~~cron bersihkan media `pending` + retensi~~ ✅, (4) kompresi video di perangkat sebelum upload.
+  - Login satpam: **tanpa OTP** (keputusan user 2026-11-23, `POST /v1/sdk/responder/login`). Template WA `kode_otp` tidak perlu dibuat; `/otp` + `/verify` dibiarkan untuk opsi pengetatan.
   5. Sesudahnya: React Native (`@siagasos/js` + opsi `bundleId`), publish SDK (npm, pub, Maven, SPM), lalu urusan web.
 - **Branch:** `main` (user commit sendiri `0ea6a5b fix`). Belum di-commit: `packages/sdk-android` (SiagaSOS.kt, SOSButtonView.kt, test/, README), seluruh `packages/sdk-ios/`, dan `SOSFloatingButton` Flutter.
 
@@ -58,11 +59,11 @@ Legenda: ✅ selesai & teruji · 🟡 sebagian · ⬜ belum
 - ⬜ OpenAPI spec untuk `/v1` dan `/v1/sdk`
 - ⬜ Antivirus (ClamAV) saat unggah, hapus otomatis dokumen akun ditolak setelah 90 hari
 - ⬜ Notifikasi aktif ke admin saat review > 36 jam kerja (sekarang baru flag di antrean)
-- ⬜ Retensi / anonimisasi laporan per app (UU PDP), endpoint hapus data pengguna akhir
+- ✅ Retensi laporan per app (`apps.retention_days`, migrasi 006, portal **Pengaturan → Penyimpanan data**) + `DELETE /v1/reporters/:ref` hapus data pengguna akhir (UU PDP)
 - ✅ Media laporan (foto/video/suara) di MinIO `sos-siaga` (kredensial sama dengan tata-warga-be): presigned PUT langsung dari perangkat, verifikasi HEAD, presigned GET 15 mnt, RLS `report_media` (migrasi 002), realtime `report.media_added`, petugas bisa melampirkan juga
 - ⬜ Dokumen onboarding masih di disk lokal terenkripsi (bisa dipindah ke MinIO)
-- ⬜ Pembersihan media `pending` yang tidak pernah di-complete (cron) + retensi media per app
-- ⬜ Unit test API (vitest sudah terpasang, belum ada test)
+- ✅ Pembersihan media `pending` yang tidak pernah di-complete (`lib/maintenance.ts`, tiap 10 menit, advisory lock) + OTP kedaluwarsa
+- 🟡 Unit test API: 31 test vitest (`apps/api/test/`: nomor WA, schema laporan, jam kerja, kunci, tanda tangan, sniff MIME, rate limit fail-open, penerima WA). Belum: route + RLS (masih lewat smoke)
 - ⬜ Hari libur nasional di perhitungan jam kerja
 
 ### SDK
@@ -95,7 +96,7 @@ Legenda: ✅ selesai & teruji · 🟡 sebagian · ⬜ belum
 
 ### Infra / ops
 - ✅ `docker-compose.yml` (postgres :5455 + role `siagasos_app`, redis :6380)
-- ⬜ CI: typecheck + unit test + smoke dengan service container
+- ⬜ CI (ditunda atas permintaan user 2026-11-23)
 - ⬜ Deploy minimal 2 instance API, Postgres terkelola, backup harian + PITR 7 hari
 - ⬜ Monitoring uptime, alert bila error > 1% selama 5 menit, status page
 
@@ -125,6 +126,7 @@ pnpm -r typecheck
 - Konteks tenant: semua akses ke tabel ber-RLS harus lewat `withTenant(accountId, fn)`. Admin/job lintas tenant memakai `withPlatform(fn)`.
 - Cache kunci in-process 30 detik. `invalidateKeyCache()` hanya membersihkan instance lokal; instance lain mengikuti TTL (tetap ≤ 60 detik sesuai PRD).
 - **Mobile toolchain di mesin ini:** Flutter 3.47, Android SDK (platform 23–36, AVD `Pixel_7_API_35`), JDK 17 untuk Gradle (`JAVA_HOME=$(/usr/libexec/java_home -v 17)`), Gradle 8.13 + AGP 8.11.1 + Kotlin 2.2.21 ter-cache. **Tidak ada Xcode penuh** (hanya Command Line Tools): Swift package bisa `swift build/run` di macOS, tapi tidak ada XCTest/simulator iOS, makanya ada `siagasos-selftest`.
+- **Ada HP fisik tersambung USB** (Redmi `ovskso79wkz9aeww`): `adb` tanpa `-s` menargetkannya. Emulator `Pixel_7_API_35` gagal start (system image ps16k tidak lengkap).
 - Unit test Android dikompilasi terhadap `android.jar`: `com.sun.net.httpserver` tidak ada, pakai `FakeHttpServer` (ServerSocket). Hindari `java.time` di kode SDK (minSdk 21).
 - Data demo mobile: app "Aplikasi Kurir (Android)" bundle `id.demosiaga.kurir`, kunci live di portal → dipakai uji integrasi SDK mobile.
 - **Port 5173 dipakai project lain (`sekolahkita`)**, jadi portal jalan di :5174. Saat dev, jalankan API dengan `PORTAL_URL=http://localhost:5174` supaya tautan verifikasi/undangan benar.
@@ -135,6 +137,7 @@ pnpm -r typecheck
 - Uji upload dari browser butuh origin terdaftar di app (demo React :5176 sudah ditambahkan oleh seed). Chrome headless: `--use-fake-device-for-media-stream` untuk mikrofon palsu.
 - Grid CSS dengan konten lebar (tabel, kode) wajib `grid-template-columns: minmax(0, 1fr)`; kolom implisit `auto` membuat halaman scroll horizontal di HP.
 - Kelas landing jangan memakai nama `.dash*` (bentrok dengan dashboard di `styles.css`); scene hero memakai prefiks `sc-`.
+- **`pnpm smoke` berturut-turut cepat bisa gagal acak** (429 di cek SDK mana saja): rate limit SDK 60/menit per IP, satu run sudah mendekati batas. Tunggu ±1 menit antar run.
 - Express 5: `req.params.x` bertipe `string | string[]`, bungkus dengan `String()`.
 - Bila mengubah perilaku API, jalankan ulang `pnpm smoke`, lalu perbarui README (daftar endpoint) dan `docs/STATUS.md`.
 
@@ -245,3 +248,34 @@ pnpm -r typecheck
 - ⬜ Deploy ke `sos.tip2.co` (migrasi 004 + env WA MetaDev yang sama); app commerceOS POS (`com.tip.kasir`) perlu didaftarkan di portal production untuk kunci `pk_live_` yang valid di sana.
 - Lanjutan (permintaan: "nomor darurat ada di aplikasi seperti tata-warga, ada CRUD-nya"): `EmergencyContact` kini punya **jabatan** (`role`) dan **aktif/nonaktif**; maks. **5 aktif** (server `MAX_EMERGENCY_CONTACTS` 3 → 5), 10 tersimpan; hanya yang aktif dikirim, nama ke server "Nama (Jabatan)". `setEmergencyContacts` menolak nama kosong / nomor ganda / tidak valid / >5 aktif dengan `ArgumentError` berbahasa Indonesia. Dokumentasi `/docs#wa-kontak` menjelaskan halaman CRUD di app host + contoh kode. SDK **15/15 test**, smoke **82 cek**.
 - UI menu SOS dirapikan (masukan user dari HP): keterangan "SOS aktif: …" dihapus (cukup titik di tombol bulat); tombol tidak lagi lebar tetap 172 px, lebarnya = label terpanjang (`IntrinsicWidth`) dan semuanya sama lebar; ikon di lingkaran putih transparan. Sub-menu **Laporan** jadi satu kartu putih ringkas: "← Laporan" lalu Pengaduan / Riwayat laporan / Nomor darurat (ikon berwarna di lingkaran pucat). Keterangan error / MODE TEST tidak ikut melebarkan tombol. SDK 15/15 test (cek: tidak ada teks "SOS aktif", 4 tombol sama lebar).
+- **Detail Riwayat laporan**: API `GET /v1/sdk/reports/:id/detail` (uraian, lokasi, timeline dengan nama petugas / "Anda" / "Sistem", ringkasan WA "terkirim ke N penerima", media + URL baca 15 menit; tanpa nomor HP pelapor / penerima, smoke memeriksa). SDK `SiagaSOS.reportDetail()` + `ReportDetail` / `ReportTimelineEntry` / `ReportMediaItem`; di sheet Riwayat, ketuk laporan → detail (kartu status + pesan petugas, waktu dikirim/diterima/selesai, uraian, lokasi + "Buka peta", galeri foto/video, riwayat status bergaya timeline, batal salah tekan). Prop baru `onOpenUrl` (peta & lampiran). Docs `/docs#floating` diperbarui (menu sekarang, Riwayat + detail, props). Smoke **84 cek**, SDK **15/15 test**.
+
+### 2026-11-23 · Login satpam (responder) dari Nomor Darurat + push FCM sirene
+- Permintaan user (POS): satpam login dengan nomor yang dimasukkan kasir di Nomor Darurat, lalu dapat FCM + sirene setiap EWS Alert.
+- Migrasi `005_responders.sql`: `emergency_contacts` (salinan server Nomor Darurat per `reporter_ref`), `responder_otps`, `responder_sessions` (token `rsp_` hash + `fcm_token`), GIN `reports.emergency_contacts`, actor_kind `responder`.
+- API: `/v1/sdk/contacts` (GET/PUT), `/v1/sdk/responder/{otp,verify,me,device,logout,reports,reports/:id,reports/:id/status}` (`src/routes/responder.ts`, `src/lib/responders.ts`).
+  - Sesi dicabut otomatis bila nomor dihapus dari semua Nomor Darurat (401 `responder_not_registered`).
+  - Satpam hanya melihat SOS yang snapshot `emergency_contacts`-nya memuat nomornya.
+- `src/lib/fcm.ts`: FCM HTTP v1 tanpa dependency baru (JWT RS256 via jsonwebtoken), channel Android `siagasos_sos` + suara `sos_siren`, token mati dikosongkan. Dipanggil setelah commit, tidak memblokir jalur SOS; ringkasan di timeline (type `push`).
+- OTP WA: `sendOtpWhatsApp` (MetaDev saja, template `METADEV_OTP_TEMPLATE_NAME`, default `kode_otp`). Nomor uji 0800 tidak dikirimi WA.
+- SDK Flutter: `SiagaSOS.setEmergencyContacts` kini mengembalikan bool tersinkron + `syncEmergencyContacts()` (dirty/synced, pulihkan di perangkat baru); kelas baru `SiagaSOSResponder` (`lib/src/responder.dart`).
+- **Teruji:** smoke 99 cek (15 baru), `pnpm -r typecheck`, SDK Flutter 17 test + analyze bersih.
+- **Belum:** template OTP `kode_otp` harus dibuat & APPROVED di MetaDev; `FCM_SERVICE_ACCOUNT` (project `pushnotif-6937d`) di server; deploy migrasi 005 ke `sos.tip2.co`; push SDK ke remote yang dipakai POS (GitLab `dev`). SDK Android/iOS native belum punya klien responder.
+
+### 2026-11-23 · Keandalan: job pembersihan, unit test API
+- User: OTP tidak perlu (login satpam langsung dengan nomor sudah ada), lanjut yang penting.
+- `apps/api/src/lib/maintenance.ts` + `MAINTENANCE_WORKER` (default true): hapus media `pending` basi (objek MinIO + baris) dan OTP kedaluwarsa, tiap 10 menit, `pg_try_advisory_xact_lock` untuk multi-instance. Smoke +1 cek (ghost media dimundurkan 3 jam → terhapus, media ready tetap).
+- Unit test API pertama: `apps/api/vitest.config.ts` (env dummy, tanpa DB/Redis) + `test/{shared,lib,failopen}.test.ts`, **31/31 lolos**.
+- CI sempat dibuat lalu dihapus: user minta dilewati dulu.
+- Retensi UU PDP: migrasi `006_retention.sql` (`apps.retention_days`, FK webhook → SET NULL, 2 indeks), job pembersihan menghapus laporan tertutup melewati retensi (test: 30 hari), `DELETE /v1/reporters/:ref` (secret key), isian portal **Penyimpanan data**, docs publik + README + STATUS (keputusan 19).
+- Teruji: `pnpm smoke` **108 cek** (+7: pending basi, validasi & simpan retensi, retensi live/test/aktif, hapus data dengan kunci test vs live, data benar-benar hilang), `pnpm -r typecheck` lolos, unit test API 31/31. UI portal belum dicek visual.
+- Belum: consent lokasi/kamera/mikrofon di SDK, web push, kompresi video, deploy migrasi 006 ke `sos.tip2.co`.
+
+### 2026-11-23 · Android native: client setara Flutter + `SOSFloatingButton` (sedang diuji)
+- Urutan dari user: Android native → iOS → consent UU PDP.
+- Client Kotlin: `complain()`, `history()`, `reportDetail()`, `addNote()`, Nomor Darurat (`emergencyContacts` / `setEmergencyContacts` / `syncEmergencyContactsBlocking`, penanda dirty berversi), `sourceLabel`, `ReportKind`, model `ReportRecord` / `ReportDetail`, `Iso` parser tanpa java.time. `SiagaSOS.create()` menyimpan riwayat & kontak per api key + `user.ref`.
+- `SOSFloatingButton.install(application, sos, Options)`: tanpa AndroidX, lapisan per Activity (ActivityLifecycleCallbacks, dipasang saat resumed), geser + tempel tepi + posisi di SharedPreferences, menu EWS (tahan N dtk / 0 = ketuk) · Telepon 110/112 (default `ACTION_DIAL`) · Laporan → Pengaduan / Riwayat (+ detail, batal salah tekan) / Nomor darurat; lembar Rekam TKP (`MediaCapture` app host) + catatan; `SosSiren` → tombol "SENYAP"; palet gelap/terang.
+- Modul `packages/sdk-android/sample` (bundle `id.demosiaga.kurir`, kunci dari `local.properties`: `siagasos.key`, `siagasos.url`), kamera palsu + sirene ToneGenerator.
+- Teruji: **17/17 test JVM** (+8 `FeaturesTest`), AAR release ±216 KB (dulu ±73 KB, UI tombol melayang).
+- **Belum diuji visual**: emulator `Pixel_7_API_35` gagal start ("No initial system image" untuk image ps16k). `adb install` tanpa `-s` masuk ke HP fisik yang tersambung USB (Redmi 24117RN76O) — app sample terpasang di sana; ke depan selalu pakai `adb -s <serial>`.
+

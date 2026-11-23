@@ -55,6 +55,8 @@ export type EmergencyContact = z.infer<typeof emergencyContactSchema>;
 export const createReportSchema = z.object({
   kind: z.enum(REPORT_KINDS).default('sos'),
   source_key: z.string().min(1).max(64).regex(/^[a-z0-9][a-z0-9._-]*$/i).optional(),
+  /** Nama tampilan source (mis. nama kios). Disimpan ke sources.label; dipakai di pesan WA SOS. */
+  source_label: z.string().trim().min(1).max(120).optional(),
   category: z.string().min(1).max(40).default('general'),
   message: z.string().max(2000).optional(),
   location: locationSchema.optional(),

@@ -77,11 +77,14 @@ sdkRouter.post('/reports', async (req, res) => {
       if (!sourceId) {
         if (!k.autoCreateSources) throw new ApiError(422, 'unknown_source', `source_key "${body.source_key}" belum terdaftar`);
         const ins = await c.query(
-          `INSERT INTO sources (app_id, account_id, source_key, platform) VALUES ($1,$2,$3,$4)
+          `INSERT INTO sources (app_id, account_id, source_key, label, platform) VALUES ($1,$2,$3,$4,$5)
            ON CONFLICT (app_id, source_key) DO UPDATE SET source_key = EXCLUDED.source_key RETURNING id`,
-          [k.appId, k.accountId, body.source_key, body.device?.platform ?? null],
+          [k.appId, k.accountId, body.source_key, body.source_label ?? null, body.device?.platform ?? null],
         );
         sourceId = ins.rows[0].id;
+      } else if (body.source_label) {
+        // Nama tampilan dari app (mis. nama kios) mengikuti perubahan di sisi klien.
+        await c.query(`UPDATE sources SET label = $2 WHERE id = $1 AND label IS DISTINCT FROM $2`, [sourceId, body.source_label]);
       }
     }
 
