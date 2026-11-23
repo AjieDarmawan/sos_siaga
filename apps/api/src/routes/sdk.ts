@@ -146,6 +146,21 @@ sdkRouter.post('/reports/:id/cancel', async (req, res) => {
   res.json(publicReport(r));
 });
 
+// Catatan pelapor setelah laporan terkirim (mis. keterangan rekaman TKP). Masuk timeline sebagai event `note`
+// (actor reporter) dan realtime `report.note_added`; tidak mengubah status, tidak memicu webhook.
+sdkRouter.post('/reports/:id/notes', async (req, res) => {
+  const k = req.key!;
+  const note = typeof req.body?.note === 'string' ? req.body.note.trim() : '';
+  if (!note || note.length > 1000) throw new ApiError(422, 'invalid_note', 'Catatan wajib diisi, maksimal 1000 karakter');
+  await enforce(`note:${req.params.id}`, 10, 600);
+  const r = await withTenant(k.accountId, async (c) => {
+    const cur = await loadReport(c, req.params.id!, k.appId);
+    if (TERMINAL_STATUSES.includes(cur.status)) throw new ApiError(409, 'report_closed', 'Laporan sudah ditutup, catatan tidak bisa ditambahkan');
+    return changeReport(c, cur.id, { note }, { kind: 'reporter', name: cur.reporter_name }, k.appId);
+  });
+  res.status(201).json(publicReport(r));
+});
+
 // Lampiran foto/video/suara. Langkah 1: minta presigned PUT; perangkat mengunggah langsung ke object storage.
 sdkRouter.post('/reports/:id/media', async (req, res) => {
   const k = req.key!;

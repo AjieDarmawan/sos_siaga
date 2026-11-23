@@ -29,6 +29,7 @@ Base URL default: `https://api.siagasos.id` (bisa dioverride untuk staging / lok
    2. `PUT upload.url` dengan **persis** `upload.headers` dan body file (ukuran harus sama dengan `size_bytes`). Ini langsung ke object storage, bukan ke API; jangan kirim `X-SOS-Key`.
    3. `POST /v1/sdk/reports/:id/media/:mediaId/complete` → `MediaPublic { id, kind, content_type, size_bytes, status:'ready' }`.
    Bila laporan masih di antrian, tunggu sampai terkirim (event `sent`) dulu.
+8. **Catatan pelapor**: `POST /v1/sdk/reports/:id/notes` `{note}` (1–1000 karakter) → `201` + status publik. Dipakai setelah rekam TKP; tampil di timeline dashboard. 409 `report_closed` bila status sudah akhir, 422 `invalid_note`.
    Batas: foto 10 MB, video 60 MB, suara 15 MB, 10 lampiran per laporan. MIME: lihat `apps/api/src/lib/media.ts`.
 
 8. **Pengaduan** (non-darurat, menu "Laporan pengaduan" di tombol melayang): sama dengan trigger, body `kind: 'pengaduan'`,

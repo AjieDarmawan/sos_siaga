@@ -145,6 +145,16 @@ async function main() {
   ok(locAfter.data.accepted === false, 'live location berhenti setelah resolved');
 
   const r2 = await call('POST', '/v1/sdk/reports', { headers: sdkH(pkTest, { 'Idempotency-Key': uuid() }), body: { category: 'medis' } });
+  // Catatan pelapor (keterangan rekaman TKP): masuk timeline sebagai note dari pelapor.
+  const badNote = await call('POST', `/v1/sdk/reports/${r2.data.id}/notes`, { headers: sdkH(pkTest), body: { note: '  ' } });
+  ok(badNote.status === 422 && badNote.data.error.code === 'invalid_note', 'catatan pelapor kosong ditolak');
+  const note = await call('POST', `/v1/sdk/reports/${r2.data.id}/notes`, { headers: sdkH(pkTest), body: { note: 'Orang mencurigakan di depan toko' } });
+  const noted = await call('GET', `/portal/reports/${r2.data.id}`, { token: A.token });
+  const ev = noted.data.timeline.find((e: any) => e.type === 'note');
+  ok(note.status === 201 && note.data.status === 'open' && ev?.actor_kind === 'reporter' && ev.note === 'Orang mencurigakan di depan toko',
+    'catatan pelapor masuk timeline (actor reporter, status tetap)');
+  const noteClosed = await call('POST', `/v1/sdk/reports/${r1.data.id}/notes`, { headers: sdkH(pkTest), body: { note: 'telat' } });
+  ok(noteClosed.status === 409, 'catatan ke laporan yang sudah ditutup ditolak');
   const cancel = await call('POST', `/v1/sdk/reports/${r2.data.id}/cancel`, { headers: sdkH(pkTest), body: { reason: 'salah pencet' } });
   ok(cancel.data.status === 'cancelled', 'pengguna batalkan laporan open');
 

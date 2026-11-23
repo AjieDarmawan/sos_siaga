@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -19,10 +20,23 @@ class CapturedMedia {
 /// Kembalikan null bila pengguna membatalkan.
 typedef MediaCapture = Future<CapturedMedia?> Function(BuildContext context, MediaKind kind);
 
+/// Sirene panik di HP pelapor. Suara diputar app host (SDK tanpa plugin audio).
+/// SDK memanggil [start] saat SOS ditekan; selama [active] true tombol bulat menjadi "SENYAP" ([stop]).
+abstract class SosSiren {
+  ValueListenable<bool> get active;
+  void start();
+  void stop();
+}
+
 /// Tombol SOS kecil yang melayang di atas semua halaman.
 ///
-/// Ketuk → 4 aksi bertumpuk: **Kirim SOS** (tahan N detik), **Telepon 110**, **Telepon 112**,
-/// dan **Laporan pengaduan** (form non-darurat: kategori, uraian, foto opsional → [SiagaSOS.complain]).
+/// Ketuk → 4 aksi bertumpuk (gaya `DraggableSosMenu` tata-warga): **Kirim SOS** (tahan N detik, atau sekali
+/// ketuk bila `holdSeconds: 0`), **Telepon 110**, **Telepon 112**, dan **Laporan** → sub-menu Pengaduan
+/// ([SiagaSOS.complain]) / Riwayat laporan ([SiagaSOS.history]).
+///
+/// Setelah SOS terkirim: [siren] berbunyi (tombol bulat jadi "SENYAP"), lalu popup "Rekam kondisi TKP?" →
+/// [onCapture] video → catatan → video + [SiagaSOS.addNote] ke petugas. Tanpa [onCapture] / `tkpPrompt: false`
+/// tampil panel status (batal + Foto/Video/Suara).
 ///
 /// Pasang sekali di root app:
 /// ```dart
@@ -61,41 +75,66 @@ class SOSFloatingButton extends StatefulWidget {
     this.sosColors,
     this.callLabel = 'Telepon',
     this.history = true,
+    this.siren,
+    this.tkpPrompt = true,
+    this.tkpSeconds = 5,
   });
 
   final SiagaSOS client;
   final Widget child;
   final String category;
   final String? message;
+
   /// Override durasi tahan; null = ikut pengaturan app di portal.
   final int? holdSeconds;
+
   /// Menelepon nomor darurat (mis. url_launcher `tel:`). Null = tombol telepon disembunyikan.
   final void Function(String phone)? onCall;
+
   /// Nomor darurat kedua di menu. Nomor pertama memakai `fallback_phone` dari portal (default 110).
   final String? secondaryPhone;
+
   /// Rekam TKP. Null = tombol Foto / Video / Suara disembunyikan.
   final MediaCapture? onCapture;
   final void Function(ActiveReport report)? onSent;
   final void Function(SiagaSOSError error)? onError;
   final double size;
   final Color color;
+
   /// false = tombol disembunyikan (mis. di halaman login) tanpa melepas widget.
   final bool visible;
+
   /// Kunci SharedPreferences untuk posisi tombol.
   final String positionKey;
+
   /// Tampilkan menu "Laporan pengaduan". Kategori dari `complaint_categories` di portal.
   final bool complaint;
   final void Function(ActiveReport report)? onComplaintSent;
+
   /// Jenis lampiran yang ditawarkan setelah SOS terkirim (mis. tanpa [MediaKind.audio] bila app tidak punya perekam).
   final List<MediaKind> captureKinds;
+
   /// Label tombol kirim SOS di menu (mis. 'EWS Alert'). Null = "Kirim `button_text` portal".
   final String? sosLabel;
+
   /// Gradien tombol kirim SOS di menu (mis. kuning EWS). Null = turunan [color].
   final List<Color>? sosColors;
+
   /// Awalan tombol telepon: `"$callLabel 110"` (mis. 'Call').
   final String callLabel;
+
   /// Tampilkan menu "Riwayat laporan" (status SOS & pengaduan yang pernah dikirim dari perangkat ini).
   final bool history;
+
+  /// Sirene di HP pelapor saat SOS ditekan (opsional).
+  final SosSiren? siren;
+
+  /// Setelah SOS terkirim, tawarkan "Rekam kondisi TKP?" (video + catatan) seperti tata-warga.
+  /// Butuh [onCapture] dan [MediaKind.video] di [captureKinds]; false = panel status biasa.
+  final bool tkpPrompt;
+
+  /// Batas durasi video TKP yang ditampilkan di ajakan rekam (kamera tetap diatur app host).
+  final int tkpSeconds;
 
   @override
   State<SOSFloatingButton> createState() => _SOSFloatingButtonState();
@@ -114,6 +153,9 @@ class _SOSFloatingButtonState extends State<SOSFloatingButton> with SingleTicker
   Offset? _dragPos;
 
   bool _open = false;
+
+  /// Sub-menu "Laporan" (Pengaduan / Riwayat) sedang terbuka.
+  bool _reportMenu = false;
   bool _sending = false;
   SdkConfig? _cfg;
   ActiveReport? _report;
@@ -122,8 +164,13 @@ class _SOSFloatingButtonState extends State<SOSFloatingButton> with SingleTicker
   double _uploadRatio = 0;
   final _attached = <MediaKind, int>{};
   String? _notice;
-  /// Lembar dari bawah (pengaduan / riwayat).
+
+  /// Lembar dari bawah (pengaduan / riwayat / rekam TKP).
   OverlayEntry? _sheet;
+
+  /// App host sedang membuka layar kamera (halaman di Navigator, di BAWAH lapisan ini): tombol & lembar
+  /// disembunyikan sementara tanpa kehilangan state.
+  bool _capturing = false;
 
   @override
   void initState() {
@@ -167,14 +214,22 @@ class _SOSFloatingButtonState extends State<SOSFloatingButton> with SingleTicker
   int get _seconds => widget.holdSeconds ?? _cfg?.holdSeconds ?? 3;
   bool get _active => _report != null && !_report!.status.isTerminal;
 
+  bool get _tkp => widget.tkpPrompt && widget.onCapture != null && widget.captureKinds.contains(MediaKind.video);
+
   Future<void> _fire() async {
+    if (_sending) return;
+    HapticFeedback.mediumImpact();
+    // Alarm panik dimulai tanpa menunggu server (jeda/durasi diatur app host).
+    widget.siren?.start();
     setState(() => _sending = true);
     try {
       final r = await widget.client.trigger(category: widget.category, message: widget.message);
       HapticFeedback.heavyImpact();
       if (mounted) setState(() => _report = r);
       if (r.id != null) widget.onSent?.call(r);
+      if (mounted && _tkp) _openTkp(r);
     } on SiagaSOSError catch (e) {
+      widget.siren?.stop(); // SOS tidak terkirim: sirene menyesatkan
       if (mounted) setState(() => _notice = e.message);
       widget.onError?.call(e);
     } finally {
@@ -196,9 +251,7 @@ class _SOSFloatingButtonState extends State<SOSFloatingButton> with SingleTicker
     });
     try {
       await widget.client.attach(r.id ?? r.localId, media.bytes,
-          contentType: media.contentType,
-          durationS: media.durationS,
-          onProgress: (p) => mounted ? setState(() => _uploadRatio = p) : null);
+          contentType: media.contentType, durationS: media.durationS, onProgress: (p) => mounted ? setState(() => _uploadRatio = p) : null);
       if (mounted) setState(() => _attached[kind] = (_attached[kind] ?? 0) + 1);
     } on SiagaSOSError catch (e) {
       if (mounted) setState(() => _notice = e.message);
@@ -230,6 +283,7 @@ class _SOSFloatingButtonState extends State<SOSFloatingButton> with SingleTicker
     HapticFeedback.selectionClick();
     setState(() {
       _open = false;
+      _reportMenu = false;
       _sheet = OverlayEntry(builder: (_) => builder());
     });
   }
@@ -243,6 +297,19 @@ class _SOSFloatingButtonState extends State<SOSFloatingButton> with SingleTicker
         onError: widget.onError,
       ));
 
+  void _openTkp(ActiveReport r) => _openSheet(() => _TkpSheet(
+        client: widget.client,
+        report: r,
+        recipientText: _cfg?.recipientText,
+        siren: widget.siren,
+        onCapture: widget.onCapture!,
+        maxSeconds: widget.tkpSeconds,
+        color: widget.color,
+        onCapturing: (v) => mounted ? setState(() => _capturing = v) : null,
+        onClose: _closeSheet,
+        onError: widget.onError,
+      ));
+
   void _openHistory() => _openSheet(() => _HistorySheet(client: widget.client, onClose: _closeSheet));
 
   void _closeSheet() {
@@ -253,6 +320,7 @@ class _SOSFloatingButtonState extends State<SOSFloatingButton> with SingleTicker
     HapticFeedback.selectionClick();
     setState(() {
       _open = !_open;
+      _reportMenu = false;
       _notice = null;
       // laporan yang sudah selesai tidak perlu ditampilkan lagi saat menu dibuka ulang
       if (_open && _report != null && _report!.status.isTerminal) {
@@ -266,8 +334,12 @@ class _SOSFloatingButtonState extends State<SOSFloatingButton> with SingleTicker
   Widget build(BuildContext context) {
     return Stack(children: [
       widget.child,
-      if (widget.visible)
-        Positioned.fill(
+      // Lapisan selalu ada di Stack (hanya disembunyikan): menghapusnya menggeser posisi lapisan lembar, sehingga
+      // Overlay-nya dibuat ulang padahal entry masih di Overlay lama ("entry is already present in a different Overlay").
+      Positioned.fill(
+        key: const ValueKey('siagasos-layer-fab'),
+        child: Offstage(
+          offstage: !widget.visible || _capturing,
           child: LayoutBuilder(builder: (context, box) {
             final pad = MediaQuery.maybePaddingOf(context) ?? EdgeInsets.zero;
             final minY = pad.top + _kEdge;
@@ -285,55 +357,64 @@ class _SOSFloatingButtonState extends State<SOSFloatingButton> with SingleTicker
             return Material(
               type: MaterialType.transparency,
               child: Stack(clipBehavior: Clip.none, children: [
-              if (_open)
-                Positioned(
-                  left: onLeft ? _kEdge : null,
-                  right: onLeft ? null : _kEdge,
-                  top: openUp ? null : pos.dy + widget.size + 10,
-                  bottom: openUp ? box.maxHeight - pos.dy + 10 : null,
-                  width: (box.maxWidth - _kEdge * 2).clamp(0, idle ? _kActionWidth : _kPanelWidth),
-                  child: idle ? _actions(context, onLeft: onLeft, openUp: openUp) : _panel(context),
+                if (_open)
+                  Positioned(
+                    left: onLeft ? _kEdge : null,
+                    right: onLeft ? null : _kEdge,
+                    top: openUp ? null : pos.dy + widget.size + 10,
+                    bottom: openUp ? box.maxHeight - pos.dy + 10 : null,
+                    width: (box.maxWidth - _kEdge * 2).clamp(0, idle ? _kActionWidth : _kPanelWidth),
+                    child: idle ? _actions(context, onLeft: onLeft, openUp: openUp) : _panel(context),
+                  ),
+                AnimatedPositioned(
+                  duration: _dragPos == null ? const Duration(milliseconds: 220) : Duration.zero,
+                  curve: Curves.easeOutCubic,
+                  left: pos.dx,
+                  top: pos.dy,
+                  child: GestureDetector(
+                    key: const ValueKey('siagasos-fab'),
+                    onPanStart: (_) => setState(() => _dragPos = pos),
+                    onPanUpdate: (d) => setState(() {
+                      final p = (_dragPos ?? pos) + d.delta;
+                      _dragPos = Offset(p.dx.clamp(_kEdge, box.maxWidth - _kEdge - widget.size), p.dy.clamp(minY, maxY));
+                    }),
+                    onPanEnd: (_) {
+                      final p = _dragPos ?? pos;
+                      setState(() {
+                        _left = p.dx + widget.size / 2 < box.maxWidth / 2;
+                        _yFrac = maxY > minY ? ((p.dy - minY) / (maxY - minY)).clamp(0.0, 1.0) : 1;
+                        _dragPos = null;
+                      });
+                      _savePosition();
+                    },
+                    child: widget.siren == null
+                        ? _fab(false)
+                        : ValueListenableBuilder<bool>(valueListenable: widget.siren!.active, builder: (_, on, __) => _fab(on)),
+                  ),
                 ),
-              AnimatedPositioned(
-                duration: _dragPos == null ? const Duration(milliseconds: 220) : Duration.zero,
-                curve: Curves.easeOutCubic,
-                left: pos.dx,
-                top: pos.dy,
-                child: GestureDetector(
-                  key: const ValueKey('siagasos-fab'),
-                  onPanStart: (_) => setState(() => _dragPos = pos),
-                  onPanUpdate: (d) => setState(() {
-                    final p = (_dragPos ?? pos) + d.delta;
-                    _dragPos = Offset(p.dx.clamp(_kEdge, box.maxWidth - _kEdge - widget.size), p.dy.clamp(minY, maxY));
-                  }),
-                  onPanEnd: (_) {
-                    final p = _dragPos ?? pos;
-                    setState(() {
-                      _left = p.dx + widget.size / 2 < box.maxWidth / 2;
-                      _yFrac = maxY > minY ? ((p.dy - minY) / (maxY - minY)).clamp(0.0, 1.0) : 1;
-                      _dragPos = null;
-                    });
-                    _savePosition();
-                  },
-                  child: _fab(),
-                ),
-              ),
-            ]),
+              ]),
             );
           }),
         ),
+      ),
       // Lembar punya Overlay sendiri: tombol ini dipasang di MaterialApp.builder (di atas Navigator),
       // sementara TextField butuh Overlay untuk handle seleksi.
-      if (_sheet != null) Positioned.fill(child: Overlay(key: ObjectKey(_sheet), initialEntries: [_sheet!])),
+      if (_sheet != null)
+        Positioned.fill(
+          key: const ValueKey('siagasos-layer-sheet'),
+          child: Offstage(offstage: _capturing, child: Overlay(key: ObjectKey(_sheet), initialEntries: [_sheet!])),
+        ),
     ]);
   }
 
-  Widget _fab() {
-    final busy = _sending || _uploading != null;
-    final colors = _active ? const [Color(0xFF64748B), Color(0xFF334155)] : [widget.color, Color.lerp(widget.color, Colors.black, 0.28)!];
+  /// [sirenOn] = sirene berbunyi: tombol menjadi "SENYAP" (ketuk = matikan), seperti tata-warga.
+  Widget _fab(bool sirenOn) {
+    final busy = !sirenOn && (_sending || _uploading != null);
+    final colors =
+        _active && !sirenOn ? const [Color(0xFF64748B), Color(0xFF334155)] : [widget.color, Color.lerp(widget.color, Colors.black, 0.28)!];
     return Semantics(
       button: true,
-      label: _open ? 'Tutup menu darurat' : 'Menu darurat SOS',
+      label: sirenOn ? 'Matikan sirene' : (_open ? 'Tutup menu darurat' : 'Menu darurat SOS'),
       value: _report != null ? _statusText : null,
       child: AnimatedScale(
         scale: _dragPos != null ? 1.08 : 1,
@@ -352,17 +433,32 @@ class _SOSFloatingButtonState extends State<SOSFloatingButton> with SingleTicker
             shape: const CircleBorder(),
             child: InkWell(
               customBorder: const CircleBorder(),
-              onTap: _toggle,
+              onTap: sirenOn
+                  ? () {
+                      HapticFeedback.selectionClick();
+                      widget.siren!.stop();
+                    }
+                  : _toggle,
               child: Center(
                 child: busy
                     ? const SizedBox.square(dimension: 22, child: CircularProgressIndicator(strokeWidth: 2.4, color: Colors.white))
                     : Column(mainAxisSize: MainAxisSize.min, children: [
-                        Icon(_open ? Icons.close_rounded : (_active ? Icons.support_agent_rounded : Icons.notifications_active_rounded),
-                            color: Colors.white, size: widget.size * 0.4),
+                        Icon(
+                            sirenOn
+                                ? Icons.volume_off_rounded
+                                : _open
+                                    ? Icons.close_rounded
+                                    : (_active ? Icons.support_agent_rounded : Icons.notifications_active_rounded),
+                            color: Colors.white,
+                            size: widget.size * 0.4),
                         SizedBox(height: widget.size * 0.02),
-                        Text(_open ? 'TUTUP' : (_active ? 'AKTIF' : 'SOS'),
+                        Text(sirenOn ? 'SENYAP' : (_open ? 'TUTUP' : (_active ? 'AKTIF' : 'SOS')),
                             style: TextStyle(
-                                color: Colors.white, fontSize: widget.size * 0.156, fontWeight: FontWeight.w800, letterSpacing: 0.4, height: 1)),
+                                color: Colors.white,
+                                fontSize: widget.size * 0.156,
+                                fontWeight: FontWeight.w800,
+                                letterSpacing: 0.4,
+                                height: 1)),
                       ]),
               ),
             ),
@@ -372,52 +468,80 @@ class _SOSFloatingButtonState extends State<SOSFloatingButton> with SingleTicker
     );
   }
 
-  /// Menu awal ala speed-dial (gaya `DraggableSosMenu` tata-warga). Urutan dari tombol bulat ke luar:
-  /// telepon kedua, telepon pertama, kirim SOS, lalu pengaduan & riwayat yang tidak darurat di ujung.
+  /// Menu awal ala speed-dial (gaya `DraggableSosMenu` tata-warga). Dari atas ke tombol bulat:
+  /// kirim SOS (EWS), telepon pertama, telepon kedua, lalu **Laporan** yang membuka sub-menu
+  /// Pengaduan / Riwayat laporan (non-darurat, sengaja satu ketukan lebih jauh).
   Widget _actions(BuildContext context, {required bool onLeft, required bool openUp}) {
     final cfg = _cfg;
     final first = cfg?.fallbackPhone ?? '110';
     final second = widget.secondaryPhone != null && widget.secondaryPhone != first ? widget.secondaryPhone : null;
-    final items = <Widget>[
-      if (widget.onCall != null) ...[
-        if (second != null)
-          _ActionButton(
-            label: '${widget.callLabel} $second',
-            icon: Icons.emergency_rounded,
-            colors: const [Color(0xFF6EE7B7), Color(0xFF34D399), Color(0xFF059669)],
-            onTap: () => widget.onCall!(second),
-          ),
-        _ActionButton(
-          label: '${widget.callLabel} $first',
-          icon: Icons.local_police_rounded,
-          colors: const [Color(0xFF818CF8), Color(0xFF6366F1), Color(0xFF4F46E5)],
-          onTap: () => widget.onCall!(first),
-        ),
-      ],
-      _HoldToSend(
-        hold: _hold,
-        seconds: _seconds,
-        colors: widget.sosColors ?? [Color.lerp(widget.color, Colors.white, 0.12)!, Color.lerp(widget.color, Colors.black, 0.3)!],
-        sending: _sending,
-        label: widget.sosLabel ?? (cfg?.buttonText.isNotEmpty == true ? 'Kirim ${cfg!.buttonText}' : 'Kirim SOS'),
-      ),
-      if (widget.complaint)
-        _ActionButton(
-          key: const ValueKey('siagasos-complaint'),
-          label: 'Pengaduan',
-          icon: Icons.campaign_rounded,
-          colors: const [Color(0xFFFDBA74), Color(0xFFFB923C), Color(0xFFEA580C)],
-          onTap: _openComplaint,
-        ),
-      if (widget.history)
-        _ActionButton(
-          key: const ValueKey('siagasos-history'),
-          label: 'Riwayat laporan',
-          icon: Icons.history_rounded,
-          colors: const [Color(0xFF94A3B8), Color(0xFF64748B), Color(0xFF475569)],
-          onTap: _openHistory,
-        ),
-    ];
+    final complaint = widget.complaint
+        ? _ActionButton(
+            key: const ValueKey('siagasos-complaint'),
+            label: 'Pengaduan',
+            icon: Icons.campaign_rounded,
+            colors: const [Color(0xFFFDBA74), Color(0xFFFB923C), Color(0xFFEA580C)],
+            onTap: _openComplaint,
+          )
+        : null;
+    final history = widget.history
+        ? _ActionButton(
+            key: const ValueKey('siagasos-history'),
+            label: 'Riwayat laporan',
+            icon: Icons.history_rounded,
+            colors: const [Color(0xFF94A3B8), Color(0xFF64748B), Color(0xFF475569)],
+            onTap: _openHistory,
+          )
+        : null;
+    // Urutan daftar = dari tombol bulat ke luar (dibalik saat menu membuka ke atas).
+    final items = _reportMenu
+        ? <Widget>[
+            _ActionButton(
+              key: const ValueKey('siagasos-back'),
+              label: 'Kembali',
+              icon: Icons.arrow_back_rounded,
+              colors: const [Color(0xFF64748B), Color(0xFF475569), Color(0xFF334155)],
+              onTap: () => setState(() => _reportMenu = false),
+            ),
+            if (history != null) history,
+            if (complaint != null) complaint,
+          ]
+        : <Widget>[
+            if (complaint != null || history != null)
+              _ActionButton(
+                key: const ValueKey('siagasos-report'),
+                label: 'Laporan',
+                icon: Icons.assignment_rounded,
+                colors: const [Color(0xFFFDBA74), Color(0xFFFB923C), Color(0xFFEA580C)],
+                // Hanya satu pilihan yang aktif → langsung buka tanpa sub-menu.
+                onTap: complaint != null && history != null
+                    ? () => setState(() => _reportMenu = true)
+                    : (complaint != null ? _openComplaint : _openHistory),
+              ),
+            if (widget.onCall != null) ...[
+              if (second != null)
+                _ActionButton(
+                  label: '${widget.callLabel} $second',
+                  icon: Icons.emergency_rounded,
+                  colors: const [Color(0xFF6EE7B7), Color(0xFF34D399), Color(0xFF059669)],
+                  onTap: () => widget.onCall!(second),
+                ),
+              _ActionButton(
+                label: '${widget.callLabel} $first',
+                icon: Icons.local_police_rounded,
+                colors: const [Color(0xFF818CF8), Color(0xFF6366F1), Color(0xFF4F46E5)],
+                onTap: () => widget.onCall!(first),
+              ),
+            ],
+            _HoldToSend(
+              hold: _hold,
+              seconds: _seconds,
+              colors: widget.sosColors ?? [Color.lerp(widget.color, Colors.white, 0.12)!, Color.lerp(widget.color, Colors.black, 0.3)!],
+              sending: _sending,
+              onTap: _fire,
+              label: widget.sosLabel ?? (cfg?.buttonText.isNotEmpty == true ? 'Kirim ${cfg!.buttonText}' : 'Kirim SOS'),
+            ),
+          ];
     final note = <String>[
       if (_notice != null) _notice!,
       if (cfg != null && cfg.recipientText.isNotEmpty) cfg.recipientText,
@@ -433,6 +557,7 @@ class _SOSFloatingButtonState extends State<SOSFloatingButton> with SingleTicker
                 style: TextStyle(color: _notice != null ? const Color(0xFFFCA5A5) : Colors.white, fontSize: 11.5, height: 1.3)),
           );
     return Column(
+      key: ValueKey(_reportMenu), // animasi muncul diputar ulang saat ganti sub-menu
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: onLeft ? CrossAxisAlignment.start : CrossAxisAlignment.end,
       children: [
@@ -601,17 +726,28 @@ class _ActionButton extends StatelessWidget {
 
 /// Bilah "tahan untuk kirim" di dalam menu melayang.
 class _HoldToSend extends StatelessWidget {
-  const _HoldToSend({required this.hold, required this.seconds, required this.colors, required this.sending, required this.label});
+  const _HoldToSend({
+    required this.hold,
+    required this.seconds,
+    required this.colors,
+    required this.sending,
+    required this.label,
+    required this.onTap,
+  });
   final AnimationController hold;
   final int seconds;
   final List<Color> colors;
   final bool sending;
+
+  /// Dipakai bila [seconds] = 0: sekali ketuk langsung kirim (gaya EWS tata-warga).
+  final VoidCallback onTap;
   final String label;
 
   @override
   Widget build(BuildContext context) {
+    final tap = seconds <= 0;
     void down() {
-      if (sending) return;
+      if (sending || tap) return;
       HapticFeedback.selectionClick();
       hold.duration = Duration(seconds: seconds);
       hold.forward(from: 0);
@@ -623,11 +759,11 @@ class _HoldToSend extends StatelessWidget {
 
     return Semantics(
       button: true,
-      label: '$label. Tahan $seconds detik untuk mengirim laporan darurat.',
+      label: tap ? '$label. Ketuk untuk mengirim laporan darurat.' : '$label. Tahan $seconds detik untuk mengirim laporan darurat.',
       child: GestureDetector(
         key: const ValueKey('siagasos-hold'),
         onTapDown: (_) => down(),
-        onTapUp: (_) => up(),
+        onTapUp: (_) => tap ? (sending ? null : onTap()) : up(),
         onTapCancel: up,
         child: AnimatedBuilder(
           animation: hold,
@@ -647,16 +783,21 @@ class _HoldToSend extends StatelessWidget {
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
-                      sending ? 'Mengirim…' : hold.value > 0 ? 'Tahan… ${(seconds * (1 - hold.value)).ceil()}' : label,
+                      sending
+                          ? 'Mengirim…'
+                          : hold.value > 0
+                              ? 'Tahan… ${(seconds * (1 - hold.value)).ceil()}'
+                              : label,
                       overflow: TextOverflow.ellipsis,
                       style: _kActionText.copyWith(fontWeight: FontWeight.w700),
                     ),
                   ),
-                  if (!sending && hold.value == 0)
+                  if (!sending && !tap && hold.value == 0)
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                       decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.25), borderRadius: BorderRadius.circular(6)),
-                      child: Text('tahan ${seconds}d', style: const TextStyle(color: Colors.white, fontSize: 10.5, fontWeight: FontWeight.w700)),
+                      child: Text('tahan ${seconds}d',
+                          style: const TextStyle(color: Colors.white, fontSize: 10.5, fontWeight: FontWeight.w700)),
                     ),
                 ]),
               ),
@@ -845,8 +986,15 @@ class _ComplaintSheetState extends State<_ComplaintSheet> {
               : Row(children: [
                   ClipRRect(
                     borderRadius: BorderRadius.circular(10),
-                    child: Image.memory(_photo!.bytes, width: 56, height: 56, fit: BoxFit.cover,
-                        errorBuilder: (_, __, ___) => Container(width: 56, height: 56, color: theme.colorScheme.surfaceContainerHighest, child: const Icon(Icons.image_rounded))),
+                    child: Image.memory(_photo!.bytes,
+                        width: 56,
+                        height: 56,
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, __, ___) => Container(
+                            width: 56,
+                            height: 56,
+                            color: theme.colorScheme.surfaceContainerHighest,
+                            child: const Icon(Icons.image_rounded))),
                   ),
                   const SizedBox(width: 12),
                   const Expanded(child: Text('Foto terlampir')),
@@ -865,12 +1013,16 @@ class _ComplaintSheetState extends State<_ComplaintSheet> {
               ? const SizedBox.square(dimension: 18, child: CircularProgressIndicator(strokeWidth: 2.2, color: Colors.white))
               : const Icon(Icons.send_rounded),
           label: Text(_sending ? 'Mengirim…' : 'Kirim pengaduan'),
-          style: FilledButton.styleFrom(backgroundColor: _amber, minimumSize: const Size.fromHeight(52), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16))),
+          style: FilledButton.styleFrom(
+              backgroundColor: _amber,
+              minimumSize: const Size.fromHeight(52),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16))),
         ),
         if (widget.client.mode == SosMode.test)
           Padding(
             padding: const EdgeInsets.only(top: 8),
-            child: Text('MODE TEST', textAlign: TextAlign.center, style: TextStyle(color: Colors.amber.shade800, fontWeight: FontWeight.w700, fontSize: 11)),
+            child: Text('MODE TEST',
+                textAlign: TextAlign.center, style: TextStyle(color: Colors.amber.shade800, fontWeight: FontWeight.w700, fontSize: 11)),
           ),
       ]);
 
@@ -883,7 +1035,8 @@ class _ComplaintSheetState extends State<_ComplaintSheet> {
         width: 64,
         height: 64,
         decoration: BoxDecoration(shape: BoxShape.circle, color: (queued ? _amber : const Color(0xFF16A34A)).withValues(alpha: 0.12)),
-        child: Icon(queued ? Icons.schedule_send_rounded : Icons.check_circle_rounded, size: 36, color: queued ? _amber : const Color(0xFF16A34A)),
+        child: Icon(queued ? Icons.schedule_send_rounded : Icons.check_circle_rounded,
+            size: 36, color: queued ? _amber : const Color(0xFF16A34A)),
       ),
       const SizedBox(height: 12),
       Text(queued ? 'Pengaduan disimpan' : 'Pengaduan terkirim', style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700)),
@@ -943,9 +1096,11 @@ class _Grip extends StatelessWidget {
 class _SheetFrame extends StatelessWidget {
   const _SheetFrame({required this.sheetKey, required this.onDismiss, required this.child, this.scroll = true});
   final Key sheetKey;
+
   /// Null = ketuk latar tidak menutup (mis. sedang mengirim).
   final VoidCallback? onDismiss;
   final Widget child;
+
   /// false = [child] mengatur scroll sendiri (mis. daftar).
   final bool scroll;
 
@@ -1073,8 +1228,7 @@ class _HistorySheetState extends State<_HistorySheet> {
               const SizedBox(height: 8),
               Text('Belum ada laporan', style: theme.textTheme.titleSmall),
               const SizedBox(height: 2),
-              Text('SOS dan pengaduan yang kamu kirim akan muncul di sini.',
-                  textAlign: TextAlign.center, style: theme.textTheme.bodySmall),
+              Text('SOS dan pengaduan yang kamu kirim akan muncul di sini.', textAlign: TextAlign.center, style: theme.textTheme.bodySmall),
             ]),
           )
         else
@@ -1167,6 +1321,423 @@ class _HistoryTile extends StatelessWidget {
           ]),
         ),
       ]),
+    );
+  }
+}
+
+enum _TkpPhase { prompt, note, sending, done }
+
+/// Setelah SOS terkirim (alur tata-warga): "SOS terkirim" + ajakan "Rekam kondisi TKP?" → kamera app host →
+/// catatan singkat → video + catatan dikirim ke petugas.
+class _TkpSheet extends StatefulWidget {
+  const _TkpSheet({
+    required this.client,
+    required this.report,
+    required this.recipientText,
+    required this.siren,
+    required this.onCapture,
+    required this.maxSeconds,
+    required this.color,
+    required this.onCapturing,
+    required this.onClose,
+    this.onError,
+  });
+  final SiagaSOS client;
+  final ActiveReport report;
+  final String? recipientText;
+  final SosSiren? siren;
+  final MediaCapture onCapture;
+  final int maxSeconds;
+  final Color color;
+  final ValueChanged<bool> onCapturing;
+  final VoidCallback onClose;
+  final void Function(SiagaSOSError error)? onError;
+
+  @override
+  State<_TkpSheet> createState() => _TkpSheetState();
+}
+
+class _TkpSheetState extends State<_TkpSheet> {
+  static const _green = Color(0xFF16A34A);
+  static const _amber = Color(0xFFD97706);
+
+  _TkpPhase _phase = _TkpPhase.prompt;
+  CapturedMedia? _video;
+  bool _uploaded = false; // video sudah masuk; percobaan ulang cukup kirim catatan
+  final _note = TextEditingController();
+  double _progress = 0;
+  String? _error;
+  bool _confirmCancel = false;
+  late ActiveReport _report = widget.report;
+  StreamSubscription<ActiveReport>? _sub;
+
+  @override
+  void initState() {
+    super.initState();
+    _sub = widget.client.status.listen((r) {
+      if (mounted && r.localId == _report.localId) setState(() => _report = r);
+    });
+  }
+
+  @override
+  void dispose() {
+    _sub?.cancel();
+    _note.dispose();
+    super.dispose();
+  }
+
+  Future<void> _record() async {
+    widget.onCapturing(true);
+    CapturedMedia? m;
+    try {
+      m = await widget.onCapture(context, MediaKind.video);
+    } catch (_) {
+      m = null;
+    } finally {
+      widget.onCapturing(false);
+    }
+    if (!mounted || m == null) return;
+    setState(() {
+      _video = m;
+      _uploaded = false;
+      _phase = _TkpPhase.note;
+      _error = null;
+      _confirmCancel = false;
+    });
+  }
+
+  Future<void> _send() async {
+    final v = _video;
+    if (v == null) return;
+    FocusScope.of(context).unfocus();
+    setState(() {
+      _phase = _TkpPhase.sending;
+      _progress = 0;
+      _error = null;
+    });
+    try {
+      if (!_uploaded) {
+        await widget.client.attach(_report.localId, v.bytes,
+            contentType: v.contentType, durationS: v.durationS, onProgress: (p) => mounted ? setState(() => _progress = p) : null);
+        _uploaded = true;
+      }
+      final note = _note.text.trim();
+      if (note.isNotEmpty) await widget.client.addNote(_report.localId, note);
+      HapticFeedback.mediumImpact();
+      if (mounted) setState(() => _phase = _TkpPhase.done);
+    } on SiagaSOSError catch (e) {
+      widget.onError?.call(e);
+      if (mounted) {
+        setState(() {
+          _phase = _TkpPhase.note;
+          _error = e.message;
+        });
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _phase = _TkpPhase.note;
+          _error = 'Rekaman gagal dikirim. Periksa koneksi lalu coba lagi.';
+        });
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final inset = MediaQuery.maybeViewInsetsOf(context)?.bottom ?? 0;
+    return Stack(children: [
+      Positioned.fill(
+        child: TweenAnimationBuilder<double>(
+          tween: Tween(begin: 0, end: 1),
+          duration: const Duration(milliseconds: 200),
+          builder: (_, t, __) => ColoredBox(color: Colors.black.withValues(alpha: 0.55 * t)),
+        ),
+      ),
+      Positioned.fill(
+        child: Padding(
+          padding: EdgeInsets.only(bottom: inset),
+          child: Center(
+            child: TweenAnimationBuilder<double>(
+              tween: Tween(begin: 0.96, end: 1),
+              duration: const Duration(milliseconds: 220),
+              curve: Curves.easeOut,
+              builder: (_, t, c) => Transform.scale(scale: t, child: c),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 24),
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(maxWidth: 420, maxHeight: MediaQuery.sizeOf(context).height * 0.85),
+                  child: Material(
+                    key: const ValueKey('siagasos-tkp'),
+                    color: theme.colorScheme.surface,
+                    borderRadius: BorderRadius.circular(24),
+                    clipBehavior: Clip.antiAlias,
+                    child: SingleChildScrollView(
+                      child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                        if (_phase != _TkpPhase.done) _header(theme),
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(20, 20, 20, 12),
+                          child: switch (_phase) {
+                            _TkpPhase.prompt => _prompt(theme),
+                            _TkpPhase.note || _TkpPhase.sending => _noteStep(theme),
+                            _TkpPhase.done => _done(theme),
+                          },
+                        ),
+                      ]),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    ]);
+  }
+
+  /// Bilah hijau "SOS terkirim" (kuning bila masih di antrian offline) + tombol matikan sirene.
+  Widget _header(ThemeData theme) {
+    final queued = _report.status == SosStatus.queued;
+    final c = queued ? _amber : _green;
+    final siren = widget.siren;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      color: c.withValues(alpha: 0.08),
+      child: Row(children: [
+        Icon(queued ? Icons.schedule_send_rounded : Icons.check_circle_rounded, color: c, size: 20),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(queued ? 'SOS disimpan' : 'SOS terkirim',
+                style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w800, color: Color.lerp(c, Colors.black, 0.45))),
+            Text(
+              queued
+                  ? 'Belum ada sinyal, terkirim otomatis'
+                  : (widget.recipientText?.isNotEmpty == true ? widget.recipientText! : 'Petugas keamanan sudah diberi tahu'),
+              style: TextStyle(fontSize: 11.5, color: Color.lerp(c, Colors.black, 0.3)),
+            ),
+          ]),
+        ),
+        if (siren != null)
+          ValueListenableBuilder<bool>(
+            valueListenable: siren.active,
+            builder: (_, on, __) => !on
+                ? const SizedBox.shrink()
+                : Material(
+                    color: const Color(0xFFDC2626),
+                    borderRadius: BorderRadius.circular(999),
+                    child: InkWell(
+                      key: const ValueKey('siagasos-tkp-mute'),
+                      borderRadius: BorderRadius.circular(999),
+                      onTap: () {
+                        HapticFeedback.selectionClick();
+                        siren.stop();
+                      },
+                      child: const Padding(
+                        padding: EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                        child: Row(mainAxisSize: MainAxisSize.min, children: [
+                          Icon(Icons.volume_off_rounded, size: 14, color: Colors.white),
+                          SizedBox(width: 4),
+                          Text('Matikan sirene', style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w800, color: Colors.white)),
+                        ]),
+                      ),
+                    ),
+                  ),
+          ),
+      ]),
+    );
+  }
+
+  Widget _prompt(ThemeData theme) {
+    final brand = widget.color;
+    return Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+      Center(
+        child: Container(
+          width: 76,
+          height: 76,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: brand.withValues(alpha: 0.08),
+            border: Border.all(color: brand.withValues(alpha: 0.15), width: 6),
+          ),
+          child: Icon(Icons.videocam_rounded, color: brand, size: 32),
+        ),
+      ),
+      const SizedBox(height: 14),
+      Text('Rekam kondisi TKP?', textAlign: TextAlign.center, style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800)),
+      const SizedBox(height: 6),
+      Text('Video singkat membantu petugas memahami situasi sebelum tiba di lokasi.',
+          textAlign: TextAlign.center, style: theme.textTheme.bodySmall?.copyWith(height: 1.4)),
+      const SizedBox(height: 14),
+      Wrap(alignment: WrapAlignment.center, spacing: 6, runSpacing: 6, children: [
+        _chip(theme, Icons.timer_outlined, 'Maks. ${widget.maxSeconds} detik'),
+        _chip(theme, Icons.place_outlined, 'Lokasi otomatis'),
+        _chip(theme, Icons.edit_outlined, 'Catatan singkat'),
+      ]),
+      const SizedBox(height: 18),
+      _gradientButton(
+        key: const ValueKey('siagasos-tkp-record'),
+        label: 'Ya, Rekam Sekarang',
+        icon: Icons.photo_camera_rounded,
+        onTap: _record,
+      ),
+      const SizedBox(height: 4),
+      TextButton(
+        key: const ValueKey('siagasos-tkp-skip'),
+        onPressed: widget.onClose,
+        child: Text('Tidak, nanti saja', style: TextStyle(fontWeight: FontWeight.w600, color: theme.colorScheme.outline)),
+      ),
+    ]);
+  }
+
+  Widget _noteStep(ThemeData theme) {
+    final sending = _phase == _TkpPhase.sending;
+    final secs = _video?.durationS?.round();
+    return Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+      Row(children: [
+        Container(
+          width: 44,
+          height: 44,
+          decoration: BoxDecoration(color: _green.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(12)),
+          child: const Icon(Icons.videocam_rounded, color: _green),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(secs != null ? 'Video $secs detik' : 'Video TKP',
+                style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700)),
+            Text('Rekaman siap dikirim', style: theme.textTheme.bodySmall),
+          ]),
+        ),
+        TextButton(onPressed: sending ? null : _record, child: const Text('Rekam ulang')),
+      ]),
+      const SizedBox(height: 14),
+      TextField(
+        key: const ValueKey('siagasos-tkp-note'),
+        controller: _note,
+        enabled: !sending,
+        minLines: 3,
+        maxLines: 5,
+        maxLength: 500,
+        textCapitalization: TextCapitalization.sentences,
+        decoration: InputDecoration(
+          labelText: 'Catatan kejadian',
+          hintText: 'Contoh: 2 orang mencurigakan di depan toko',
+          alignLabelWithHint: true,
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
+        ),
+      ),
+      if (_error != null) ...[
+        const SizedBox(height: 4),
+        Text(_error!, style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.error)),
+      ],
+      const SizedBox(height: 12),
+      if (sending) ...[
+        Text(_uploaded ? 'Menyimpan catatan…' : 'Mengirim rekaman… ${(_progress * 100).round()}%',
+            style: theme.textTheme.bodySmall, textAlign: TextAlign.center),
+        const SizedBox(height: 8),
+        LinearProgressIndicator(value: _uploaded ? null : _progress, color: widget.color),
+        const SizedBox(height: 12),
+      ] else if (_confirmCancel) ...[
+        Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(color: const Color(0xFFFEF3C7), borderRadius: BorderRadius.circular(12)),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+            const Text('Batalkan rekaman?', style: TextStyle(fontWeight: FontWeight.w800, color: Color(0xFF78350F))),
+            const SizedBox(height: 2),
+            const Text('Rekaman TKP belum dikirim. SOS tetap sudah terkirim ke petugas.',
+                style: TextStyle(fontSize: 12.5, color: Color(0xFF92400E))),
+            const SizedBox(height: 8),
+            Row(mainAxisAlignment: MainAxisAlignment.end, children: [
+              TextButton(onPressed: () => setState(() => _confirmCancel = false), child: const Text('Lanjut kirim')),
+              TextButton(
+                onPressed: widget.onClose,
+                style: TextButton.styleFrom(foregroundColor: theme.colorScheme.error),
+                child: const Text('Ya, batalkan'),
+              ),
+            ]),
+          ]),
+        ),
+        const SizedBox(height: 12),
+      ] else ...[
+        _gradientButton(
+          key: const ValueKey('siagasos-tkp-send'),
+          label: 'Kirim ke Petugas',
+          icon: Icons.send_rounded,
+          onTap: _send,
+        ),
+        const SizedBox(height: 4),
+        TextButton(
+          onPressed: () => setState(() => _confirmCancel = true),
+          child: Text('Batal', style: TextStyle(fontWeight: FontWeight.w600, color: theme.colorScheme.outline)),
+        ),
+      ],
+    ]);
+  }
+
+  Widget _done(ThemeData theme) => Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        const SizedBox(height: 8),
+        Center(
+          child: Container(
+            width: 72,
+            height: 72,
+            decoration: BoxDecoration(shape: BoxShape.circle, color: _green.withValues(alpha: 0.12)),
+            child: const Icon(Icons.check_circle_rounded, size: 40, color: _green),
+          ),
+        ),
+        const SizedBox(height: 14),
+        Text('Rekaman TKP terkirim',
+            textAlign: TextAlign.center, style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800)),
+        const SizedBox(height: 6),
+        Text('Video dan catatanmu sudah diterima petugas keamanan.',
+            textAlign: TextAlign.center, style: theme.textTheme.bodySmall?.copyWith(height: 1.4)),
+        const SizedBox(height: 18),
+        FilledButton(
+          key: const ValueKey('siagasos-tkp-close'),
+          onPressed: widget.onClose,
+          style: FilledButton.styleFrom(
+              minimumSize: const Size.fromHeight(48), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14))),
+          child: const Text('Tutup'),
+        ),
+        const SizedBox(height: 8),
+      ]);
+
+  Widget _chip(ThemeData theme, IconData icon, String text) => Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(color: theme.colorScheme.surfaceContainerHighest, borderRadius: BorderRadius.circular(999)),
+        child: Row(mainAxisSize: MainAxisSize.min, children: [
+          Icon(icon, size: 14, color: theme.colorScheme.onSurfaceVariant),
+          const SizedBox(width: 4),
+          Text(text, style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600, color: theme.colorScheme.onSurfaceVariant)),
+        ]),
+      );
+
+  Widget _gradientButton({required Key key, required String label, required IconData icon, required VoidCallback onTap}) {
+    final c = widget.color;
+    return SizedBox(
+      height: 50,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(colors: [Color.lerp(c, Colors.white, 0.12)!, Color.lerp(c, Colors.black, 0.25)!]),
+          borderRadius: BorderRadius.circular(14),
+          boxShadow: [BoxShadow(color: c.withValues(alpha: 0.3), blurRadius: 10, offset: const Offset(0, 4))],
+        ),
+        child: Material(
+          color: Colors.transparent,
+          borderRadius: BorderRadius.circular(14),
+          child: InkWell(
+            key: key,
+            borderRadius: BorderRadius.circular(14),
+            onTap: onTap,
+            child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+              Icon(icon, color: Colors.white, size: 18),
+              const SizedBox(width: 8),
+              Text(label, style: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w700)),
+            ]),
+          ),
+        ),
+      ),
     );
   }
 }

@@ -32,6 +32,7 @@ class FakeServer {
     if (p == '/v1/sdk/reports/rep-1/media') {
       return http.Response(jsonEncode({'media': {'id': 'm-1'}, 'upload': {'method': 'PUT', 'url': 'https://storage.test/put?sig=1', 'headers': {'Content-Type': 'image/jpeg'}}}), 201);
     }
+    if (p == '/v1/sdk/reports/rep-1/notes') return http.Response(jsonEncode({'id': 'rep-1', 'status': status, 'status_message': null}), 201);
     if (req.url.host == 'storage.test') return http.Response('', 200);
     if (p == '/v1/sdk/reports/rep-1/media/m-1/complete') {
       return http.Response(jsonEncode({'id': 'm-1', 'kind': 'image', 'content_type': 'image/jpeg', 'size_bytes': 3, 'status': 'ready'}), 200);
