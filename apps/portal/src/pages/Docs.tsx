@@ -16,6 +16,7 @@ const TOC: [string, string, [string, string][]?][] = [
   ['pengaduan', 'Laporan pengaduan'],
   ['lokasi', 'Lokasi & privasi'],
   ['lampiran', 'Foto, video & suara'],
+  ['whatsapp', 'Penerima SOS & WhatsApp', [['wa-penerima', 'Penerima SOS'], ['wa-kontak', 'Nomor darurat (CRUD di app)'], ['wa-pesan', 'Isi pesan & hasil'], ['wa-server', 'Konfigurasi server']]],
   ['source', 'Source'],
   ['webhook', 'Webhook', [['webhook-event', 'Event & payload'], ['webhook-verify', 'Verifikasi tanda tangan'], ['webhook-retry', 'Retry']]],
   ['api-server', 'REST API server'],
@@ -394,6 +395,7 @@ try await sos.attach(r.localId, data: jpeg, contentType: "image/jpeg")`}</Code>
                   <tr><td>Cara kirim</td><td>Tahan tombol N detik</td><td>Form: jenis + uraian (wajib, min. 5 karakter) + foto opsional</td></tr>
                   <tr><td>Bunyi alarm & notifikasi browser</td><td>Ya</td><td>Tidak</td></tr>
                   <tr><td>Email ke responder (live)</td><td>Ya</td><td>Tidak</td></tr>
+                  <tr><td>WhatsApp ke Penerima SOS & nomor darurat (live)</td><td>Ya</td><td>Tidak</td></tr>
                   <tr><td>Lokasi</td><td>Saat dikirim + live</td><td>Saat dikirim saja</td></tr>
                   <tr><td>Batas per pengguna</td><td>3 laporan / 10 menit</td><td>5 pengaduan / jam (terpisah dari SOS)</td></tr>
                 </tbody>
@@ -442,6 +444,80 @@ await sos.attach(report.localId, file, {           // File/Blob dari <input type
               <li><code>POST /v1/sdk/reports/:id/media/:mediaId/complete</code> → server memeriksa file, lalu lampiran tampil di dashboard.</li>
             </ol>
             <Note>Penyimpanan bersifat privat. Dashboard dan <code>GET /v1/reports/:id</code> memberikan URL baca bertanda tangan yang berlaku 15 menit; jangan simpan URL tersebut, minta ulang saat dibutuhkan. Responder juga bisa melampirkan dokumentasi dari dashboard.</Note>
+          </section>
+
+          <section id="whatsapp">
+            <h2>Penerima SOS & WhatsApp</h2>
+            <p>Setiap <b>SOS live</b> dikabarkan lewat WhatsApp ke dua kelompok nomor: <b>Penerima SOS</b> yang Anda atur di portal (pos satpam, pengelola gedung, pemilik toko) dan <b>nomor darurat pribadi</b> yang diatur pelapor sendiri di aplikasi (keluarga, rekan). Pengiriman berjalan di latar belakang setelah laporan tersimpan, jadi WhatsApp yang lambat atau gagal tidak pernah menunda atau menggagalkan SOS.</p>
+
+            <h3 id="wa-penerima">Penerima SOS</h3>
+            <p>Buka <b>App & kunci → pilih app → tab Penerima SOS</b>, lalu tambahkan nama dan nomor WhatsApp (format <code>08xx</code>, <code>+62</code>, atau <code>62</code>; disimpan sebagai <code>62xx</code>).</p>
+            <ul>
+              <li><b>Cakupan</b>: <i>Semua source</i> menerima SOS dari seluruh app; pilih satu source (mis. satu outlet atau gedung) agar nomor itu hanya menerima SOS dari lokasi tersebut.</li>
+              <li>Nonaktifkan sementara tanpa menghapus, mis. saat pergantian shift satpam.</li>
+              <li>Hanya peran <b>Owner</b> dan <b>Admin</b> yang bisa mengubah; setiap penambahan & penghapusan tercatat di audit log.</li>
+            </ul>
+            <Code lang="http · portal API">{`GET    /portal/apps/:id/recipients
+POST   /portal/apps/:id/recipients      { "name": "Pos satpam", "phone": "0812xxxxxxx", "source_id": null }
+PATCH  /portal/apps/:id/recipients/:rid { "active": false }
+DELETE /portal/apps/:id/recipients/:rid`}</Code>
+
+            <h3 id="wa-kontak">Nomor darurat pelapor</h3>
+            <p>Selain penerima yang diatur pengelola, setiap pengguna punya daftar <b>Nomor Darurat</b> pribadi di aplikasi (seperti menu Nomor Darurat di tata-warga dan POSTIP): keluarga, pemilik toko, atau satpam yang harus ikut dikabari saat <i>dia</i> menekan SOS.</p>
+            <Props rows={[
+              ['Nama kontak', 'wajib', 'Mis. Pak Joko.'],
+              ['Jabatan / hubungan', 'opsional', 'Mis. Satpam, Pemilik toko, Keluarga. Ikut tertulis di nama penerima WhatsApp: "Pak Joko (Satpam)".'],
+              ['Nomor WhatsApp', 'wajib', '08xx / +62 / 62, disimpan sebagai 62xx. Tidak boleh ganda.'],
+              ['Aktif', 'default ya', 'Hanya kontak aktif yang menerima SOS. Maks. 5 aktif, maks. 10 tersimpan.'],
+            ]} />
+            <p>Data disimpan SDK di perangkat, terpisah per pengguna (<code>user.ref</code>), lalu kontak aktif ikut terkirim otomatis bersama setiap SOS. Ada dua tempat pengguna mengelolanya:</p>
+            <ul>
+              <li><b>Halaman Nomor Darurat di aplikasi Anda</b> (disarankan): daftar dengan filter Semua / Aktif / Nonaktif, tambah, ubah, aktif/nonaktif, dan hapus dengan konfirmasi. Contoh: POSTIP <b>Menu → Pengaturan → Nomor Darurat</b>.</li>
+              <li><b>Tombol melayang → Laporan → Nomor darurat</b>: akses cepat untuk menambah atau menghapus, tanpa keluar dari layar yang sedang dibuka.</li>
+            </ul>
+            <p>Membangun halaman CRUD sendiri cukup dengan dua method; aturan (nomor valid, tidak ganda, maks. 5 aktif) diperiksa SDK dan dilempar sebagai <code>ArgumentError</code> dengan pesan berbahasa Indonesia yang siap ditampilkan:</p>
+            <Code lang="dart">{`// Baca (aktif & nonaktif)
+final contacts = await sos.emergencyContacts();
+
+// Tambah / ubah / hapus / aktif-nonaktif = simpan ulang seluruh daftar
+try {
+  await sos.setEmergencyContacts([
+    ...contacts,
+    const EmergencyContact(name: 'Pak Joko', role: 'Satpam', phone: '0812 3456 7890'),
+  ]);
+  // nonaktifkan: contacts[i].copyWith(active: false)
+  // hapus:       contacts.where((c) => c.phone != phone).toList()
+} on ArgumentError catch (e) {
+  showSnackBar(e.message);   // mis. "Maksimal 5 nomor darurat aktif"
+}`}</Code>
+            <p>SDK lain / backend mengirimnya di body laporan (hanya untuk SOS; pengaduan mengabaikannya):</p>
+            <Code lang="http · API">{`POST /v1/sdk/reports
+{ "category": "kriminal", "reporter": { "ref": "user_123", "name": "Budi" },
+  "emergency_contacts": [ { "name": "Istri", "phone": "081333334444" } ] }`}</Code>
+
+            <h3 id="wa-pesan">Isi pesan & hasil</h3>
+            <p>Pesan memakai template WhatsApp resmi (sudah disetujui Meta) dengan tiga isian: <b>nama pelapor</b>, <b>lokasi</b> (nama app · source), dan <b>link Google Maps</b> titik SOS. Nomor yang sama di beberapa daftar hanya dikirimi sekali.</p>
+            <Props rows={[
+              ['Hasil per nomor', 'Timeline laporan', 'Terkirim, gagal (beserta alasannya), atau dilewati; terlihat di detail laporan di dashboard.'],
+              ['Mode test', 'Tidak dikirim', 'Kunci pk_test_ hanya mencatat siapa yang akan dikabari.'],
+              ['Nomor uji', '0800…', 'Nomor 0800 (bebas pulsa) dicatat tetapi tidak pernah dikirimi WhatsApp: pakai untuk QA.'],
+              ['Batas', '5 WA / nomor / jam', 'Mencegah spam bila kunci publishable disalahgunakan. Nomor darurat pribadi maks. 5 per laporan.'],
+            ]} />
+
+            <h3 id="wa-server">Konfigurasi server</h3>
+            <p>Provider dan nama variabel lingkungan sama dengan tata-warga, sehingga akun WhatsApp yang sama dapat dipakai. Tanpa konfigurasi, server berjalan dalam mode <code>stub</code>: tidak ada WhatsApp keluar, timeline mencatat "provider WA belum diatur".</p>
+            <Code lang="env · MetaDev (bot.mkasir.id)">{`PANIC_BUTTON_USE_METADEV=true        # atau WA_PROVIDER=metadev
+METADEV_BASE_URL=https://api-bot.mkasir.id
+METADEV_API_KEY=mk_live_...
+METADEV_ACCOUNT_ID=...
+METADEV_EWSBUTTON_TEMPLATE_NAME=ewsbutton
+METADEV_EWSBUTTON_LANGUAGE=id`}</Code>
+            <Code lang="env · Qontak (Mekari)">{`WA_PROVIDER=qontak
+PANIC_QONTAK_HMAC_USERNAME=...
+PANIC_QONTAK_HMAC_SECRET=...
+PANIC_QONTAK_TEMPLATE_ID=...
+PANIC_QONTAK_CHANNEL_INTEGRATION_ID=...`}</Code>
+            <Note tone="warn">Template harus berstatus <b>APPROVED</b> di provider dengan tiga parameter body berurutan: <code>{'{{1}}'}</code> nama, <code>{'{{2}}'}</code> lokasi, <code>{'{{3}}'}</code> link maps. Template yang belum disetujui ditolak Meta dan tercatat "gagal" di timeline.</Note>
           </section>
 
           <section id="source">
@@ -557,6 +633,7 @@ curl -X PATCH ${api}/v1/reports/6f1c... \\
               <li><CheckCircle size={18} weight="fill" />Responder sudah diundang dan bisa login ke dashboard, bunyi alert diaktifkan.</li>
               <li><CheckCircle size={18} weight="fill" />Kategori SOS & pengaduan, teks penerima, dan nomor cadangan diatur di Pengaturan app.</li>
               <li><CheckCircle size={18} weight="fill" />Aplikasi mobile: package name / bundle id produksi terdaftar, izin lokasi/kamera/mikrofon dijelaskan ke pengguna.</li>
+              <li><CheckCircle size={18} weight="fill" />Penerima SOS (WhatsApp) diisi di tab <b>Penerima SOS</b>, dan satu SOS live uji menunjukkan "terkirim" di timeline.</li>
               <li><CheckCircle size={18} weight="fill" />Webhook (bila dipakai) lolos verifikasi tanda tangan dan membalas 2xx.</li>
               <li><CheckCircle size={18} weight="fill" />Pengguna sudah diberi tahu tentang pembagian lokasi (UU PDP).</li>
               <li><CheckCircle size={18} weight="fill" />Uji satu laporan live end-to-end bersama tim responder.</li>

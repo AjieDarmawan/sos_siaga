@@ -154,7 +154,9 @@ class SiagaSOS {
       loc = null; // tanpa lokasi tetap terkirim
     }
     // Kontak darurat hanya untuk SOS (pengaduan tidak memicu WhatsApp). Gagal baca → SOS tetap jalan tanpa kontak.
-    final contacts = kind == ReportKind.sos ? await emergencyContacts() : const <EmergencyContact>[];
+    final contacts = kind == ReportKind.sos
+        ? (await emergencyContacts()).where((c) => c.active).take(maxActiveEmergencyContacts).toList()
+        : const <EmergencyContact>[];
     final item = <String, dynamic>{
       'localId': _uuid(),
       'idem': _uuid(),
@@ -167,7 +169,7 @@ class SiagaSOS {
         if (loc != null) 'location': loc.toJson(),
         if (user != null) 'reporter': user!.toJson(),
         if (metadata != null) 'metadata': metadata,
-        if (contacts.isNotEmpty) 'emergency_contacts': contacts.map((c) => c.toJson()).toList(),
+        if (contacts.isNotEmpty) 'emergency_contacts': contacts.map((c) => c.toReportJson()).toList(),
         'device': {'platform': _platform(), 'sdk_version': 'flutter-$sdkVersion'},
         'client_created_at': DateTime.now().toUtc().toIso8601String(),
       },
@@ -241,15 +243,21 @@ class SiagaSOS {
     }
   }
 
-  /// Simpan kontak darurat (maks. [maxEmergencyContacts]). Nomor dinormalisasi ke 62xx; nomor tidak valid → [ArgumentError].
+  /// Simpan seluruh daftar kontak darurat (ganti total). Nomor dinormalisasi ke 62xx. [ArgumentError] bila nomor tidak
+  /// valid, nama kosong, nomor ganda, lebih dari [maxEmergencyContacts] kontak, atau lebih dari [maxActiveEmergencyContacts] aktif.
   Future<void> setEmergencyContacts(List<EmergencyContact> contacts) async {
-    if (contacts.length > maxEmergencyContacts) throw ArgumentError('Maksimal $maxEmergencyContacts kontak darurat');
+    if (contacts.length > maxEmergencyContacts) throw ArgumentError('Maksimal $maxEmergencyContacts nomor darurat');
+    if (contacts.where((c) => c.active).length > maxActiveEmergencyContacts) {
+      throw ArgumentError('Maksimal $maxActiveEmergencyContacts nomor darurat aktif');
+    }
     final out = <EmergencyContact>[];
     for (final c in contacts) {
       final n = toWhatsAppNumber(c.phone);
       if (n == null) throw ArgumentError('Nomor WhatsApp tidak valid: ${c.phone}');
-      if (out.any((o) => o.phone == n)) continue;
-      out.add(EmergencyContact(name: c.name.trim(), phone: n));
+      if (c.name.trim().isEmpty) throw ArgumentError('Nama kontak wajib diisi');
+      if (out.any((o) => o.phone == n)) throw ArgumentError('Nomor +$n sudah ada di daftar');
+      final role = c.role?.trim();
+      out.add(EmergencyContact(name: c.name.trim(), phone: n, role: role == null || role.isEmpty ? null : role, active: c.active));
     }
     await _contacts.save(out.map((c) => c.toJson()).toList());
   }

@@ -68,7 +68,7 @@ Halaman: registrasi 3 langkah, verifikasi email, status verifikasi + unggah doku
 | Method | Path | |
 |---|---|---|
 | GET | `/v1/sdk/config` | kategori SOS & pengaduan (`complaint_categories`), teks tombol, durasi tahan, teks penerima |
-| POST | `/v1/sdk/reports` | buat laporan (wajib `Idempotency-Key`); `kind: 'pengaduan'` = laporan non-darurat (uraian wajib, tanpa alarm & lokasi live); `emergency_contacts` (maks. 3 `{name, phone}`) = kontak darurat pribadi yang ikut dikabari WhatsApp saat SOS |
+| POST | `/v1/sdk/reports` | buat laporan (wajib `Idempotency-Key`); `kind: 'pengaduan'` = laporan non-darurat (uraian wajib, tanpa alarm & lokasi live); `emergency_contacts` (maks. 5 `{name, phone}`) = kontak darurat pribadi yang ikut dikabari WhatsApp saat SOS |
 | GET | `/v1/sdk/reports/:id` | status untuk pengguna |
 | POST | `/v1/sdk/reports/:id/locations` | live location; balasan `accepted:false` = berhenti |
 | POST | `/v1/sdk/reports/:id/cancel` | batal, hanya selama `open` |

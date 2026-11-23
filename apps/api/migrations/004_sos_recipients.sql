@@ -27,4 +27,4 @@ COMMENT ON POLICY tenant_isolation ON sos_recipients IS
   'Baris hanya terlihat bila account_id = app.account_id transaksi, atau sesi admin platform (app.platform=on).';
 
 ALTER TABLE reports ADD COLUMN emergency_contacts jsonb;
-COMMENT ON COLUMN reports.emergency_contacts IS 'Kontak darurat pribadi pelapor yang dikirim SDK bersama SOS ([{name, phone}], maks. 3, phone 62xx). Ikut dikabari WhatsApp; disimpan untuk jejak siapa yang dihubungi.';
+COMMENT ON COLUMN reports.emergency_contacts IS 'Kontak darurat pribadi pelapor yang dikirim SDK bersama SOS ([{name, phone}], maks. 5, phone 62xx). Ikut dikabari WhatsApp; disimpan untuk jejak siapa yang dihubungi.';

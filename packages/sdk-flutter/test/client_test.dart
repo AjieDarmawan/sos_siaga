@@ -185,4 +185,32 @@ void main() {
     sos.dispose();
     await tester.pumpWidget(const SizedBox());
   });
+
+  test('kontak darurat: jabatan & aktif disimpan, hanya yang aktif dikirim bersama SOS, maks. 5 aktif', () async {
+    final s = FakeServer();
+    final sos = make(s);
+    await sos.setEmergencyContacts(const [
+      EmergencyContact(name: 'Pak Joko', phone: '0812-1111-2222', role: 'Satpam'),
+      EmergencyContact(name: 'Kakak', phone: '+62 813 3333 4444', active: false),
+    ]);
+    final saved = await sos.emergencyContacts();
+    expect(saved.map((c) => (c.phone, c.role, c.active)), [('6281211112222', 'Satpam', true), ('6281333334444', null, false)]);
+
+    await sos.trigger(category: 'kriminal');
+    final body = jsonDecode(s.requests.firstWhere((q) => q.url.path == '/v1/sdk/reports').body) as Map;
+    expect(body['emergency_contacts'], [
+      {'name': 'Pak Joko (Satpam)', 'phone': '6281211112222'}
+    ]);
+
+    expect(
+      () => sos.setEmergencyContacts([for (var i = 0; i < 6; i++) EmergencyContact(name: 'K$i', phone: '08120000000$i')]),
+      throwsA(isA<ArgumentError>()),
+    );
+    expect(() => sos.setEmergencyContacts(const [EmergencyContact(name: 'X', phone: '123')]), throwsA(isA<ArgumentError>()));
+    expect(
+      () => sos.setEmergencyContacts(const [EmergencyContact(name: 'A', phone: '081211112222'), EmergencyContact(name: 'B', phone: '6281211112222')]),
+      throwsA(isA<ArgumentError>()),
+    );
+    sos.dispose();
+  });
 }

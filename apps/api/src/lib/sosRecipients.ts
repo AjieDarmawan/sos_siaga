@@ -22,9 +22,9 @@ export function mergeTargets(recipients: { name: string; phone: string; source_i
   return out;
 }
 
-/** Satu nomor maks. 5 WA SOS per jam lintas laporan: pagar bila kunci publishable disalahgunakan untuk spam. */
 /** Nomor 0800 (bebas pulsa, bukan nomor seluler WhatsApp) = nomor uji: dicatat tapi tidak pernah dikirimi WA (smoke/QA). */
 export const isTestNumber = (phone: string) => phone.startsWith('62800');
+/** Satu nomor maks. 5 WA SOS per jam lintas laporan: pagar bila kunci publishable disalahgunakan untuk spam. */
 const PER_NUMBER_LIMIT = 5;
 
 function outcome(t: WaTarget, r: WaResult | 'limited' | 'test'): string {

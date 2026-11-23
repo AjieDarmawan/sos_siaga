@@ -40,8 +40,8 @@ export function toWhatsAppNumber(phone: string): string | null {
   return /^62[0-9]{8,13}$/.test(d) ? d : null;
 }
 
-/** Nomor WhatsApp yang dikabari saat SOS. Maks. 3 per laporan (pelapor memilih di perangkat). */
-export const MAX_EMERGENCY_CONTACTS = 3;
+/** Nomor WhatsApp pribadi yang dikabari saat SOS. Maks. 5 per laporan (kontak aktif di perangkat pelapor, sama dengan tata-warga). */
+export const MAX_EMERGENCY_CONTACTS = 5;
 export const emergencyContactSchema = z.object({
   name: z.string().trim().max(80).optional(),
   phone: z.string().max(32).transform((p, ctx) => {

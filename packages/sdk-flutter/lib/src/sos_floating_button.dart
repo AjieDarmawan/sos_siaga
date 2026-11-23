@@ -144,7 +144,7 @@ class SOSFloatingButton extends StatefulWidget {
 }
 
 const double _kEdge = 12;
-const double _kActionWidth = 196;
+const double _kActionWidth = 172;
 
 class _SOSFloatingButtonState extends State<SOSFloatingButton> with SingleTickerProviderStateMixin {
   late final AnimationController _hold = AnimationController(vsync: this);
@@ -539,7 +539,6 @@ class _SOSFloatingButtonState extends State<SOSFloatingButton> with SingleTicker
     final note = <String>[
       if (_notice != null) _notice!,
       if (_active) 'SOS aktif: $_statusText. Batalkan lewat Laporan → Riwayat.',
-      if (cfg != null && cfg.recipientText.isNotEmpty) cfg.recipientText,
       if (widget.client.mode == SosMode.test) 'MODE TEST',
     ];
     final ordered = openUp ? items.reversed.toList() : items;
@@ -558,7 +557,7 @@ class _SOSFloatingButtonState extends State<SOSFloatingButton> with SingleTicker
       children: [
         if (openUp && caption != null) ...[caption, const SizedBox(height: 8)],
         for (var i = 0; i < ordered.length; i++) ...[
-          if (i > 0) const SizedBox(height: 8),
+          if (i > 0) const SizedBox(height: 6),
           _Pop(index: openUp ? ordered.length - 1 - i : i, child: ordered[i]),
         ],
         if (!openUp && caption != null) ...[const SizedBox(height: 8), caption],
@@ -567,9 +566,9 @@ class _SOSFloatingButtonState extends State<SOSFloatingButton> with SingleTicker
   }
 }
 
-const _kActionHeight = 48.0;
-const _kActionRadius = 12.0;
-const _kActionText = TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w600);
+const _kActionHeight = 42.0;
+const _kActionRadius = 11.0;
+const _kActionText = TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w600);
 
 BoxDecoration _actionDecoration(List<Color> colors) => BoxDecoration(
       gradient: LinearGradient(colors: colors, begin: Alignment.topLeft, end: Alignment.bottomRight),
@@ -617,9 +616,9 @@ class _ActionButton extends StatelessWidget {
                 onTap();
               },
               child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 14),
+                padding: const EdgeInsets.symmetric(horizontal: 12),
                 child: Row(children: [
-                  Icon(icon, color: Colors.white, size: 22),
+                  Icon(icon, color: Colors.white, size: 19),
                   const SizedBox(width: 8),
                   Expanded(child: Text(label, overflow: TextOverflow.ellipsis, style: _kActionText)),
                 ]),
@@ -681,11 +680,11 @@ class _HoldToSend extends StatelessWidget {
             child: Stack(children: [
               FractionallySizedBox(widthFactor: hold.value, child: Container(color: Colors.black.withValues(alpha: 0.22))),
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 14),
+                padding: const EdgeInsets.symmetric(horizontal: 12),
                 child: Row(children: [
                   sending
                       ? const SizedBox.square(dimension: 20, child: CircularProgressIndicator(strokeWidth: 2.4, color: Colors.white))
-                      : const Icon(Icons.warning_amber_rounded, color: Colors.white, size: 22),
+                      : const Icon(Icons.warning_amber_rounded, color: Colors.white, size: 19),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
@@ -1773,7 +1772,7 @@ class _ContactsSheetState extends State<_ContactsSheet> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final items = _items;
-    final full = (items?.length ?? 0) >= maxEmergencyContacts;
+    final full = (items?.where((c) => c.active).length ?? 0) >= maxActiveEmergencyContacts || (items?.length ?? 0) >= maxEmergencyContacts;
     return _SheetFrame(
       sheetKey: const ValueKey('siagasos-contacts-sheet'),
       onDismiss: _saving ? null : widget.onClose,
@@ -1805,7 +1804,7 @@ class _ContactsSheetState extends State<_ContactsSheet> {
           Container(
             padding: const EdgeInsets.all(14),
             decoration: BoxDecoration(color: theme.colorScheme.surfaceContainerHighest, borderRadius: BorderRadius.circular(14)),
-            child: Text('Belum ada nomor darurat. Tambahkan keluarga atau rekan (maks. $maxEmergencyContacts) yang perlu tahu saat kamu menekan SOS.',
+            child: Text('Belum ada nomor darurat. Tambahkan keluarga, rekan, atau satpam (maks. $maxActiveEmergencyContacts aktif) yang perlu tahu saat kamu menekan SOS.',
                 style: theme.textTheme.bodySmall?.copyWith(height: 1.4)),
           )
         else
@@ -1825,8 +1824,8 @@ class _ContactsSheetState extends State<_ContactsSheet> {
                   const SizedBox(width: 12),
                   Expanded(
                     child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                      Text(c.name, style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700)),
-                      Text('+${c.phone}', style: theme.textTheme.bodySmall),
+                      Text(c.role == null ? c.name : '${c.name} · ${c.role}', style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700)),
+                      Text(c.active ? '+${c.phone}' : '+${c.phone} · nonaktif', style: theme.textTheme.bodySmall),
                     ]),
                   ),
                   IconButton(
@@ -1879,7 +1878,7 @@ class _ContactsSheetState extends State<_ContactsSheet> {
           ),
         ],
         if (full)
-          Text('Maksimal $maxEmergencyContacts nomor. Hapus salah satu untuk mengganti.',
+          Text('Maksimal $maxActiveEmergencyContacts nomor aktif. Hapus atau nonaktifkan salah satu untuk mengganti.',
               textAlign: TextAlign.center, style: theme.textTheme.bodySmall),
         if (_error != null) ...[
           const SizedBox(height: 8),

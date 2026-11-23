@@ -86,25 +86,50 @@ class ActiveReport {
   String toString() => 'ActiveReport($localId, id=$id, $status)';
 }
 
-/// Kontak darurat pribadi pelapor: dikabari WhatsApp oleh server saat SOS (maks. [maxEmergencyContacts]).
-/// Disimpan di perangkat ([SiagaSOS.setEmergencyContacts]) dan dikirim bersama setiap SOS.
+/// Kontak darurat pribadi pelapor (gaya "Nomor Darurat" tata-warga): yang [active] dikabari WhatsApp oleh server
+/// setiap SOS (maks. [maxActiveEmergencyContacts] aktif). Disimpan di perangkat per pengguna
+/// ([SiagaSOS.setEmergencyContacts]); app host bisa membuat halaman CRUD sendiri di atas API ini.
 class EmergencyContact {
-  const EmergencyContact({required this.name, required this.phone});
+  const EmergencyContact({required this.name, required this.phone, this.role, this.active = true});
   final String name;
   /// Nomor WhatsApp ternormalisasi 62xxxxxxxxxx.
   final String phone;
+  /// Jabatan / hubungan, opsional (mis. Satpam, Pemilik toko, Keluarga).
+  final String? role;
+  /// Hanya kontak aktif yang menerima SOS.
+  final bool active;
 
-  Map<String, dynamic> toJson() => {'name': name, 'phone': phone};
-  factory EmergencyContact.fromJson(Map<String, dynamic> j) =>
-      EmergencyContact(name: j['name'] as String? ?? '', phone: j['phone'] as String? ?? '');
+  EmergencyContact copyWith({String? name, String? phone, String? role, bool? active, bool clearRole = false}) => EmergencyContact(
+        name: name ?? this.name,
+        phone: phone ?? this.phone,
+        role: clearRole ? null : (role ?? this.role),
+        active: active ?? this.active,
+      );
+
+  /// Bentuk yang disimpan di perangkat.
+  Map<String, dynamic> toJson() => {'name': name, 'phone': phone, if (role != null) 'role': role, 'active': active};
+
+  /// Bentuk yang dikirim ke server bersama SOS (`emergency_contacts[]`).
+  Map<String, dynamic> toReportJson() => {'name': role == null || role!.isEmpty ? name : '$name ($role)', 'phone': phone};
+
+  factory EmergencyContact.fromJson(Map<String, dynamic> j) => EmergencyContact(
+        name: j['name'] as String? ?? '',
+        phone: j['phone'] as String? ?? '',
+        role: (j['role'] as String?)?.trim().isEmpty ?? true ? null : (j['role'] as String).trim(),
+        active: j['active'] as bool? ?? true,
+      );
 
   @override
-  bool operator ==(Object other) => other is EmergencyContact && other.name == name && other.phone == phone;
+  bool operator ==(Object other) =>
+      other is EmergencyContact && other.name == name && other.phone == phone && other.role == role && other.active == active;
   @override
-  int get hashCode => Object.hash(name, phone);
+  int get hashCode => Object.hash(name, phone, role, active);
 }
 
-const maxEmergencyContacts = 3;
+/// Maks. kontak aktif yang dikabari per SOS (sama dengan batas server & tata-warga).
+const maxActiveEmergencyContacts = 5;
+/// Maks. kontak tersimpan (aktif + nonaktif).
+const maxEmergencyContacts = 10;
 
 /// 08xx / +62xx / 62xx / 8xx → 62xx. Null bila bukan nomor Indonesia yang masuk akal (sama dengan server).
 String? toWhatsAppNumber(String phone) {

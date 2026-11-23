@@ -249,8 +249,10 @@ async function main() {
   const tmp = await call('POST', `/portal/apps/${appId}/recipients`, { token: A.token, body: { name: 'Sementara', phone: '080099990000' } });
   ok((await call('DELETE', `/portal/apps/${appId}/recipients/${tmp.data.id}`, { token: A.token })).status === 204, 'penerima SOS dihapus');
   const badContacts = await call('POST', '/v1/sdk/reports', { headers: sdkH(pkLive, { 'Idempotency-Key': uuid() }),
-    body: { ...payload, emergency_contacts: [{ phone: '1' }, { phone: '2' }, { phone: '3' }, { phone: '4' }] } });
-  ok(badContacts.status === 422, 'kontak darurat: >3 nomor / nomor tidak valid ditolak');
+    body: { ...payload, emergency_contacts: Array.from({ length: 6 }, (_, i) => ({ phone: `0800000000${i}` })) } });
+  ok(badContacts.status === 422, 'kontak darurat: >5 nomor ditolak');
+  const badPhone = await call('POST', '/v1/sdk/reports', { headers: sdkH(pkLive, { 'Idempotency-Key': uuid() }), body: { ...payload, emergency_contacts: [{ phone: '123' }] } });
+  ok(badPhone.status === 422, 'kontak darurat: nomor tidak valid ditolak');
 
   const liveRep = await call('POST', '/v1/sdk/reports', { headers: sdkH(pkLive, { 'Idempotency-Key': uuid() }), body: { ...payload, reporter: { ref: 'user_999' },
     emergency_contacts: [{ name: 'Istri', phone: '0800 3333 4444' }, { name: 'Dobel', phone: '6280011112222' }] } });
