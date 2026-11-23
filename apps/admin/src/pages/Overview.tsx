@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { ArrowRight, Clock, Warning } from '@phosphor-icons/react';
+import { ArrowRight, CheckCircle, Clock, FileDashed, HourglassMedium, NotePencil, Snowflake, Warning, type Icon } from '@phosphor-icons/react';
 import { ACCOUNT_STATUS, fmtDate, REPORT_STATUS } from '@portal/lib/format';
 import type { AccountStatus, ReportStatus } from '@portal/lib/types';
 import { Alert, Badge, Empty, Spinner, useLoad } from '@portal/components/ui';
@@ -27,12 +27,12 @@ export function OverviewPage() {
   const testTotal = reports.filter((r) => r.mode === 'test').reduce((a, r) => a + r.n, 0);
   const byStatus = (Object.keys(REPORT_COLOR) as ReportStatus[]).map((s) => ({ s, n: live.filter((r) => r.status === s).reduce((a, r) => a + r.n, 0) })).filter((x) => x.n);
 
-  const cards: { k: string; label: string; to: string; tone?: string }[] = [
-    { k: 'pending_review', label: 'Menunggu review', to: '/queue', tone: 'var(--warn)' },
-    { k: 'drafting', label: 'Masih melengkapi dokumen', to: '/accounts?status=drafting' },
-    { k: 'needs_revision', label: 'Perlu revisi', to: '/accounts?status=needs_revision' },
-    { k: 'approved', label: 'Disetujui', to: '/accounts?status=approved', tone: 'var(--ok)' },
-    { k: 'suspended', label: 'Dibekukan', to: '/accounts?status=suspended', tone: 'var(--sos)' },
+  const cards: { k: string; label: string; to: string; tone?: string; soft?: string; Ic: Icon }[] = [
+    { k: 'pending_review', label: 'Menunggu review', to: '/queue', tone: 'var(--warn)', soft: 'var(--warn-soft)', Ic: HourglassMedium },
+    { k: 'drafting', label: 'Masih melengkapi dokumen', to: '/accounts?status=drafting', Ic: FileDashed },
+    { k: 'needs_revision', label: 'Perlu revisi', to: '/accounts?status=needs_revision', tone: 'var(--info)', soft: 'var(--info-soft)', Ic: NotePencil },
+    { k: 'approved', label: 'Disetujui', to: '/accounts?status=approved', tone: 'var(--ok)', soft: 'var(--ok-soft)', Ic: CheckCircle },
+    { k: 'suspended', label: 'Dibekukan', to: '/accounts?status=suspended', tone: 'var(--sos)', soft: 'var(--sos-soft)', Ic: Snowflake },
   ];
 
   return (
@@ -48,12 +48,15 @@ export function OverviewPage() {
       )}
 
       <div className="stat-grid">
-        {cards.map(({ k, label, to, tone }) => (
-          <div key={k} className="card stat">
+        {cards.map(({ k, label, to, tone, soft, Ic }) => (
+          <Link key={k} to={to} className="card stat" style={{ color: 'var(--text)' }} aria-label={`${label}: ${c[k] ?? 0}. Lihat`}>
+            <span className="stat-top">
+              <span className="stat-ic" style={{ color: tone, background: soft }} aria-hidden><Ic size={20} weight="duotone" /></span>
+              <ArrowRight size={14} className="muted" aria-hidden />
+            </span>
             <span className="n" style={{ color: tone }}>{c[k] ?? 0}</span>
             <span className="l">{label}</span>
-            <Link to={to} className="row" style={{ gap: 4 }}>Lihat<ArrowRight size={12} /></Link>
-          </div>
+          </Link>
         ))}
       </div>
 

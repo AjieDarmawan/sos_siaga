@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
-import { BellRinging, BellSlash, DownloadSimple, MapPin, MapPinLine, Phone, Siren, User, X } from '@phosphor-icons/react';
+import { BellRinging, BellSlash, CarProfile, DownloadSimple, Fire, FirstAidKit, MapPin, MapPinLine, Megaphone, Phone, ShieldWarning, Siren, User, Warning, X, type Icon } from '@phosphor-icons/react';
 import { TERMINAL_STATUSES } from '@siagasos/shared';
 import { api, API_URL, download, tokenStore } from '../lib/api';
 import { useAuth } from '../lib/auth';
@@ -17,6 +17,13 @@ const PERIODS: [number, string][] = [[1, '24 jam'], [7, '7 hari'], [30, '30 hari
 const SOUND_KEY = 'siagasos.dashboard.sound';
 const REMIND_MS = 20_000;
 
+type Kind = '' | 'sos' | 'pengaduan';
+const kindOf = (r: Report) => r.kind ?? 'sos';
+/** SOS "Baru" yang belum diterima: memicu banner & bunyi. Pengaduan tidak darurat, jadi tidak dihitung. */
+const isUrgent = (r: Report) => r.status === 'open' && kindOf(r) === 'sos';
+const CAT_ICON: Record<string, Icon> = { kriminal: ShieldWarning, medis: FirstAidKit, kebakaran: Fire, kecelakaan: CarProfile, bencana: Warning, general: Siren };
+const median = (a: number[]) => { if (!a.length) return null; const s = [...a].sort((x, y) => x - y); return s[Math.floor(s.length / 2)]; };
+
 const isTerminal = (s: ReportStatus) => TERMINAL_STATUSES.includes(s);
 const inGroup = (r: Report, g: Group) => (g === 'all' ? true : g === 'active' ? !isTerminal(r.status) : isTerminal(r.status));
 
@@ -31,6 +38,7 @@ export function DashboardPage() {
   const [group, setGroup] = useState<Group>('active');
   const [days, setDays] = useState(7);
   const [mode, setMode] = useState<'' | 'live' | 'test'>('');
+  const [kind, setKind] = useState<Kind>('');
   const [byId, setById] = useState<Map<string, Report>>(new Map());
   const [loading, setLoading] = useState(true);
   const [loadErr, setLoadErr] = useState<string | null>(null);
@@ -125,10 +133,22 @@ export function DashboardPage() {
 
   // ------------------------------------------------------------ tampilan
   const reports = useMemo(() => [...byId.values()]
-    .filter((r) => inGroup(r, group) && (!mode || r.mode === mode))
+    .filter((r) => inGroup(r, group) && (!mode || r.mode === mode) && (!kind || kindOf(r) === kind))
     .sort((a, b) => (a.status === 'open') !== (b.status === 'open') ? (a.status === 'open' ? -1 : 1) : b.created_at.localeCompare(a.created_at)),
-  [byId, group, mode]);
-  const openCount = useMemo(() => [...byId.values()].filter((r) => r.status === 'open').length, [byId]);
+  [byId, group, mode, kind]);
+  const openCount = useMemo(() => [...byId.values()].filter(isUrgent).length, [byId]);
+  // Ringkasan untuk periode & mode terpilih (dari data yang dimuat)
+  const stats = useMemo(() => {
+    const all = [...byId.values()].filter((r) => !mode || r.mode === mode);
+    const resp = median(all.filter((r) => kindOf(r) === 'sos' && r.acknowledged_at)
+      .map((r) => (Date.parse(r.acknowledged_at!) - Date.parse(r.created_at)) / 60_000));
+    return {
+      baru: all.filter(isUrgent).length,
+      proses: all.filter((r) => r.status === 'acknowledged' || r.status === 'in_progress').length,
+      aduan: all.filter((r) => kindOf(r) === 'pengaduan' && !isTerminal(r.status)).length,
+      resp,
+    };
+  }, [byId, mode]);
 
   // pengingat bunyi berulang selama masih ada laporan "Baru" yang belum diterima
   useEffect(() => {
@@ -170,15 +190,15 @@ export function DashboardPage() {
   const selReport = selected ? byId.get(selected) ?? detail : null;
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+    <div className="dash-shell">
       {openCount > 0 && (
         <div className="alarm-banner" role="alert">
           <Siren size={22} weight="fill" />
-          <span style={{ flex: 1 }}>{openCount} laporan baru belum diterima</span>
-          <Button size="sm" onClick={() => { const first = [...byId.values()].find((r) => r.status === 'open'); if (first) setSelected(first.id); }}>Lihat</Button>
+          <span style={{ flex: 1 }}>{openCount} SOS baru belum diterima</span>
+          <Button size="sm" onClick={() => { const first = [...byId.values()].find(isUrgent); if (first) setSelected(first.id); }}>Lihat</Button>
         </div>
       )}
-      <div className="dash" style={{ flex: 1, height: 'auto' }}>
+      <div className="dash">
         <section className="dash-list" aria-label="Daftar laporan">
           <div className="dash-toolbar">
             <div className="row-between">
@@ -203,17 +223,26 @@ export function DashboardPage() {
                 )}
               </div>
             </div>
+            <dl className="dash-stats" aria-label="Ringkasan periode ini">
+              <div className={stats.baru ? 'is-sos' : ''}><dt>SOS baru</dt><dd>{stats.baru}</dd></div>
+              <div><dt>Ditangani</dt><dd>{stats.proses}</dd></div>
+              <div><dt>Pengaduan</dt><dd>{stats.aduan}</dd></div>
+              <div><dt>Respons</dt><dd>{stats.resp == null ? '–' : stats.resp < 1 ? '<1' : Math.round(stats.resp)}<small>{stats.resp == null ? '' : ' mnt'}</small></dd></div>
+            </dl>
             {sound && soundBlocked && <p className="small" style={{ color: 'var(--warn)' }}>Klik di mana saja pada halaman untuk mengaktifkan suara.</p>}
             <div className="seg" role="group" aria-label="Status">
               {GROUPS.map(([g, l]) => <button key={g} aria-pressed={group === g} onClick={() => setGroup(g)}>{l}</button>)}
             </div>
             <div className="row" style={{ gap: 8 }}>
               <select className="select" style={{ minHeight: 34, padding: '4px 8px', flex: 1 }} aria-label="Periode" value={days} onChange={(e) => setDays(Number(e.target.value))}>
-                {PERIODS.map(([d, l]) => <option key={d} value={d}>{l} terakhir</option>)}
+                {PERIODS.map(([d, l]) => <option key={d} value={d}>{l}</option>)}
+              </select>
+              <select className="select" style={{ minHeight: 34, padding: '4px 8px', flex: 1 }} aria-label="Jenis laporan" value={kind} onChange={(e) => setKind(e.target.value as Kind)}>
+                <option value="">Semua jenis</option><option value="sos">SOS</option><option value="pengaduan">Pengaduan</option>
               </select>
               {!me?.account.limited && (
                 <select className="select" style={{ minHeight: 34, padding: '4px 8px', flex: 1 }} aria-label="Mode" value={mode} onChange={(e) => setMode(e.target.value as typeof mode)}>
-                  <option value="">Live + test</option><option value="live">Live saja</option><option value="test">Test saja</option>
+                  <option value="">Live + test</option><option value="live">Live</option><option value="test">Test</option>
                 </select>
               )}
             </div>
@@ -255,10 +284,14 @@ function notifyBrowser(r: Report) {
 
 function ReportItem({ r, active, isNew, onClick }: { r: Report; active: boolean; isNew: boolean; onClick: () => void }) {
   const st = REPORT_STATUS[r.status];
-  const cls = r.status === 'open' ? 'is-open' : r.status === 'acknowledged' || r.status === 'in_progress' ? 'is-ack' : '';
+  const aduan = kindOf(r) === 'pengaduan';
+  const cls = r.status === 'open' ? (aduan ? 'is-ack' : 'is-open') : r.status === 'acknowledged' || r.status === 'in_progress' ? 'is-ack' : '';
+  const Ic = aduan ? Megaphone : CAT_ICON[r.category] ?? Siren;
+  const tone = isTerminal(r.status) ? 'done' : aduan ? 'aduan' : r.status === 'open' ? 'sos' : 'ack';
   return (
     <button className={`report-item ${cls} ${isNew ? 'is-new' : ''}`} aria-current={active} onClick={onClick}>
       <span className="rail" aria-hidden />
+      <span className={`ri-icon ${tone}`} aria-hidden><Ic size={18} weight="duotone" /></span>
       <span style={{ minWidth: 0 }}>
         <span className="row-between" style={{ flexWrap: 'nowrap' }}>
           <span className="title">

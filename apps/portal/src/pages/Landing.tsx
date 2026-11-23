@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import {
   ArrowRight, Bell, Buildings, CheckCircle, Code, CloudArrowUp, Copy, FileLock, GraduationCap, Key, List,
-  MapPinLine, Package, PlugsConnected, ShieldCheck, Siren, Storefront, Truck, UsersThree, WifiSlash, X,
+  DeviceMobile, MapPinLine, Megaphone, Package, PlugsConnected, ShieldCheck, Siren, Storefront, Truck, UsersThree, WifiSlash, X,
 } from '@phosphor-icons/react';
 import { useAuth } from '../lib/auth';
 import { BrandMark } from '../components/Layout';
@@ -253,7 +253,7 @@ function UseCases() {
 // ---------------------------------------------------------------- 3. cara kerja
 function HowItWorks() {
   const steps = [
-    { icon: Code, title: 'Pasang SDK', text: 'Daftar, buat app, dan tempel publishable key ke SDK web atau Android. Tiga baris kode.' },
+    { icon: Code, title: 'Pasang SDK', text: 'Daftar, buat app, dan tempel publishable key ke SDK web, Flutter, Android, atau iOS. Tiga baris kode.' },
     { icon: Siren, title: 'Pengguna menahan tombol', text: 'Tahan 3 detik untuk mencegah salah tekan. Lokasi dan data pelapor ikut terkirim, bahkan saat sinyal putus.' },
     { icon: Bell, title: 'Tim Anda merespons', text: 'Laporan muncul realtime di dashboard dengan bunyi alarm, peta, dan status yang dilihat pelapor.' },
   ];
@@ -307,6 +307,16 @@ function Features() {
             text="Data tiap perusahaan diisolasi di level database, dokumen dienkripsi AES-256, dan setiap akses detail laporan tercatat di audit log." />
           <Bento cls="b-key" icon={<Key size={22} weight="duotone" />} title="Kunci yang bisa dikendalikan"
             text="Batasi ke domain atau bundle id, rotasi dengan masa tenggang, cabut seketika. Mode test terpisah dari data live." />
+          <Bento cls="b-mob" icon={<DeviceMobile size={22} weight="duotone" />} title="Tombol melayang di aplikasi mobile"
+            text="Pasang sekali, tombol SOS kecil tampil di semua halaman: bisa digeser, menempel ke tepi. Ketuk untuk Kirim SOS, Telepon 110, Telepon 112, atau Laporan pengaduan.">
+            <div className="mini-fab" aria-hidden>
+              <span className="mfa sos">Kirim SOS</span><span className="mfa c110">Telepon 110</span>
+              <span className="mfa c112">Telepon 112</span><span className="mfa adu">Laporan pengaduan</span>
+              <span className="mfab">SOS</span>
+            </div>
+          </Bento>
+          <Bento cls="b-adu" icon={<Megaphone size={22} weight="duotone" />} title="Pengaduan non-darurat"
+            text="Parkir liar, kebisingan, pungli: pengguna mengirim pengaduan dengan uraian dan foto. Masuk ke dashboard yang sama tanpa membunyikan alarm, dengan kuota terpisah dari SOS." />
         </div>
       </div>
     </section>
@@ -336,6 +346,21 @@ const SNIPPETS: Record<string, string> = {
 const sos = SiagaSOS.init({ apiKey: 'pk_test_...' });
 await sos.trigger({ category: 'medis', message: 'Rekan pingsan' });
 sos.on('status', (r) => console.log(r.status)); // open → acknowledged → resolved`,
+  Flutter: `MaterialApp(
+  builder: (context, child) => SOSFloatingButton(
+    client: SiagaSOS(apiKey: 'pk_test_...', bundleId: 'com.perusahaan.app'),
+    onCall: (tel) => launchUrl(Uri(scheme: 'tel', path: tel)),
+    child: child!,   // tombol SOS melayang di semua halaman
+  ),
+)`,
+  Android: `val sos = SiagaSOS.create(context, apiKey = "pk_test_...")
+binding.sosButton.bind(sos, category = "kriminal")   // SOSButtonView di XML
+sos.trigger("medis", "Rekan pingsan") { it.onSuccess { r -> show(r.status) } }`,
+  iOS: `import SiagaSOS
+
+let sos = try SiagaSOS(apiKey: "pk_test_...")
+SOSButton(client: sos, category: "kriminal")         // SwiftUI
+let r = try await sos.trigger(category: "medis")`,
   Webhook: `// Verifikasi X-SOS-Signature: t=<unix>,v1=<hex>
 const [t, v1] = header.split(',').map((p) => p.split('=')[1]);
 const expected = hmacSha256(WEBHOOK_SECRET, \`\${t}.\${rawBody}\`);
@@ -352,7 +377,7 @@ function Developer() {
         <div className="lp-dev-copy reveal">
           <p className="lp-kicker">Untuk developer</p>
           <h2 id="dev-title">Integrasi tiga baris. Ganti <code>pk_test_</code> ke <code>pk_live_</code> saat siap.</h2>
-          <p>SDK tanpa dependency, bekerja di React, JavaScript biasa, dan segera Android. Mode test memakai data terpisah, jadi tim Anda bisa mencoba alur lengkap sebelum dokumen perusahaan selesai diverifikasi.</p>
+          <p>SDK tanpa dependency untuk web (React, JavaScript), Flutter, Android, dan iOS. Mode test memakai data terpisah, jadi tim Anda bisa mencoba alur lengkap sebelum dokumen perusahaan selesai diverifikasi.</p>
           <Link to="/docs" className="lp-btn lp-btn-outline" style={{ justifySelf: 'start' }}>Baca dokumentasi<ArrowRight size={16} weight="bold" /></Link>
           <dl className="lp-stats">
             <div><dt><CountUp to={3.2} decimals={1} suffix=" KB" /></dt><dd>ukuran SDK (gzip)</dd></div>
@@ -437,7 +462,7 @@ const FAQ = [
   ['Dokumen apa saja yang dibutuhkan?', 'NIB, NPWP badan, dan KTP penanggung jawab. PT dan yayasan menambahkan akta serta SK Kemenkumham. Bila PIC bukan direksi, lampirkan surat kuasa.'],
   ['Bagaimana jika pengguna tidak ada sinyal?', 'SDK menyimpan laporan di perangkat dan mengirim ulang otomatis begitu koneksi kembali. Setiap laporan punya kunci unik sehingga tidak tercatat dua kali.'],
   ['Bagaimana data pelapor dilindungi?', 'Data setiap perusahaan dipisahkan di level database, dokumen legal dienkripsi, dan setiap kali petugas membuka detail laporan tercatat di audit log, sesuai prinsip UU PDP.'],
-  ['Platform apa saja yang didukung?', 'Saat ini web (React dan JavaScript). SDK Android sedang dikembangkan, disusul iOS, Flutter, dan React Native. Backend Anda bisa memakai REST API dan webhook.'],
+  ['Platform apa saja yang didukung?', 'Web (React dan JavaScript), Flutter, Android (Kotlin), dan iOS (Swift). Tombol melayang dengan menu pengaduan sudah tersedia di Flutter; Android dan iOS menyusul. React Native bisa memakai SDK JavaScript. Backend Anda memakai REST API dan webhook.'],
 ];
 
 function Faq() {

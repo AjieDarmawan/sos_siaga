@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { CaretRight, Plus, SquaresFour, Warning } from '@phosphor-icons/react';
+import { CaretRight, DeviceMobile, Globe, Plus, SquaresFour, Warning } from '@phosphor-icons/react';
 import { api, ApiError } from '../lib/api';
 import { fmtDate } from '../lib/format';
 import type { ApiKey, App } from '../lib/types';
@@ -40,17 +40,29 @@ export function AppsPage() {
             <tbody>
               {data.data.map((a) => {
                 const active = a.keys.filter((k) => k.active && k.kind === 'publishable');
+                const modes = (['test', 'live'] as const).map((m) => ({ m, n: active.filter((k) => k.mode === m).length })).filter((x) => x.n);
+                const mobile = a.allowed_bundle_ids.length > 0, web = a.allowed_origins.length > 0;
+                const AppIc = mobile && !web ? DeviceMobile : Globe;
                 return (
                   <tr key={a.id} style={{ cursor: 'pointer' }} onClick={() => nav(`/apps/${a.id}`)}>
                     <td>
-                      <Link to={`/apps/${a.id}`} onClick={(e) => e.stopPropagation()} style={{ fontWeight: 600, color: 'var(--text)' }}>{a.name}</Link>
-                      {a.disabled && <> <Badge tone="sos">Dinonaktifkan</Badge></>}
+                      <span className="app-name">
+                        <span className="app-ic" aria-hidden><AppIc size={20} weight="duotone" /></span>
+                        <span style={{ minWidth: 0 }}>
+                          <Link to={`/apps/${a.id}`} onClick={(e) => e.stopPropagation()} style={{ fontWeight: 600, color: 'var(--text)' }}>{a.name}</Link>
+                          {a.disabled && <> <Badge tone="sos">Dinonaktifkan</Badge></>}
+                          <small className="row" style={{ gap: 4, marginTop: 3 }}>
+                            {web && <span className="plat"><Globe size={12} />Web</span>}
+                            {mobile && <span className="plat"><DeviceMobile size={12} />Mobile</span>}
+                          </small>
+                        </span>
+                      </span>
                     </td>
                     <td className="small muted">
                       {[...a.allowed_origins, ...a.allowed_bundle_ids].slice(0, 2).join(', ') || <span className="row" style={{ gap: 4, color: 'var(--warn)' }}><Warning size={14} />Belum diatur</span>}
                       {a.allowed_origins.length + a.allowed_bundle_ids.length > 2 && ` +${a.allowed_origins.length + a.allowed_bundle_ids.length - 2}`}
                     </td>
-                    <td><div className="row">{active.map((k) => <Badge key={k.id} tone={k.mode === 'live' ? 'ok' : 'test'}>{k.mode.toUpperCase()}</Badge>)}</div></td>
+                    <td><div className="row">{modes.map(({ m, n }) => <Badge key={m} tone={m === 'live' ? 'ok' : 'test'}><span title={n > 1 ? `${n} kunci ${m} aktif (mis. masa tenggang rotasi)` : undefined}>{m.toUpperCase()}{n > 1 ? ` ×${n}` : ''}</span></Badge>)}</div></td>
                     <td className="small muted">{fmtDate(a.created_at)}</td>
                     <td style={{ width: 40 }}><CaretRight size={16} aria-hidden /></td>
                   </tr>
