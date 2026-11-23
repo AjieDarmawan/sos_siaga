@@ -56,6 +56,7 @@ class SOSFloatingButton extends StatefulWidget {
     this.positionKey = 'siagasos.fab.position',
     this.complaint = true,
     this.onComplaintSent,
+    this.captureKinds = MediaKind.values,
   });
 
   final SiagaSOS client;
@@ -81,6 +82,8 @@ class SOSFloatingButton extends StatefulWidget {
   /// Tampilkan menu "Laporan pengaduan". Kategori dari `complaint_categories` di portal.
   final bool complaint;
   final void Function(ActiveReport report)? onComplaintSent;
+  /// Jenis lampiran yang ditawarkan setelah SOS terkirim (mis. tanpa [MediaKind.audio] bila app tidak punya perekam).
+  final List<MediaKind> captureKinds;
 
   @override
   State<SOSFloatingButton> createState() => _SOSFloatingButtonState();
@@ -431,14 +434,14 @@ class _SOSFloatingButtonState extends State<SOSFloatingButton> with SingleTicker
         ),
       ));
     }
-    if (widget.onCapture != null && !r.status.isTerminal) {
+    if (widget.onCapture != null && widget.captureKinds.isNotEmpty && !r.status.isTerminal) {
       children.add(Padding(
         padding: const EdgeInsets.only(top: 8, bottom: 4),
         child: Text('Kirim bukti ke petugas', style: theme.textTheme.labelMedium),
       ));
       children.add(Row(children: [
-        for (final k in MediaKind.values) ...[
-          if (k != MediaKind.values.first) const SizedBox(width: 6),
+        for (final k in widget.captureKinds) ...[
+          if (k != widget.captureKinds.first) const SizedBox(width: 6),
           Expanded(child: _mediaButton(k)),
         ],
       ]));
