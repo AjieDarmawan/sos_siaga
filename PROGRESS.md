@@ -78,6 +78,7 @@ Legenda: ✅ selesai & teruji · 🟡 sebagian · ⬜ belum
 - ✅ **iOS** `packages/sdk-ios` (Swift Package, iOS 15+/macOS 12): `SiagaSOS` async/await, `UserDefaultsQueueStore`, `CoreLocationProvider`, SwiftUI `SOSButton`. **20/20** lewat `SIAGASOS_IT=1 swift run siagasos-selftest` (15 unit dengan mock `URLProtocol` + 5 integrasi ke API lokal & MinIO). Ada warning Swift 6 `NSLock` di selftest (bukan di SDK)
 - ✅ `SOSFloatingButton` Flutter: tombol kecil melayang (pasang di `MaterialApp.builder`), geser + tempel tepi + posisi diingat, area kosong tembus sentuhan, menu tahan-kirim / Telepon 110 (`fallback_phone`) / 112, panel status + batal + Foto/Video/Suara lewat callback `onCapture` (SDK tetap tanpa plugin kamera). 1 widget test
 - ✅ Laporan pengaduan: `reports.kind` (`sos`|`pengaduan`, migrasi 003), `complaint_categories` di config, Flutter `complain()` + menu ke-4 di `SOSFloatingButton` (gaya tombol gradien tata-warga). Portal: badge Pengaduan tanpa alarm. Polmas: tampil sebagai jenis pengaduan
+- ✅ Flutter `SOSFloatingButton` gaya tata-warga + menu **Riwayat laporan** (`SiagaSOS.history()`, riwayat lokal per pengguna)
 - ⬜ `SOSFloatingButton` Android native & iOS (termasuk menu pengaduan). Prioritas berikutnya
 - ⬜ React Native, publish pub.dev / Maven / SPM, contoh app mobile + uji emulator
 
@@ -212,3 +213,10 @@ pnpm -r typecheck
 - Dashboard: **bug peta** diperbaiki (kontainer setinggi daftar → peta tampak menghadap laut), ringkasan angka, filter jenis, ikon kategori, alarm/banner hanya SOS, tombol "Tampilkan semua laporan".
 - Landing: klaim usang dihapus ("segera Android"), kartu tombol melayang + pengaduan, tab kode Flutter/Android/iOS, FAQ platform diperbarui.
 - Typecheck semua paket lolos, build portal & admin lolos. Diverifikasi lewat screenshot desktop terang/gelap + mobile 390 px. Flutter SDK tidak diubah di putaran ini.
+
+### 2026-11-23 · Flutter `SOSFloatingButton`: gaya tata-warga + riwayat laporan
+- **Bug teks** diperbaiki: lapisan tombol (di `MaterialApp.builder`, di atas Navigator) tidak punya `Material`, jadi teks bilah kirim & keterangan jatuh ke gaya darurat Flutter (monospace + garis bawah kuning). Sekarang dibungkus `Material(type: transparency)`; area kosong tetap tembus sentuhan.
+- Tampilan disamakan dengan `DraggableSosMenu` tata-warga: tombol bulat 48 px berikon lonceng, tombol aksi 48 px radius 12 w600, gradien 3 warna 110/112, urutan dari tombol bulat: 112, 110, kirim SOS, Pengaduan, Riwayat. Props baru `sosLabel`, `sosColors`, `callLabel` (commerceOS POS: "EWS Alert" kuning, "Call 110/112"). Default `size` 56 → 48.
+- **Riwayat laporan**: `SiagaSOS.history()` + menu ke-5. Laporan yang terkirim dicatat di perangkat (`historyStore`, default SharedPreferences per api key + `user.ref`, maks. 50), status yang belum selesai diperbarui lewat `GET /v1/sdk/reports/:id` saat riwayat dibuka. **Tanpa perubahan API**: tidak ada endpoint "daftar laporan saya" (kunci publishable tidak boleh bisa membaca laporan orang lain).
+- `flutter analyze` bersih, **12/12 test** (+1 skip integrasi): test pengaduan memeriksa riwayat; test baru untuk label EWS + gaya teks.
+- Belum: sirene lokal & alur rekam TKP ala tata-warga; Android/iOS native belum punya riwayat.

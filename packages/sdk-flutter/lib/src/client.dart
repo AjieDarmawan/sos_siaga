@@ -41,9 +41,13 @@ class SiagaSOS {
     this.locationProvider,
     http.Client? httpClient,
     QueueStore? queueStore,
+    QueueStore? historyStore,
   })  : baseUrl = baseUrl.replaceAll(RegExp(r'/+$'), ''),
         _http = httpClient ?? http.Client(),
-        _queue = queueStore ?? SharedPrefsQueueStore('siagasos.queue.${apiKey.length > 16 ? apiKey.substring(0, 16) : apiKey}') {
+        _queue = queueStore ?? SharedPrefsQueueStore('siagasos.queue.${apiKey.length > 16 ? apiKey.substring(0, 16) : apiKey}'),
+        // Riwayat per pengguna: kasir lain yang login di perangkat yang sama tidak melihat laporan orang lain.
+        _history = historyStore ??
+            SharedPrefsQueueStore('siagasos.history.${apiKey.length > 16 ? apiKey.substring(0, 16) : apiKey}.${user?.ref ?? '-'}') {
     final m = RegExp(r'^pk_(live|test)_').firstMatch(apiKey);
     if (m == null) {
       throw const SiagaSOSError(0, 'invalid_api_key', 'apiKey harus publishable key (pk_live_... / pk_test_...)');
@@ -67,6 +71,7 @@ class SiagaSOS {
 
   final http.Client _http;
   final QueueStore _queue;
+  final QueueStore _history;
   final _reports = <String, ActiveReport>{};
   final _pollers = <String, Timer>{};
   final _locators = <String, Timer>{};
@@ -207,7 +212,51 @@ class SiagaSOS {
     _sentCtl.add(r);
     _statusCtl.add(r);
     _track(r);
+    _remember(ReportRecord(
+      id: r.id!,
+      kind: r.kind,
+      category: r.category,
+      message: (item['body'] as Map)['message'] as String?,
+      status: r.status,
+      statusMessage: r.statusMessage,
+      createdAt: r.createdAt,
+    ));
     return r;
+  }
+
+  // ------------------------------------------------------------------ riwayat
+  static const _historyLimit = 50;
+
+  Future<void> _remember(ReportRecord rec) async {
+    try {
+      final items = (await _history.load()).where((j) => j['id'] != rec.id).toList();
+      await _history.save([rec.toJson(), ...items].take(_historyLimit).toList());
+    } catch (_) {/* riwayat tidak boleh mengganggu jalur SOS */}
+  }
+
+  /// Laporan (SOS & pengaduan) yang pernah terkirim dari perangkat ini oleh [user], terbaru dulu.
+  /// [refresh] = ambil status terbaru dari server untuk laporan yang belum selesai.
+  /// Gagal jaringan → status terakhir yang tersimpan.
+  Future<List<ReportRecord>> history({bool refresh = true}) async {
+    var list = <ReportRecord>[];
+    try {
+      list = (await _history.load()).map(ReportRecord.fromJson).toList();
+    } catch (_) {
+      return [];
+    }
+    if (!refresh || list.isEmpty) return list;
+    list = await Future.wait(list.map((r) async {
+      if (r.status.isTerminal) return r;
+      try {
+        return r.withServer(await _request('GET', '/v1/sdk/reports/${r.id}'));
+      } catch (_) {
+        return r;
+      }
+    }));
+    try {
+      await _history.save(list.map((r) => r.toJson()).toList());
+    } catch (_) {}
+    return list;
   }
 
   static ReportKind _kindOf(Map<String, dynamic> item) =>

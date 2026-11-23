@@ -111,11 +111,12 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('siagasos-fab')));
     await pumpFrames(tester, 8);
 
-    // 4 aksi: Kirim SOS (tahan), Telepon 110, Telepon 112, Laporan pengaduan.
+    // 5 aksi: Kirim SOS (tahan), Telepon 110, Telepon 112, Pengaduan, Riwayat laporan.
     expect(find.byKey(const ValueKey('siagasos-hold')), findsOneWidget);
     expect(find.text('Telepon 110'), findsOneWidget);
     expect(find.text('Telepon 112'), findsOneWidget);
-    expect(find.text('Laporan pengaduan'), findsOneWidget);
+    expect(find.text('Pengaduan'), findsOneWidget);
+    expect(find.text('Riwayat laporan'), findsOneWidget);
 
     await tester.tap(find.byKey(const ValueKey('siagasos-complaint')));
     await pumpFrames(tester, 8);
@@ -155,6 +156,48 @@ void main() {
     await pumpFrames(tester, 4);
     expect(find.byKey(const ValueKey('siagasos-complaint-sheet')), findsNothing);
 
+    // Riwayat: pengaduan tadi tercatat, statusnya diperbarui dari server.
+    s.status = 'resolved';
+    await tester.tap(find.byKey(const ValueKey('siagasos-fab')));
+    await pumpFrames(tester, 8);
+    await tester.tap(find.byKey(const ValueKey('siagasos-history')));
+    for (var i = 0; i < 20; i++) {
+      await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 10)));
+      await tester.pump(const Duration(milliseconds: 20));
+    }
+    expect(find.byKey(const ValueKey('siagasos-history-sheet')), findsOneWidget);
+    expect(find.text('Parkir liar'), findsOneWidget);
+    expect(find.text('Parkir liar menutup gang setiap malam'), findsOneWidget);
+    expect(find.text('Selesai'), findsOneWidget);
+
+    sos.dispose();
+    await tester.pumpWidget(const SizedBox());
+  });
+
+  testWidgets('SOSFloatingButton: label & warna EWS, teks tanpa gaya darurat Flutter', (tester) async {
+    tester.view.physicalSize = const Size(400, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final sos = make(FakeServer());
+    await tester.pumpWidget(MaterialApp(
+      home: const SizedBox(),
+      builder: (context, child) => SOSFloatingButton(
+        client: sos,
+        onCall: (_) {},
+        sosLabel: 'EWS Alert',
+        callLabel: 'Call',
+        child: child!,
+      ),
+    ));
+    await tester.pump();
+    await tester.tap(find.byKey(const ValueKey('siagasos-fab')));
+    await pumpFrames(tester, 8);
+    expect(find.text('EWS Alert'), findsOneWidget);
+    expect(find.text('Call 110'), findsOneWidget);
+    expect(find.text('Call 112'), findsOneWidget);
+    // Dipasang di atas Navigator: tetap harus punya Material, bukan gaya darurat (garis bawah kuning).
+    final style = DefaultTextStyle.of(tester.element(find.text('EWS Alert'))).style;
+    expect(style.decoration, isNot(TextDecoration.underline));
     sos.dispose();
     await tester.pumpWidget(const SizedBox());
   });

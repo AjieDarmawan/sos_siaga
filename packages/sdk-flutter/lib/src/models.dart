@@ -86,6 +86,70 @@ class ActiveReport {
   String toString() => 'ActiveReport($localId, id=$id, $status)';
 }
 
+/// Satu laporan di riwayat perangkat ([SiagaSOS.history]): yang pernah terkirim dari perangkat ini
+/// oleh pengguna yang sama. Status diperbarui dari server saat riwayat dibuka.
+class ReportRecord {
+  const ReportRecord({
+    required this.id,
+    required this.kind,
+    required this.category,
+    required this.status,
+    required this.createdAt,
+    this.message,
+    this.statusMessage,
+    this.acknowledgedAt,
+    this.resolvedAt,
+  });
+  final String id;
+  final ReportKind kind;
+  final String category;
+  final String? message;
+  final SosStatus status;
+  final String? statusMessage;
+  final DateTime createdAt;
+  final DateTime? acknowledgedAt;
+  final DateTime? resolvedAt;
+
+  /// Gabungkan jawaban `GET /v1/sdk/reports/:id`.
+  ReportRecord withServer(Map<String, dynamic> j) => ReportRecord(
+        id: id,
+        kind: kind,
+        category: category,
+        message: message,
+        createdAt: createdAt,
+        status: sosStatusFromApi(j['status'] as String? ?? 'open'),
+        statusMessage: j['status_message'] as String?,
+        acknowledgedAt: _date(j['acknowledged_at']),
+        resolvedAt: _date(j['resolved_at']),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'kind': kind.name,
+        'category': category,
+        if (message != null) 'message': message,
+        'status': status.name,
+        if (statusMessage != null) 'status_message': statusMessage,
+        'created_at': createdAt.toUtc().toIso8601String(),
+        if (acknowledgedAt != null) 'acknowledged_at': acknowledgedAt!.toUtc().toIso8601String(),
+        if (resolvedAt != null) 'resolved_at': resolvedAt!.toUtc().toIso8601String(),
+      };
+
+  factory ReportRecord.fromJson(Map<String, dynamic> j) => ReportRecord(
+        id: j['id'] as String,
+        kind: j['kind'] == 'pengaduan' ? ReportKind.pengaduan : ReportKind.sos,
+        category: j['category'] as String? ?? '',
+        message: j['message'] as String?,
+        status: SosStatus.values.where((s) => s.name == j['status']).firstOrNull ?? SosStatus.open,
+        statusMessage: j['status_message'] as String?,
+        createdAt: _date(j['created_at']) ?? DateTime.now(),
+        acknowledgedAt: _date(j['acknowledged_at']),
+        resolvedAt: _date(j['resolved_at']),
+      );
+
+  static DateTime? _date(Object? v) => v is String ? DateTime.tryParse(v)?.toLocal() : null;
+}
+
 class SdkConfig {
   const SdkConfig({
     required this.appName,

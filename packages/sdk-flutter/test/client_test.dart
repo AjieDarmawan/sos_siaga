@@ -41,9 +41,9 @@ class FakeServer {
   });
 }
 
-SiagaSOS make(FakeServer s, {QueueStore? store, http.Client? c}) => SiagaSOS(
+SiagaSOS make(FakeServer s, {QueueStore? store, QueueStore? history, http.Client? c}) => SiagaSOS(
       apiKey: key, bundleId: 'com.demo.app', baseUrl: 'https://api.test', httpClient: c ?? s.client,
-      queueStore: store ?? MemoryQueueStore(), user: const SosUser(ref: 'u1', name: 'Budi'),
+      queueStore: store ?? MemoryQueueStore(), historyStore: history ?? MemoryQueueStore(), user: const SosUser(ref: 'u1', name: 'Budi'),
       locationProvider: () async => const SosLocation(lat: -6.2, lng: 106.8, accuracyM: 10),
       pollInterval: const Duration(milliseconds: 50));
 
