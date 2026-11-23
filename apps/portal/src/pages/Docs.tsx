@@ -304,7 +304,7 @@ sos.on('error',  (e) => console.error(e.code, e.message));`}</Code>
             <h3 id="flutter">Flutter</h3>
             <Code lang="yaml · pubspec.yaml">{`dependencies:
   siagasos:
-    git: { url: git@gitlab.com:technosoft-indo-prima/sos_siaga.git, path: packages/sdk-flutter }`}</Code>
+    git: { url: https://github.com/AjieDarmawan/sos_siaga.git, path: packages/sdk-flutter }`}</Code>
             <Code lang="dart">{`import 'package:siagasos/siagasos.dart';
 
 final sos = SiagaSOS(
