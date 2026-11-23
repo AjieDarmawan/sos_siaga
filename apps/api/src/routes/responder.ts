@@ -7,6 +7,7 @@ import { ApiError, parse } from '../lib/errors.js';
 import { enforce } from '../lib/rateLimit.js';
 import { changeReport } from '../lib/reports.js';
 import { sendOtpWhatsApp } from '../lib/whatsapp.js';
+import { isTestNumber } from '../lib/sosRecipients.js';
 import {
   consumeOtp, createOtp, createSession, listForResponder, loadForResponder, registeredName, replaceContacts, responderAuth,
   responderReport, OTP_TTL_MIN,
@@ -83,7 +84,8 @@ responderRouter.post('/otp', async (req, res) => {
     }
     return { name, code: await createOtp(c, k, phone) };
   });
-  const wa = await sendOtpWhatsApp(phone, out.code);
+  // Nomor uji 0800: tidak pernah dikirimi WA (sama dengan WA SOS).
+  const wa = isTestNumber(phone) ? { status: 'stub' as const } : await sendOtpWhatsApp(phone, out.code);
   // Tanpa WA (dev / kunci test): kode dikembalikan supaya alur bisa diuji. Kunci live di production wajib WA.
   const exposeCode = k.mode === 'test' || !config.isProd;
   if (wa.status !== 'sent' && !exposeCode) {

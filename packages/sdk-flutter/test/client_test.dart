@@ -14,6 +14,7 @@ class FakeServer {
   final requests = <http.Request>[];
   int failNext = 0; // jumlah POST /reports berikutnya yang dibuat gagal jaringan
   String status = 'open';
+  List<Map<String, dynamic>> serverContacts = [];
   late final client = MockClient((req) async {
     requests.add(req);
     final p = req.url.path;
@@ -58,14 +59,20 @@ class FakeServer {
     if (p == '/v1/sdk/reports/rep-1/media/m-1/complete') {
       return http.Response(jsonEncode({'id': 'm-1', 'kind': 'image', 'content_type': 'image/jpeg', 'size_bytes': 3, 'status': 'ready'}), 200);
     }
+    if (p == '/v1/sdk/contacts' && req.method == 'PUT') {
+      serverContacts = ((jsonDecode(req.body) as Map)['contacts'] as List).cast<Map<String, dynamic>>();
+      return http.Response(jsonEncode({'ok': true, 'count': serverContacts.length}), 200);
+    }
+    if (p == '/v1/sdk/contacts') return http.Response(jsonEncode({'contacts': serverContacts}), 200);
     if (p == '/v1/sdk/reports/bad' ) return http.Response(jsonEncode({'error': {'code': 'invalid_api_key', 'message': 'x'}}), 401);
     return http.Response('{}', 404);
   });
 }
 
-SiagaSOS make(FakeServer s, {QueueStore? store, QueueStore? history, QueueStore? contacts, http.Client? c}) => SiagaSOS(
+SiagaSOS make(FakeServer s, {QueueStore? store, QueueStore? history, QueueStore? contacts, QueueStore? contactsSync, http.Client? c}) => SiagaSOS(
       apiKey: key, bundleId: 'com.demo.app', baseUrl: 'https://api.test', httpClient: c ?? s.client,
-      queueStore: store ?? MemoryQueueStore(), historyStore: history ?? MemoryQueueStore(), contactsStore: contacts ?? MemoryQueueStore(), user: const SosUser(ref: 'u1', name: 'Budi'),
+      queueStore: store ?? MemoryQueueStore(), historyStore: history ?? MemoryQueueStore(), contactsStore: contacts ?? MemoryQueueStore(),
+      contactsSyncStore: contactsSync ?? MemoryQueueStore(), user: const SosUser(ref: 'u1', name: 'Budi'),
       locationProvider: () async => const SosLocation(lat: -6.2, lng: 106.8, accuracyM: 10),
       pollInterval: const Duration(milliseconds: 50));
 
@@ -229,5 +236,66 @@ void main() {
       throwsA(isA<ArgumentError>()),
     );
     sos.dispose();
+  });
+
+  test('Nomor Darurat disinkronkan ke server dan dipulihkan di perangkat baru', () async {
+    final s = FakeServer();
+    final sos = make(s);
+    final synced = await sos.setEmergencyContacts(const [EmergencyContact(name: 'Pak Budi', role: 'Satpam', phone: '0812 1111 2222')]);
+    expect(synced, isTrue);
+    final put = s.requests.lastWhere((r) => r.url.path == '/v1/sdk/contacts' && r.method == 'PUT');
+    expect(jsonDecode(put.body), {
+      'reporter': {'ref': 'u1', 'name': 'Budi'},
+      'contacts': [{'name': 'Pak Budi', 'role': 'Satpam', 'phone': '6281211112222', 'active': true}],
+    });
+    sos.dispose();
+
+    // Perangkat baru (penyimpanan kosong) → ambil dari server.
+    final fresh = make(s);
+    expect(await fresh.syncEmergencyContacts(), isTrue);
+    final restored = await fresh.emergencyContacts();
+    expect(restored.single.phone, '6281211112222');
+    expect(restored.single.role, 'Satpam');
+    fresh.dispose();
+  });
+
+  test('responder: OTP → verify → laporan → tanggapi → logout', () async {
+    final requests = <http.Request>[];
+    final c = MockClient((req) async {
+      requests.add(req);
+      final p = req.url.path;
+      if (p == '/v1/sdk/responder/otp') return http.Response(jsonEncode({'sent': false, 'expires_in_s': 300, 'dev_code': '123456'}), 200);
+      if (p == '/v1/sdk/responder/verify') {
+        return http.Response(jsonEncode({'token': 'rsp_abc', 'responder': {'phone': '6281211112222', 'name': 'Pak Budi (Satpam)'}}), 201);
+      }
+      final rep = {'id': 'r1', 'status': 'open', 'mode': 'live', 'category': 'kriminal', 'reporter_name': 'Kasir Satu',
+        'source_label': 'Outlet A', 'location': {'lat': -6.2, 'lng': 106.8, 'accuracy_m': null}, 'created_at': '2026-11-23T08:00:00Z'};
+      if (p == '/v1/sdk/responder/reports') return http.Response(jsonEncode({'data': [rep]}), 200);
+      if (p == '/v1/sdk/responder/reports/r1/status') return http.Response(jsonEncode({...rep, 'status': 'acknowledged'}), 200);
+      if (p == '/v1/sdk/responder/logout') return http.Response('', 204);
+      return http.Response(jsonEncode({'error': {'code': 'responder_not_registered', 'message': 'x'}}), 401);
+    });
+    final r = SiagaSOSResponder(apiKey: key, bundleId: 'com.demo.app', baseUrl: 'https://api.test', httpClient: c);
+    expect((await r.requestOtp('081211112222')).devCode, '123456');
+    final me = await r.verify('081211112222', '123456', fcmToken: 'fcm-1');
+    expect(me.name, 'Pak Budi (Satpam)');
+    expect(r.token, 'rsp_abc');
+    expect((jsonDecode(requests.last.body) as Map)['device'], containsPair('fcm_token', 'fcm-1'));
+    expect(requests.first.headers.containsKey('X-SOS-Responder'), isFalse);
+
+    final list = await r.reports();
+    expect(list.single.reporterName, 'Kasir Satu');
+    expect(list.single.mapsUri.toString(), 'https://www.google.com/maps?q=-6.2,106.8');
+    expect(requests.last.headers['X-SOS-Responder'], 'rsp_abc');
+    expect((await r.setStatus('r1', ResponderAction.acknowledged)).status, SosStatus.acknowledged);
+
+    try {
+      await r.me();
+      fail('harus 401');
+    } on SiagaSOSError catch (e) {
+      expect(e.isResponderSessionEnded, isTrue);
+    }
+    await r.logout();
+    expect(r.isLoggedIn, isFalse);
   });
 }

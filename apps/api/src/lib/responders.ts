@@ -5,7 +5,6 @@ import { logger } from '../logger.js';
 import { ApiError } from './errors.js';
 import { randomToken, safeEqual, sha256 } from './crypto.js';
 import { sendSosPush } from './fcm.js';
-import { isTestNumber } from './sosRecipients.js';
 
 /**
  * Responder = satpam / penerima darurat yang login di app klien dengan nomor yang tercantum di Nomor Darurat
@@ -183,7 +182,8 @@ export async function loadForResponder(c: Db, appId: string, phone: string, id: 
  */
 export async function dispatchSosPush(report: any, appName: string): Promise<void> {
   if (report.kind === 'pengaduan') return;
-  const phones = [...new Set(((report.emergency_contacts ?? []) as { phone: string }[]).map((c) => c.phone).filter((p) => p && !isTestNumber(p)))];
+  const phones = [...new Set(((report.emergency_contacts ?? []) as { phone: string }[]).map((c) => c.phone).filter(Boolean))];
+  // Nomor uji 0800 tetap dapat push: push masuk ke HP yang login, bukan WhatsApp (berguna untuk QA).
   if (!phones.length) return;
   try {
     const { sessions, sourceLabel } = await withTenant(report.account_id, async (c) => {
