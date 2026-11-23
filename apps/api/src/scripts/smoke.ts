@@ -148,9 +148,22 @@ async function main() {
   const cancel = await call('POST', `/v1/sdk/reports/${r2.data.id}/cancel`, { headers: sdkH(pkTest), body: { reason: 'salah pencet' } });
   ok(cancel.data.status === 'cancelled', 'pengguna batalkan laporan open');
 
+  // Laporan pengaduan (menu tombol melayang): uraian wajib, tanpa lokasi live, terlihat sebagai kind=pengaduan
+  const pgNoMsg = await call('POST', '/v1/sdk/reports', { headers: sdkH(pkTest, { 'Idempotency-Key': uuid() }), body: { kind: 'pengaduan', category: 'kebisingan' } });
+  ok(pgNoMsg.status === 422, 'pengaduan tanpa uraian → 422');
+  const pg = await call('POST', '/v1/sdk/reports', { headers: sdkH(pkTest, { 'Idempotency-Key': uuid() }),
+    body: { kind: 'pengaduan', category: 'kebisingan', message: 'Hajatan sampai jam 2 pagi', location: { lat: -6.2, lng: 106.8 }, reporter: { ref: 'user_123' } } });
+  ok(pg.status === 201 && pg.data.kind === 'pengaduan', 'POST pengaduan → 201, kind=pengaduan (kuota terpisah dari SOS)');
+  const pgLoc = await call('POST', `/v1/sdk/reports/${pg.data.id}/locations`, { headers: sdkH(pkTest), body: { lat: -6.21, lng: 106.81 } });
+  ok(pgLoc.data.accepted === false, 'pengaduan tidak menerima lokasi live');
+  const cfgPg = await call('GET', '/v1/sdk/config', { headers: sdkH(pkTest) });
+  ok(Array.isArray(cfgPg.data.complaint_categories) && cfgPg.data.complaint_categories.length > 0, '/v1/sdk/config berisi complaint_categories');
+
   // secret key API
   const srv = await call('GET', '/v1/reports', { token: skTest });
-  ok(srv.status === 200 && srv.data.data.length === 2, 'GET /v1/reports dengan secret key');
+  ok(srv.status === 200 && srv.data.data.length === 3, 'GET /v1/reports dengan secret key');
+  const srvSos = await call('GET', '/v1/reports?kind=sos', { token: skTest });
+  ok(srvSos.data.data.length === 2 && srvSos.data.data.every((r: any) => r.kind === 'sos'), 'GET /v1/reports?kind=sos memisahkan SOS dari pengaduan');
 
   // ---------------------------------------------------------------- dokumen + review admin
   const docs = ['nib', 'npwp', 'ktp_pic', 'akta'];

@@ -17,6 +17,22 @@ extension SosStatusX on SosStatus {
 
 enum SosMode { live, test }
 
+/// Jenis laporan. [pengaduan] = non-darurat: tanpa lokasi live, tanpa notifikasi darurat ke responder.
+enum ReportKind { sos, pengaduan }
+
+/// Label bawaan kategori pengaduan (slug dari `complaint_categories` di /v1/sdk/config).
+const complaintCategoryLabels = <String, String>{
+  'ketertiban': 'Gangguan ketertiban',
+  'kebisingan': 'Kebisingan',
+  'parkir_liar': 'Parkir liar',
+  'pungli': 'Pungutan liar',
+  'kehilangan': 'Kehilangan barang/dokumen',
+  'patroli': 'Minta patroli',
+  'lainnya': 'Lainnya',
+};
+String complaintCategoryLabel(String slug) =>
+    complaintCategoryLabels[slug] ?? (slug.isEmpty ? slug : slug[0].toUpperCase() + slug.substring(1).replaceAll('_', ' '));
+
 class SosLocation {
   const SosLocation({required this.lat, required this.lng, this.accuracyM});
   final double lat;
@@ -44,8 +60,10 @@ class ActiveReport {
     required this.category,
     required this.createdAt,
     this.statusMessage,
+    this.kind = ReportKind.sos,
   });
   final String localId;
+  final ReportKind kind;
   final String? id;
   final SosStatus status;
   final String? statusMessage;
@@ -61,6 +79,7 @@ class ActiveReport {
         mode: mode,
         category: category,
         createdAt: createdAt,
+        kind: kind,
       );
 
   @override
@@ -71,6 +90,7 @@ class SdkConfig {
   const SdkConfig({
     required this.appName,
     required this.categories,
+    this.complaintCategories = const ['ketertiban', 'kebisingan', 'parkir_liar', 'pungli', 'kehilangan', 'patroli', 'lainnya'],
     required this.buttonText,
     required this.holdSeconds,
     required this.recipientText,
@@ -79,6 +99,7 @@ class SdkConfig {
   });
   final String appName;
   final List<String> categories;
+  final List<String> complaintCategories;
   final String buttonText;
   final int holdSeconds;
   final String recipientText;
@@ -88,6 +109,8 @@ class SdkConfig {
   factory SdkConfig.fromJson(Map<String, dynamic> j) => SdkConfig(
         appName: j['app_name'] as String? ?? '',
         categories: (j['categories'] as List? ?? const []).cast<String>(),
+        complaintCategories: (j['complaint_categories'] as List?)?.cast<String>() ??
+            const ['ketertiban', 'kebisingan', 'parkir_liar', 'pungli', 'kehilangan', 'patroli', 'lainnya'],
         buttonText: j['button_text'] as String? ?? 'SOS',
         holdSeconds: (j['hold_seconds'] as num? ?? 3).toInt(),
         recipientText: j['recipient_text'] as String? ?? '',

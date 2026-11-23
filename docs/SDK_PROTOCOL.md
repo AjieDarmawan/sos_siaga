@@ -16,10 +16,10 @@ Base URL default: `https://api.siagasos.id` (bisa dioverride untuk staging / lok
 
 ## Alur
 
-1. `GET /v1/sdk/config` → `{ app_name, mode, categories[], button_text, hold_seconds, recipient_text, fallback_phone, live_location_interval_s }`. Cache di memori.
+1. `GET /v1/sdk/config` → `{ app_name, mode, categories[], complaint_categories[], button_text, hold_seconds, recipient_text, fallback_phone, live_location_interval_s }`. Cache di memori.
 2. **Trigger**: ambil lokasi (timeout default 8 dtk, boleh gagal), lalu `POST /v1/sdk/reports`
-   `{ category, message?, source_key?, location?{lat,lng,accuracy_m}, reporter?{ref,name,phone}, device?{platform,sdk_version,os}, metadata?, client_created_at }`
-   → 201 (baru) / 200 + `Idempotent-Replayed: true` (ulangan) → `ReportPublic { id, status, mode, category, created_at, acknowledged_at, resolved_at, status_message }`.
+   `{ kind?, category, message?, source_key?, location?{lat,lng,accuracy_m}, reporter?{ref,name,phone}, device?{platform,sdk_version,os}, metadata?, client_created_at }`
+   → 201 (baru) / 200 + `Idempotent-Replayed: true` (ulangan) → `ReportPublic { id, kind, status, mode, category, created_at, acknowledged_at, resolved_at, status_message }`.
 3. **Offline**: bila gagal jaringan atau 5xx/429, simpan item ke antrian **persisten** (`localId`, `idempotencyKey`, body) dan emit `queued`. Kirim ulang dengan backoff eksponensial (2 dtk → maks 60 dtk) dan saat koneksi kembali. Error 4xx lain (kunci salah, origin) = permanen: emit `error`, buang dari antrian.
 4. **Status**: polling `GET /v1/sdk/reports/:id` tiap 4 dtk sampai status akhir (`resolved`, `cancelled`, `false_alarm`). Emit `status` hanya bila berubah.
 5. **Lokasi live** (default aktif): `POST /v1/sdk/reports/:id/locations` `{lat,lng,accuracy_m,recorded_at}` tiap `live_location_interval_s`. Berhenti bila balasan `accepted:false` atau status akhir.
@@ -30,6 +30,11 @@ Base URL default: `https://api.siagasos.id` (bisa dioverride untuk staging / lok
    3. `POST /v1/sdk/reports/:id/media/:mediaId/complete` → `MediaPublic { id, kind, content_type, size_bytes, status:'ready' }`.
    Bila laporan masih di antrian, tunggu sampai terkirim (event `sent`) dulu.
    Batas: foto 10 MB, video 60 MB, suara 15 MB, 10 lampiran per laporan. MIME: lihat `apps/api/src/lib/media.ts`.
+
+8. **Pengaduan** (non-darurat, menu "Laporan pengaduan" di tombol melayang): sama dengan trigger, body `kind: 'pengaduan'`,
+   `category` dari `complaint_categories`, `message` **wajib** (≥ 5 karakter, 422 bila kurang). Server tidak mengirim email darurat
+   ke responder, kuota per pengguna terpisah dari SOS (5/jam), dan `/locations` selalu `accepted:false` (jangan kirim lokasi live).
+   SDK boleh polling lebih jarang (Flutter: 8× `pollInterval`). Dashboard tenant & Polmas menampilkannya sebagai pengaduan tanpa alarm.
 
 ## Error
 
@@ -44,4 +49,5 @@ Kode penting: `invalid_api_key`, `wrong_key_type`, `origin_not_allowed`, `bundle
 | getConfig / trigger / cancel / getReport / attach / flush / dispose | ✔ | ✔ | ✔ | ✔ | ✔ |
 | Event `queued`, `sent`, `status`, `error` | `on()` | `Stream` | listener | delegate/closure | `on()` |
 | Antrian offline persisten | IndexedDB/localStorage | SharedPreferences | SharedPreferences | UserDefaults | AsyncStorage (opsional) |
+| Pengaduan `complain()` / `kind:'pengaduan'` | ⬜ | ✔ | ⬜ | ⬜ | ⬜ |
 | Komponen tombol tahan N detik | `SOSButton` (React) | `SOSButton` widget | `SOSButtonView` | SwiftUI `SOSButton` | `SOSButton` |

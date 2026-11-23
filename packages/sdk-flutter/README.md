@@ -59,6 +59,45 @@ await sos.attach(report.localId, await File(file!).readAsBytes(), contentType: '
 
 Batas: foto 10 MB, video 60 MB, suara 15 MB, 10 lampiran per laporan. Bila laporan masih di antrian offline, `attach` menunggu sampai terkirim.
 
+### Tombol melayang (`SOSFloatingButton`)
+
+Pasang sekali di root app, tombol SOS kecil tampil di semua halaman (pojok kanan bawah).
+Bisa digeser, menempel ke tepi kiri/kanan, posisinya diingat (SharedPreferences), dan area di luar tombol tidak menangkap sentuhan.
+
+```dart
+MaterialApp(
+  builder: (context, child) => SOSFloatingButton(
+    client: sos,
+    category: 'kriminal',
+    onCall: (phone) => launchUrl(Uri(scheme: 'tel', path: phone)), // url_launcher di app Anda
+    onCapture: (context, kind) async {
+      // opsional: buka kamera / perekam (mis. image_picker, record), kembalikan bytes-nya
+      final x = await ImagePicker().pickImage(source: ImageSource.camera, imageQuality: 70);
+      if (x == null) return null;
+      return CapturedMedia(bytes: await x.readAsBytes(), contentType: 'image/jpeg');
+    },
+    child: child!,
+  ),
+  home: const HomePage(),
+)
+```
+
+Ketuk tombol → 4 tombol gradien bertumpuk (gaya menu SOS tata-warga), **Kirim SOS** selalu paling dekat dengan tombol bulat:
+
+| Aksi | Perilaku |
+|---|---|
+| **Kirim SOS** | tahan N detik (`hold_seconds` portal) → `trigger()` |
+| **Telepon 110** | `onCall(fallback_phone)` |
+| **Telepon 112** | `onCall(secondaryPhone)` |
+| **Laporan pengaduan** | lembar form non-darurat: jenis (`complaint_categories` portal), uraian (min. 5 karakter), foto opsional lewat `onCapture` → `complain()` |
+
+Setelah SOS terkirim, panel menampilkan status realtime, tombol batal (salah tekan), dan **Foto / Video / Suara** bila `onCapture` diisi.
+Pengaduan tidak mengubah tombol menjadi "AKTIF", tidak memicu alarm/email darurat di dashboard, dan tidak mengirim lokasi live
+(lokasi saat dikirim tetap ikut bila tersedia). `complaint: false` menyembunyikan menu pengaduan; `onComplaintSent` dipanggil setelah terkirim.
+
+Tanpa widget: `await sos.complain(category: 'kebisingan', message: 'Hajatan sampai jam 2 pagi')` (antrian offline sama dengan SOS).
+`visible: false` menyembunyikan tombol (mis. di halaman login). SDK tidak membawa plugin kamera/telepon, jadi ukuran dan izin tetap di tangan app.
+
 ### Izin
 
 - Android `AndroidManifest.xml`: `INTERNET`, `ACCESS_FINE_LOCATION` (+ `CAMERA`, `RECORD_AUDIO` bila memakai lampiran).

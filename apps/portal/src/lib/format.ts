@@ -49,6 +49,9 @@ export const DOC_LABEL: Record<DocType, { label: string; hint: string }> = {
 
 export const CATEGORY_LABEL: Record<string, string> = {
   general: 'Darurat umum', kriminal: 'Kriminal', medis: 'Medis', kebakaran: 'Kebakaran', bencana: 'Bencana', kecelakaan: 'Kecelakaan',
+  // kategori pengaduan (menu "Laporan pengaduan" di tombol melayang SDK)
+  ketertiban: 'Gangguan ketertiban', kebisingan: 'Kebisingan', parkir_liar: 'Parkir liar', pungli: 'Pungutan liar',
+  kehilangan: 'Kehilangan barang/dokumen', patroli: 'Minta patroli', lainnya: 'Lainnya',
 };
 export const catLabel = (c: string) => CATEGORY_LABEL[c] ?? c;
 

@@ -17,6 +17,7 @@ const STATUS_MESSAGES: Record<ReportStatus, string> = {
 export function publicReport(r: any): ReportPublic {
   return {
     id: r.id,
+    kind: r.kind ?? 'sos',
     status: r.status,
     mode: r.mode,
     category: r.category,
@@ -30,6 +31,7 @@ export function publicReport(r: any): ReportPublic {
 export function fullReport(r: any) {
   return {
     id: r.id,
+    kind: r.kind ?? 'sos',
     app_id: r.app_id,
     source_key: r.source_key ?? null,
     mode: r.mode,
@@ -108,5 +110,6 @@ export async function onReportCreated(c: Db, report: any, appName: string) {
   const full = fullReport(report);
   publish(report.account_id, 'report.created', { report: full });
   await enqueueWebhook(c, report.app_id, report.account_id, report.id, 'report.created', full, report.mode);
-  if (report.mode === 'live') notifyResponders(report.account_id, full, appName);
+  // Pengaduan bukan darurat: tidak memicu email darurat ke responder (tetap realtime + webhook).
+  if (report.mode === 'live' && report.kind !== 'pengaduan') notifyResponders(report.account_id, full, appName);
 }

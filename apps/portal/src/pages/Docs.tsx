@@ -12,6 +12,8 @@ const TOC: [string, string, [string, string][]?][] = [
   ['cara-kerja', 'Cara kerja', [['alur', 'Alur laporan'], ['status', 'Siklus status'], ['test-live', 'Mode test & live']]],
   ['sdk-react', 'SDK React', [['sos-provider', 'SOSProvider'], ['sos-button', 'SOSButton'], ['use-sos', 'useSOS()']]],
   ['sdk-js', 'SDK JavaScript', [['init', 'init()'], ['trigger', 'trigger()'], ['events', 'Event'], ['offline', 'Offline & retry']]],
+  ['sdk-mobile', 'SDK Mobile', [['flutter', 'Flutter'], ['floating', 'Tombol melayang'], ['android', 'Android (Kotlin)'], ['ios', 'iOS (Swift)']]],
+  ['pengaduan', 'Laporan pengaduan'],
   ['lokasi', 'Lokasi & privasi'],
   ['lampiran', 'Foto, video & suara'],
   ['source', 'Source'],
@@ -147,6 +149,7 @@ export function App() {
               </li>
             </ol>
             <Note>Setelah perusahaan disetujui, ganti <code>pk_test_</code> dengan <code>pk_live_</code>. Kode lain tidak perlu diubah.</Note>
+            <Note>Aplikasi mobile? Lihat <a href="#sdk-mobile">SDK Mobile</a> (Flutter, Android, iOS). Daftarkan <b>package name / bundle id</b> di pengaturan app, bukan origin.</Note>
           </section>
 
           <section id="cara-kerja">
@@ -177,6 +180,7 @@ export function App() {
               <span className="s prog">in_progress<small>Ditangani</small></span><i>→</i>
               <span className="s done">resolved<small>Selesai</small></span>
             </div>
+            <p>Laporan <a href="#pengaduan">pengaduan</a> (<code>kind: "pengaduan"</code>) memakai siklus status yang sama, tetapi tanpa alarm, tanpa email darurat, dan tanpa lokasi live.</p>
             <p>Status akhir lain: <code>false_alarm</code> (ditandai responder) dan <code>cancelled</code> (dibatalkan pelapor, hanya saat masih <code>open</code>). Setelah status akhir, laporan tidak bisa diubah lagi dan lokasi live berhenti.</p>
 
             <h3 id="test-live">Mode test & live</h3>
@@ -281,6 +285,129 @@ sos.on('error',  (e) => console.error(e.code, e.message));`}</Code>
             <p>Laporan disimpan di IndexedDB (fallback localStorage, lalu memori), lalu dikirim ulang dengan backoff eksponensial dan saat perangkat kembali online. Setiap laporan membawa <code>Idempotency-Key</code> yang sama di setiap percobaan, sehingga tidak pernah tercatat dua kali.</p>
           </section>
 
+          <section id="sdk-mobile">
+            <h2>SDK Mobile</h2>
+            <p>Perilaku semua SDK sama dengan SDK web: antrian offline yang bertahan saat app ditutup, <code>Idempotency-Key</code> per laporan, polling status, lokasi live, dan lampiran langsung ke storage. Bedanya, aplikasi mobile dikenali lewat header <code>X-SOS-Bundle</code>, jadi daftarkan <b>package name</b> (Android) dan <b>bundle identifier</b> (iOS) di <b>App → Pengaturan → Bundle id</b>.</p>
+            <div className="doc-table">
+              <table>
+                <thead><tr><th /><th>Flutter</th><th>Android</th><th>iOS</th></tr></thead>
+                <tbody>
+                  <tr><td>Paket</td><td><code>siagasos</code></td><td><code>id.siagasos:siagasos-android</code></td><td>Swift Package <code>SiagaSOS</code></td></tr>
+                  <tr><td>Minimum</td><td>Flutter 3.22</td><td>minSdk 21</td><td>iOS 15</td></tr>
+                  <tr><td>Tombol tahan N detik</td><td><code>SOSButton</code></td><td><code>SOSButtonView</code></td><td>SwiftUI <code>SOSButton</code></td></tr>
+                  <tr><td>Tombol melayang + pengaduan</td><td>✔ <code>SOSFloatingButton</code></td><td>segera</td><td>segera</td></tr>
+                  <tr><td>Antrian offline</td><td>SharedPreferences</td><td>SharedPreferences</td><td>UserDefaults</td></tr>
+                </tbody>
+              </table>
+            </div>
+
+            <h3 id="flutter">Flutter</h3>
+            <Code lang="yaml · pubspec.yaml">{`dependencies:
+  siagasos:
+    git: { url: git@gitlab.com:technosoft-indo-prima/sos_siaga.git, path: packages/sdk-flutter }`}</Code>
+            <Code lang="dart">{`import 'package:siagasos/siagasos.dart';
+
+final sos = SiagaSOS(
+  apiKey: 'pk_test_...',                 // pk_live_ setelah perusahaan disetujui
+  bundleId: 'com.perusahaan.app',        // harus terdaftar di app
+  user: SosUser(ref: user.id, name: user.name, phone: user.phone),
+  locationProvider: () async {           // mis. paket geolocator
+    final p = await Geolocator.getCurrentPosition();
+    return SosLocation(lat: p.latitude, lng: p.longitude, accuracyM: p.accuracy);
+  },
+);
+
+// Tombol besar di satu halaman
+SOSButton(client: sos, category: 'kriminal');
+
+// Atau UI sendiri
+final r = await sos.trigger(category: 'medis', message: 'Rekan pingsan');
+sos.status.listen((r) => print('\${r.status} \${r.statusMessage}'));
+await sos.attach(r.localId, bytes, contentType: 'image/jpeg');`}</Code>
+
+            <h3 id="floating">Tombol melayang (Flutter)</h3>
+            <p>Pasang sekali di root app: tombol SOS kecil tampil di semua halaman, bisa digeser, menempel ke tepi, dan posisinya diingat. Area di luar tombol tidak menangkap sentuhan.</p>
+            <Code lang="dart">{`MaterialApp(
+  builder: (context, child) => SOSFloatingButton(
+    client: sos,
+    category: 'kriminal',
+    onCall: (phone) => launchUrl(Uri(scheme: 'tel', path: phone)),   // url_launcher
+    onCapture: (context, kind) async {                                 // opsional: kamera / mikrofon
+      final x = await ImagePicker().pickImage(source: ImageSource.camera, imageQuality: 70);
+      return x == null ? null : CapturedMedia(bytes: await x.readAsBytes(), contentType: 'image/jpeg');
+    },
+    onComplaintSent: (r) => analytics.log('pengaduan', r.id),
+    child: child!,
+  ),
+  home: const HomePage(),
+)`}</Code>
+            <p>Ketuk tombol → 4 aksi bertumpuk:</p>
+            <Props rows={[
+              ['Kirim SOS', 'tahan N detik', 'Mengirim laporan darurat (durasi tahan dari Pengaturan app). Setelah terkirim: status realtime, batal (salah tekan), Foto / Video / Suara.'],
+              ['Telepon 110', 'onCall', 'Nomor dari "Nomor cadangan" di Pengaturan app.', '110'],
+              ['Telepon 112', 'onCall', 'Nomor kedua, atur dengan secondaryPhone.', '112'],
+              ['Laporan pengaduan', 'form', 'Laporan non-darurat: jenis, uraian, foto opsional. Lihat Laporan pengaduan.'],
+            ]} />
+            <Props rows={[
+              ['client', 'SiagaSOS', 'Instance klien.'],
+              ['onCall', '(phone) → void', 'Menelepon nomor darurat. Kosong = tombol telepon disembunyikan.'],
+              ['onCapture', '(context, kind) → CapturedMedia?', 'Mengambil foto/video/suara dari app Anda. Kosong = tombol lampiran disembunyikan.'],
+              ['complaint', 'bool', 'Tampilkan menu Laporan pengaduan.', 'true'],
+              ['onSent / onComplaintSent', '(ActiveReport) → void', 'Dipanggil setelah SOS / pengaduan diterima server.'],
+              ['secondaryPhone', 'String?', 'Nomor kedua di menu.', "'112'"],
+              ['visible', 'bool', 'false = sembunyikan (mis. di halaman login) tanpa melepas widget.', 'true'],
+            ]} />
+            <Note>SDK tidak membawa plugin kamera atau telepon, jadi ukuran app dan izin tetap di tangan Anda. Minta izin lokasi, kamera, dan mikrofon dengan penjelasan bahwa data dibagikan ke tim responder (UU PDP).</Note>
+
+            <h3 id="android">Android (Kotlin)</h3>
+            <p>Tanpa dependency runtime, AAR ±73 KB. Lokasi lewat <code>LocationManager</code> (tanpa Google Play Services).</p>
+            <Code lang="kotlin">{`val sos = SiagaSOS.create(context, apiKey = "pk_test_...",
+    user = SosUser(ref = user.id, name = user.name, phone = user.phone))
+
+// XML: <id.siagasos.SOSButtonView android:layout_width="200dp" android:layout_height="200dp"/>
+binding.sosButton.bind(sos, category = "kriminal") { it.onFailure { e -> showError(e.message) } }
+
+sos.trigger("medis", "Rekan pingsan") { it.onSuccess { r -> current = r } }
+sos.attach(current.localId, bytes, "image/jpeg") { }`}</Code>
+
+            <h3 id="ios">iOS (Swift)</h3>
+            <Code lang="swift">{`import SiagaSOS
+
+let sos = try SiagaSOS(apiKey: "pk_test_...", user: SosUser(ref: user.id, name: user.name))
+
+// SwiftUI
+SOSButton(client: sos, category: "kriminal")
+
+// Atau UI sendiri
+let r = try await sos.trigger(category: "medis", message: "Rekan pingsan")
+try await sos.attach(r.localId, data: jpeg, contentType: "image/jpeg")`}</Code>
+            <p>Tambahkan <code>NSLocationWhenInUseUsageDescription</code> (dan <code>NSCameraUsageDescription</code>, <code>NSMicrophoneUsageDescription</code> bila memakai lampiran) di <code>Info.plist</code>.</p>
+          </section>
+
+          <section id="pengaduan">
+            <h2>Laporan pengaduan</h2>
+            <p>Selain SOS darurat, pengguna bisa mengirim <b>pengaduan</b> non-darurat (parkir liar, kebisingan, pungli, dan sebagainya) dari menu <b>Laporan pengaduan</b> di tombol melayang. Pengaduan masuk ke dashboard yang sama dengan label <b>Pengaduan</b>.</p>
+            <div className="doc-table">
+              <table>
+                <thead><tr><th /><th>SOS</th><th>Pengaduan</th></tr></thead>
+                <tbody>
+                  <tr><td>Cara kirim</td><td>Tahan tombol N detik</td><td>Form: jenis + uraian (wajib, min. 5 karakter) + foto opsional</td></tr>
+                  <tr><td>Bunyi alarm & notifikasi browser</td><td>Ya</td><td>Tidak</td></tr>
+                  <tr><td>Email ke responder (live)</td><td>Ya</td><td>Tidak</td></tr>
+                  <tr><td>Lokasi</td><td>Saat dikirim + live</td><td>Saat dikirim saja</td></tr>
+                  <tr><td>Batas per pengguna</td><td>3 laporan / 10 menit</td><td>5 pengaduan / jam (terpisah dari SOS)</td></tr>
+                </tbody>
+              </table>
+            </div>
+            <Code lang="dart">{`// Tanpa widget (antrian offline sama dengan SOS)
+await sos.complain(category: 'parkir_liar', message: 'Parkir liar menutup gang setiap malam');`}</Code>
+            <Code lang="http · API">{`POST /v1/sdk/reports
+Idempotency-Key: 6f2c...
+{ "kind": "pengaduan", "category": "kebisingan", "message": "Hajatan sampai jam 2 pagi",
+  "location": { "lat": -6.59, "lng": 106.79 }, "reporter": { "ref": "user_123" } }`}</Code>
+            <p>Jenis pengaduan bawaan: <code>ketertiban</code>, <code>kebisingan</code>, <code>parkir_liar</code>, <code>pungli</code>, <code>kehilangan</code>, <code>patroli</code>, <code>lainnya</code>. Ubah lewat <code>sdk_config.complaint_categories</code> di pengaturan app; SDK membacanya dari <code>GET /v1/sdk/config</code>.</p>
+          </section>
+
           <section id="lokasi">
             <h2>Lokasi & privasi</h2>
             <p>Browser meminta izin lokasi saat tombol pertama kali ditekan. Bila ditolak atau GPS lambat (&gt; 8 detik), laporan tetap terkirim tanpa lokasi. Selama laporan aktif, lokasi dikirim berkala (default 15 detik, diatur di portal) dan berhenti otomatis saat laporan mencapai status akhir.</p>
@@ -342,7 +469,7 @@ await sos.attach(report.localId, file, {           // File/Blob dari <input type
   "created": "2026-11-21T08:15:02.120Z",
   "data": {
     "report": {
-      "id": "6f1c...", "app_id": "c716...", "mode": "live",
+      "id": "6f1c...", "kind": "sos", "app_id": "c716...", "mode": "live",
       "status": "open", "status_message": null,
       "category": "kriminal", "message": "Ada orang mencurigakan",
       "source_key": "gudang-cakung",
@@ -354,6 +481,7 @@ await sos.attach(report.localId, file, {           // File/Blob dari <input type
     }
   }
 }`}</Code>
+            <p><code>kind</code> bernilai <code>"sos"</code> atau <code>"pengaduan"</code>; event untuk keduanya sama.</p>
             <p>Gunakan <code>id</code> event untuk deduplikasi: event yang sama bisa terkirim lebih dari sekali saat retry.</p>
 
             <h3 id="webhook-verify">Verifikasi tanda tangan</h3>
@@ -386,7 +514,7 @@ $event = json_decode($raw, true);`}</Code>
             <h2>REST API server</h2>
             <p>Untuk backend Anda, memakai <b>secret key</b> (<code>sk_live_</code> / <code>sk_test_</code>). Jangan pernah menaruh secret key di aplikasi klien. Base URL: <code>{api}</code></p>
             <Props rows={[
-              ['GET /v1/reports', 'list', 'Daftar laporan. Filter: status, category, source_key, from, to, limit (maks. 500), cursor.'],
+              ['GET /v1/reports', 'list', 'Daftar laporan. Filter: kind (sos | pengaduan), status, category, source_key, from, to, limit (maks. 500), cursor.'],
               ['GET /v1/reports/:id', 'detail', 'Detail satu laporan beserta timeline.'],
               ['PATCH /v1/reports/:id', 'update', 'Ubah status dan/atau tambah catatan: { "status": "acknowledged", "note": "..." }'],
               ['POST /v1/webhooks/test', 'test', 'Kirim event uji ke webhook URL app.'],
@@ -415,7 +543,8 @@ curl -X PATCH ${api}/v1/reports/6f1c... \\
               ['415 unsupported_media_type', '', 'Tipe file lampiran tidak didukung.'],
               ['409 upload_missing', '', 'complete dipanggil sebelum file selesai diunggah ke storage.'],
               ['409 report_closed', '', 'Laporan sudah ditutup lebih dari 30 menit; lampiran tidak diterima.'],
-              ['429 rate_limited', '', '120 permintaan/menit per kunci, 60/menit per IP, 3 laporan/10 menit per pengguna (user.ref).'],
+              ['422 validation_failed', '', 'Isi permintaan tidak valid, mis. pengaduan tanpa uraian (min. 5 karakter).'],
+              ['429 rate_limited', '', '120 permintaan/menit per kunci, 60/menit per IP, 3 SOS/10 menit dan 5 pengaduan/jam per pengguna (user.ref).'],
               ['429 test_quota_exceeded', '', 'Melewati 50 laporan test per hari.'],
             ]} />
           </section>
@@ -426,7 +555,8 @@ curl -X PATCH ${api}/v1/reports/6f1c... \\
               <li><CheckCircle size={18} weight="fill" />Perusahaan berstatus <b>Disetujui</b> dan kunci <code>pk_live_</code> sudah dibuat.</li>
               <li><CheckCircle size={18} weight="fill" />Origin produksi (https) atau bundle id terdaftar; hapus <code>*</code> dan localhost.</li>
               <li><CheckCircle size={18} weight="fill" />Responder sudah diundang dan bisa login ke dashboard, bunyi alert diaktifkan.</li>
-              <li><CheckCircle size={18} weight="fill" />Kategori, teks penerima, dan nomor cadangan diatur di Pengaturan app.</li>
+              <li><CheckCircle size={18} weight="fill" />Kategori SOS & pengaduan, teks penerima, dan nomor cadangan diatur di Pengaturan app.</li>
+              <li><CheckCircle size={18} weight="fill" />Aplikasi mobile: package name / bundle id produksi terdaftar, izin lokasi/kamera/mikrofon dijelaskan ke pengguna.</li>
               <li><CheckCircle size={18} weight="fill" />Webhook (bila dipakai) lolos verifikasi tanda tangan dan membalas 2xx.</li>
               <li><CheckCircle size={18} weight="fill" />Pengguna sudah diberi tahu tentang pembagian lokasi (UU PDP).</li>
               <li><CheckCircle size={18} weight="fill" />Uji satu laporan live end-to-end bersama tim responder.</li>

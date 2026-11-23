@@ -14,7 +14,7 @@ Verifikasi: `pnpm smoke` (59 cek end-to-end terhadap API sungguhan + Postgres + 
 | F-05 | Rotate (dengan masa tenggang opsional) & revoke ≤ 60 dtk | ✔ cache 30 dtk | `apps.ts`, `keyAuth.ts` |
 | F-06 | Source per app, filter laporan per source | ✔ (auto-create bisa dimatikan) | `apps.ts`, `reportQuery.ts` |
 | F-07 | SDK web npm + 3 baris kode | ✔ belum dipublish | `packages/sdk-js`, `sdk-react` |
-| F-08 | SDK Android | ✘ M4 | — |
+| F-08 | SDK Android | ✔ native Kotlin + Flutter + iOS Swift (semua teruji, termasuk integrasi); tombol melayang ✔ Flutter (`SOSFloatingButton`, 4 aksi termasuk **Laporan pengaduan** `kind='pengaduan'`), Android/iOS belum | `packages/sdk-android`, `packages/sdk-flutter`, `packages/sdk-ios` |
 | F-09 | Tahan 3 dtk, batal bila dilepas | ✔ `<SOSButton>` | `sdk-react/src/index.tsx` |
 | F-10 | Antrian offline + idempotency | ✔ IndexedDB → localStorage → memori | `sdk-js/src/queue.ts` |
 | F-11 | Status ke pengguna ≤ 5 dtk | ✔ polling 4 dtk | `sdk-js/src/index.ts` |

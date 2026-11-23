@@ -14,7 +14,7 @@ export interface ApiKey {
 }
 
 export interface SdkConfig {
-  categories?: string[]; button_text?: string; hold_seconds?: number; recipient_text?: string;
+  categories?: string[]; complaint_categories?: string[]; button_text?: string; hold_seconds?: number; recipient_text?: string;
   fallback_phone?: string; live_location_interval_s?: number;
 }
 
@@ -25,7 +25,7 @@ export interface App {
 }
 
 export interface Report {
-  id: string; app_id: string; source_key: string | null; mode: 'live' | 'test'; category: string; status: ReportStatus;
+  id: string; kind?: 'sos' | 'pengaduan'; app_id: string; source_key: string | null; mode: 'live' | 'test'; category: string; status: ReportStatus;
   status_message: string | null; message: string | null;
   location: { lat: number; lng: number; accuracy_m: number | null } | null;
   reporter: { ref: string | null; name: string | null; phone: string | null };

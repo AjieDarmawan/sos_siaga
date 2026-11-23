@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import cors from 'cors';
-import { createReportSchema, locationUpdateSchema, DEFAULT_CATEGORIES, TERMINAL_STATUSES, type SdkConfig } from '@siagasos/shared';
+import { createReportSchema, locationUpdateSchema, DEFAULT_CATEGORIES, DEFAULT_COMPLAINT_CATEGORIES, TERMINAL_STATUSES, type SdkConfig } from '@siagasos/shared';
 import { withTenant } from '../db.js';
 import { ApiError, parse } from '../lib/errors.js';
 import { enforce, hit } from '../lib/rateLimit.js';
@@ -29,6 +29,7 @@ sdkRouter.get('/config', (req, res) => {
     app_name: k.appName,
     mode: k.mode,
     categories: c.categories?.length ? c.categories : [...DEFAULT_CATEGORIES],
+    complaint_categories: c.complaint_categories?.length ? c.complaint_categories : [...DEFAULT_COMPLAINT_CATEGORIES],
     button_text: c.button_text ?? 'SOS',
     hold_seconds: c.hold_seconds ?? 3,
     recipient_text: c.recipient_text ?? `Laporan dikirim ke tim keamanan ${k.appName}, bukan ke polisi/110.`,
@@ -52,7 +53,9 @@ sdkRouter.post('/reports', async (req, res) => {
     if (dup.rows[0]) return { report: dup.rows[0], replay: true };
 
     if (body.reporter?.ref) {
-      await enforce(`reporter:${k.appId}:${body.reporter.ref}`, 3, 600, 'reporter_rate_limited');
+      // Kuota terpisah: pengaduan tidak boleh menghabiskan jatah SOS pengguna yang sama.
+      if (body.kind === 'pengaduan') await enforce(`complaint:${k.appId}:${body.reporter.ref}`, 5, 3600, 'reporter_rate_limited');
+      else await enforce(`reporter:${k.appId}:${body.reporter.ref}`, 3, 600, 'reporter_rate_limited');
     }
     if (k.mode === 'test') {
       const day = new Date().toISOString().slice(0, 10);
@@ -77,13 +80,13 @@ sdkRouter.post('/reports', async (req, res) => {
 
     const ins = await c.query(
       `INSERT INTO reports (app_id, account_id, source_id, mode, category, reporter_ref, reporter_name, reporter_phone,
-         message, lat, lng, accuracy_m, device, metadata, ip, idempotency_key, client_created_at)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)
+         message, lat, lng, accuracy_m, device, metadata, ip, idempotency_key, client_created_at, kind)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)
        ON CONFLICT (app_id, idempotency_key) DO NOTHING RETURNING *`,
       [k.appId, k.accountId, sourceId, k.mode, body.category, body.reporter?.ref ?? null, body.reporter?.name ?? null,
         body.reporter?.phone ?? null, body.message ?? null, body.location?.lat ?? null, body.location?.lng ?? null,
         body.location?.accuracy_m ?? null, body.device ? JSON.stringify(body.device) : null,
-        body.metadata ? JSON.stringify(body.metadata) : null, req.ip ?? null, idem, body.client_created_at ?? null],
+        body.metadata ? JSON.stringify(body.metadata) : null, req.ip ?? null, idem, body.client_created_at ?? null, body.kind],
     );
     if (!ins.rows[0]) {
       // balapan dua retry bersamaan
@@ -118,7 +121,8 @@ sdkRouter.post('/reports/:id/locations', async (req, res) => {
   await enforce(`loc:${req.params.id}`, 20, 60); // ~ tiap 3 detik maksimum
   const out = await withTenant(k.accountId, async (c) => {
     const r = await loadReport(c, req.params.id!, k.appId);
-    if (TERMINAL_STATUSES.includes(r.status)) return { r, accepted: false };
+    // Pengaduan tidak memakai lokasi live; SDK berhenti mengirim saat accepted:false.
+    if (TERMINAL_STATUSES.includes(r.status) || r.kind === 'pengaduan') return { r, accepted: false };
     await c.query(`INSERT INTO report_locations (report_id, account_id, lat, lng, accuracy_m, recorded_at) VALUES ($1,$2,$3,$4,$5, coalesce($6::timestamptz, now()))`,
       [r.id, k.accountId, body.lat, body.lng, body.accuracy_m ?? null, body.recorded_at ?? null]);
     await c.query(`UPDATE reports SET lat = $2, lng = $3, accuracy_m = $4, updated_at = now() WHERE id = $1`,

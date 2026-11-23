@@ -112,8 +112,11 @@ export function DashboardPage() {
       if (ev.type === 'report.created') {
         setFresh((s) => new Set(s).add(r.id));
         setTimeout(() => setFresh((s) => { const n = new Set(s); n.delete(r.id); return n; }), 4000);
-        if (soundRef.current && !playAlarm(3)) setSoundBlocked(true);
-        notifyBrowser(r);
+        // Pengaduan bukan darurat: tanpa alarm & notifikasi browser.
+        if (r.kind !== 'pengaduan') {
+          if (soundRef.current && !playAlarm(3)) setSoundBlocked(true);
+          notifyBrowser(r);
+        }
       }
       if (selectedRef.current === r.id) void loadDetail(r.id);
     };
@@ -260,6 +263,7 @@ function ReportItem({ r, active, isNew, onClick }: { r: Report; active: boolean;
         <span className="row-between" style={{ flexWrap: 'nowrap' }}>
           <span className="title">
             {catLabel(r.category)}
+            {r.kind === 'pengaduan' && <Badge tone="info">Pengaduan</Badge>}
             {r.mode === 'test' && <Badge tone="test">TEST</Badge>}
           </span>
           <Badge tone={st.tone}>{st.label}</Badge>
@@ -318,7 +322,7 @@ function DetailPanel({ report: r, detail, onClose, onChanged }: { report: Report
     <aside className="card detail" aria-label="Detail laporan" style={{ boxShadow: 'var(--shadow-lg)' }}>
       <div className="card-head">
         <div style={{ minWidth: 0 }}>
-          <h2 className="row" style={{ gap: 8 }}>{catLabel(r.category)}{r.mode === 'test' && <Badge tone="test">TEST</Badge>}</h2>
+          <h2 className="row" style={{ gap: 8 }}>{catLabel(r.category)}{r.kind === 'pengaduan' && <Badge tone="info">Pengaduan</Badge>}{r.mode === 'test' && <Badge tone="test">TEST</Badge>}</h2>
           <p>{fmtDate(r.created_at)} · {fmtAgo(r.created_at)}</p>
         </div>
         <button ref={closeRef} className="btn btn-ghost btn-icon" onClick={onClose} aria-label="Tutup detail"><X size={18} /></button>
