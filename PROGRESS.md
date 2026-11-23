@@ -232,3 +232,12 @@ pnpm -r typecheck
 - Selama SOS belum selesai, menu tetap EWS / 110 / 112 / Laporan (dulu tombol jadi abu-abu "AKTIF" dan membuka panel status berbeda — membingungkan saat SOS dari antrian offline terkirim belakangan). Status tampil di keterangan menu ("SOS aktif: …"), tombol bulat tetap merah "SOS" dengan titik kuning kecil.
 - Batal salah tekan pindah ke **Laporan → Riwayat laporan** (tombol "Batalkan (salah tekan)" pada SOS berstatus `open`). Panel status lama + tombol Foto/Video/Suara di panel dihapus; lampiran lewat alur Rekam TKP.
 - 13/13 test (test pertama kini memeriksa menu saat SOS aktif + batal lewat riwayat).
+
+### 2026-11-23 · Penerima SOS + notifikasi WhatsApp (gaya tata-warga)
+- **Migrasi 004**: `sos_recipients` (nama, nomor 62xx, per app atau khusus satu source, aktif/nonaktif; RLS `tenant_isolation`) + `reports.emergency_contacts` (kontak darurat pribadi dari SDK).
+- **API**: portal `GET|POST /portal/apps/:id/recipients`, `PATCH|DELETE /:recipientId` (owner/admin, audit). SDK `POST /v1/sdk/reports` menerima `emergency_contacts` (maks. 3, hanya SOS). Setelah commit + respons, `dispatchSosWhatsApp` mengirim template WA (nama pelapor, lokasi = app · source, link maps) ke penerima app/source + kontak pribadi, nomor ganda sekali; mode test tidak mengirim. Pagar spam: maks. 5 WA per nomor per jam (Redis, fail-open). Hasil per nomor dicatat di timeline (`type = whatsapp`).
+- **Provider WA** (`lib/whatsapp.ts`): MetaDev / Qontak / stub, nama env sama dengan tata-warga (`METADEV_*`, `PANIC_QONTAK_*`, `WA_PROVIDER`). Default stub (tanpa WA keluar).
+- **Portal**: tab **Penerima SOS** di detail app (tambah, cakupan source, aktif/nonaktif, hapus); timeline menampilkan event WhatsApp.
+- **Flutter SDK**: `SiagaSOS.emergencyContacts()/setEmergencyContacts()` (SharedPreferences per api key + `user.ref`), dikirim otomatis bersama SOS; menu **Laporan → Nomor darurat** (maks. 3, validasi 62xx).
+- Smoke **81 cek lolos** (+6), typecheck semua paket lolos, SDK **14/14 test**.
+- ⬜ Deploy ke `sos.tip2.co` (migrasi 004 + env WA); app commerceOS POS (`com.tip.kasir`) perlu didaftarkan di portal production untuk kunci `pk_live_` yang valid di sana.

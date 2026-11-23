@@ -78,6 +78,7 @@ class SOSFloatingButton extends StatefulWidget {
     this.siren,
     this.tkpPrompt = true,
     this.tkpSeconds = 5,
+    this.emergencyContacts = true,
   });
 
   final SiagaSOS client;
@@ -135,6 +136,8 @@ class SOSFloatingButton extends StatefulWidget {
 
   /// Batas durasi video TKP yang ditampilkan di ajakan rekam (kamera tetap diatur app host).
   final int tkpSeconds;
+  /// Menu "Nomor darurat" (Laporan → Nomor darurat): maks. 3 nomor WhatsApp pribadi yang ikut dikabari saat SOS.
+  final bool emergencyContacts;
 
   @override
   State<SOSFloatingButton> createState() => _SOSFloatingButtonState();
@@ -282,6 +285,8 @@ class _SOSFloatingButtonState extends State<SOSFloatingButton> with SingleTicker
       ));
 
   void _openHistory() => _openSheet(() => _HistorySheet(client: widget.client, onClose: _closeSheet));
+
+  void _openContacts() => _openSheet(() => _ContactsSheet(client: widget.client, onClose: _closeSheet));
 
   void _closeSheet() {
     if (mounted) setState(() => _sheet = null);
@@ -473,6 +478,16 @@ class _SOSFloatingButtonState extends State<SOSFloatingButton> with SingleTicker
             onTap: _openHistory,
           )
         : null;
+    final contacts = widget.emergencyContacts
+        ? _ActionButton(
+            key: const ValueKey('siagasos-contacts'),
+            label: 'Nomor darurat',
+            icon: Icons.contact_phone_rounded,
+            colors: const [Color(0xFF4ADE80), Color(0xFF22C55E), Color(0xFF15803D)],
+            onTap: _openContacts,
+          )
+        : null;
+    final subOptions = [if (contacts != null) _openContacts, if (history != null) _openHistory, if (complaint != null) _openComplaint];
     // Urutan daftar = dari tombol bulat ke luar (dibalik saat menu membuka ke atas).
     final items = _reportMenu
         ? <Widget>[
@@ -483,20 +498,19 @@ class _SOSFloatingButtonState extends State<SOSFloatingButton> with SingleTicker
               colors: const [Color(0xFF64748B), Color(0xFF475569), Color(0xFF334155)],
               onTap: () => setState(() => _reportMenu = false),
             ),
+            if (contacts != null) contacts,
             if (history != null) history,
             if (complaint != null) complaint,
           ]
         : <Widget>[
-            if (complaint != null || history != null)
+            if (subOptions.isNotEmpty)
               _ActionButton(
                 key: const ValueKey('siagasos-report'),
                 label: 'Laporan',
                 icon: Icons.assignment_rounded,
                 colors: const [Color(0xFFFDBA74), Color(0xFFFB923C), Color(0xFFEA580C)],
                 // Hanya satu pilihan yang aktif → langsung buka tanpa sub-menu.
-                onTap: complaint != null && history != null
-                    ? () => setState(() => _reportMenu = true)
-                    : (complaint != null ? _openComplaint : _openHistory),
+                onTap: subOptions.length > 1 ? () => setState(() => _reportMenu = true) : subOptions.first,
               ),
             if (widget.onCall != null) ...[
               if (second != null)
@@ -1683,6 +1697,198 @@ class _TkpSheetState extends State<_TkpSheet> {
           ),
         ),
       ),
+    );
+  }
+}
+
+/// "Nomor darurat": maks. 3 nomor WhatsApp pribadi (keluarga, rekan) yang ikut dikabari setiap SOS dari perangkat ini.
+class _ContactsSheet extends StatefulWidget {
+  const _ContactsSheet({required this.client, required this.onClose});
+  final SiagaSOS client;
+  final VoidCallback onClose;
+
+  @override
+  State<_ContactsSheet> createState() => _ContactsSheetState();
+}
+
+class _ContactsSheetState extends State<_ContactsSheet> {
+  static const _green = Color(0xFF16A34A);
+  List<EmergencyContact>? _items;
+  final _name = TextEditingController();
+  final _phone = TextEditingController();
+  String? _error;
+  bool _saving = false;
+
+  @override
+  void initState() {
+    super.initState();
+    widget.client.emergencyContacts().then((l) => mounted ? setState(() => _items = l) : null);
+    _name.addListener(() => setState(() {}));
+    _phone.addListener(() => setState(() {}));
+  }
+
+  @override
+  void dispose() {
+    _name.dispose();
+    _phone.dispose();
+    super.dispose();
+  }
+
+  Future<void> _save(List<EmergencyContact> next) async {
+    setState(() {
+      _saving = true;
+      _error = null;
+    });
+    try {
+      await widget.client.setEmergencyContacts(next);
+      final fresh = await widget.client.emergencyContacts();
+      if (mounted) setState(() => _items = fresh);
+    } on ArgumentError catch (e) {
+      if (mounted) setState(() => _error = '${e.message}');
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  Future<void> _add() async {
+    final items = _items ?? const [];
+    final phone = toWhatsAppNumber(_phone.text);
+    if (phone == null) {
+      setState(() => _error = 'Nomor WhatsApp tidak valid. Contoh: 0812 3456 7890');
+      return;
+    }
+    if (items.any((c) => c.phone == phone)) {
+      setState(() => _error = 'Nomor ini sudah ada di daftar.');
+      return;
+    }
+    FocusScope.of(context).unfocus();
+    await _save([...items, EmergencyContact(name: _name.text.trim().isEmpty ? 'Kontak darurat' : _name.text.trim(), phone: phone)]);
+    if (_error == null) {
+      _name.clear();
+      _phone.clear();
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final items = _items;
+    final full = (items?.length ?? 0) >= maxEmergencyContacts;
+    return _SheetFrame(
+      sheetKey: const ValueKey('siagasos-contacts-sheet'),
+      onDismiss: _saving ? null : widget.onClose,
+      child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        _Grip(theme),
+        Row(children: [
+          Container(
+            width: 44,
+            height: 44,
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(colors: [Color(0xFF4ADE80), Color(0xFF15803D)]),
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: const Icon(Icons.contact_phone_rounded, color: Colors.white),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text('Nomor darurat', style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700)),
+              Text('Dikabari WhatsApp setiap kamu menekan SOS', style: theme.textTheme.bodySmall),
+            ]),
+          ),
+          IconButton(onPressed: _saving ? null : widget.onClose, icon: const Icon(Icons.close_rounded), tooltip: 'Tutup'),
+        ]),
+        const SizedBox(height: 14),
+        if (items == null)
+          const SizedBox(height: 80)
+        else if (items.isEmpty)
+          Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(color: theme.colorScheme.surfaceContainerHighest, borderRadius: BorderRadius.circular(14)),
+            child: Text('Belum ada nomor darurat. Tambahkan keluarga atau rekan (maks. $maxEmergencyContacts) yang perlu tahu saat kamu menekan SOS.',
+                style: theme.textTheme.bodySmall?.copyWith(height: 1.4)),
+          )
+        else
+          for (final c in items)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Container(
+                padding: const EdgeInsets.fromLTRB(12, 8, 4, 8),
+                decoration: BoxDecoration(borderRadius: BorderRadius.circular(14), border: Border.all(color: theme.colorScheme.outlineVariant)),
+                child: Row(children: [
+                  Container(
+                    width: 36,
+                    height: 36,
+                    decoration: BoxDecoration(color: _green.withValues(alpha: 0.12), shape: BoxShape.circle),
+                    child: const Icon(Icons.person_rounded, size: 20, color: _green),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      Text(c.name, style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700)),
+                      Text('+${c.phone}', style: theme.textTheme.bodySmall),
+                    ]),
+                  ),
+                  IconButton(
+                    key: ValueKey('siagasos-contact-del-${c.phone}'),
+                    onPressed: _saving ? null : () => _save(items.where((o) => o.phone != c.phone).toList()),
+                    icon: Icon(Icons.delete_outline_rounded, color: theme.colorScheme.error),
+                    tooltip: 'Hapus',
+                  ),
+                ]),
+              ),
+            ),
+        if (items != null && !full) ...[
+          const SizedBox(height: 10),
+          TextField(
+            key: const ValueKey('siagasos-contact-name'),
+            controller: _name,
+            enabled: !_saving,
+            textCapitalization: TextCapitalization.words,
+            decoration: InputDecoration(
+              labelText: 'Nama',
+              hintText: 'Mis. Istri, Kakak, Pemilik toko',
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
+            ),
+          ),
+          const SizedBox(height: 10),
+          TextField(
+            key: const ValueKey('siagasos-contact-phone'),
+            controller: _phone,
+            enabled: !_saving,
+            keyboardType: TextInputType.phone,
+            decoration: InputDecoration(
+              labelText: 'Nomor WhatsApp',
+              hintText: '0812 3456 7890',
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
+            ),
+          ),
+          const SizedBox(height: 12),
+          FilledButton.icon(
+            key: const ValueKey('siagasos-contact-add'),
+            onPressed: _saving || _phone.text.trim().isEmpty ? null : _add,
+            icon: _saving
+                ? const SizedBox.square(dimension: 18, child: CircularProgressIndicator(strokeWidth: 2.2, color: Colors.white))
+                : const Icon(Icons.add_rounded),
+            label: const Text('Tambah nomor'),
+            style: FilledButton.styleFrom(
+              backgroundColor: _green,
+              minimumSize: const Size.fromHeight(48),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+            ),
+          ),
+        ],
+        if (full)
+          Text('Maksimal $maxEmergencyContacts nomor. Hapus salah satu untuk mengganti.',
+              textAlign: TextAlign.center, style: theme.textTheme.bodySmall),
+        if (_error != null) ...[
+          const SizedBox(height: 8),
+          Text(_error!, style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.error)),
+        ],
+        const SizedBox(height: 8),
+        Text('Petugas keamanan & penerima SOS yang diatur pengelola tetap dikabari. Pesan berisi nama, lokasi, dan link peta.',
+            textAlign: TextAlign.center, style: theme.textTheme.labelSmall?.copyWith(color: theme.colorScheme.outline)),
+      ]),
     );
   }
 }

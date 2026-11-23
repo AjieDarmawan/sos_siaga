@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { z } from 'zod';
-import { KEY_MODES, PLATFORMS, type KeyMode } from '@siagasos/shared';
+import { KEY_MODES, PLATFORMS, toWhatsAppNumber, type KeyMode } from '@siagasos/shared';
 import { pool, q, withTenant, type Db } from '../../db.js';
 import { ApiError, forbidden, notFound, parse } from '../../lib/errors.js';
 import { generateKey } from '../../lib/keys.js';
@@ -231,6 +231,85 @@ appsRouter.patch('/:id/sources/:sourceId', canManage, async (req, res) => {
   );
   if (!rows[0]) throw notFound('Source');
   res.json(rows[0]);
+});
+
+// ---------------------------------------------------------------- penerima SOS (WhatsApp)
+const recipientSchema = z.object({
+  name: z.string().trim().min(1).max(80),
+  phone: z.string().max(32).transform((p, ctx) => {
+    const n = toWhatsAppNumber(p);
+    if (!n) ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Nomor WhatsApp tidak valid (contoh 0812xxxxxxx)' });
+    return n ?? p;
+  }),
+  /** null / tidak diisi = semua source app. */
+  source_id: z.string().uuid().nullable().optional(),
+  active: z.boolean().optional(),
+});
+
+const RECIPIENT_COLS = `r.id, r.name, r.phone, r.source_id, r.active, r.created_at, s.source_key, s.label AS source_label`;
+
+appsRouter.get('/:id/recipients', async (req, res) => {
+  const u = req.user!;
+  const app = await loadApp(u, req.params.id!);
+  const { rows } = await withTenant(u.accountId, (c) =>
+    c.query(`SELECT ${RECIPIENT_COLS} FROM sos_recipients r LEFT JOIN sources s ON s.id = r.source_id
+             WHERE r.app_id = $1 ORDER BY r.source_id NULLS FIRST, r.name`, [app.id]),
+  );
+  res.json({ data: rows });
+});
+
+appsRouter.post('/:id/recipients', canManage, async (req, res) => {
+  const u = req.user!;
+  const app = await loadApp(u, req.params.id!);
+  const body = parse(recipientSchema, req.body);
+  const row = await withTenant(u.accountId, async (c) => {
+    if (body.source_id) {
+      const s = await c.query(`SELECT 1 FROM sources WHERE id = $1 AND app_id = $2`, [body.source_id, app.id]);
+      if (!s.rows[0]) throw notFound('Source');
+    }
+    const ins = await c.query(
+      `INSERT INTO sos_recipients (account_id, app_id, source_id, name, phone, active) VALUES ($1,$2,$3,$4,$5,coalesce($6,true)) RETURNING id`,
+      [u.accountId, app.id, body.source_id ?? null, body.name, body.phone, body.active ?? null],
+    );
+    const { rows } = await c.query(`SELECT ${RECIPIENT_COLS} FROM sos_recipients r LEFT JOIN sources s ON s.id = r.source_id WHERE r.id = $1`, [ins.rows[0].id]);
+    return rows[0];
+  }).catch((e) => {
+    if (e.code === '23505') throw new ApiError(409, 'recipient_exists', 'Nomor ini sudah menjadi penerima untuk cakupan yang sama');
+    throw e;
+  });
+  await audit({ accountId: u.accountId, actorKind: 'user', actorId: u.id, action: 'recipient.created', targetType: 'app', targetId: app.id, detail: { recipient_id: row.id } });
+  res.status(201).json(row);
+});
+
+appsRouter.patch('/:id/recipients/:recipientId', canManage, async (req, res) => {
+  const u = req.user!;
+  const app = await loadApp(u, req.params.id!);
+  const body = parse(recipientSchema.partial(), req.body);
+  const row = await withTenant(u.accountId, async (c) => {
+    const upd = await c.query(
+      `UPDATE sos_recipients SET name = coalesce($3, name), phone = coalesce($4, phone), active = coalesce($5, active)
+       WHERE id = $1 AND app_id = $2 RETURNING id`,
+      [req.params.recipientId, app.id, body.name ?? null, body.phone ?? null, body.active ?? null],
+    );
+    if (!upd.rows[0]) throw notFound('Penerima');
+    const { rows } = await c.query(`SELECT ${RECIPIENT_COLS} FROM sos_recipients r LEFT JOIN sources s ON s.id = r.source_id WHERE r.id = $1`, [upd.rows[0].id]);
+    return rows[0];
+  }).catch((e) => {
+    if (e.code === '23505') throw new ApiError(409, 'recipient_exists', 'Nomor ini sudah menjadi penerima untuk cakupan yang sama');
+    throw e;
+  });
+  res.json(row);
+});
+
+appsRouter.delete('/:id/recipients/:recipientId', canManage, async (req, res) => {
+  const u = req.user!;
+  const app = await loadApp(u, req.params.id!);
+  const { rowCount } = await withTenant(u.accountId, (c) =>
+    c.query(`DELETE FROM sos_recipients WHERE id = $1 AND app_id = $2`, [req.params.recipientId, app.id]),
+  );
+  if (!rowCount) throw notFound('Penerima');
+  await audit({ accountId: u.accountId, actorKind: 'user', actorId: u.id, action: 'recipient.deleted', targetType: 'app', targetId: app.id, detail: { recipient_id: req.params.recipientId } });
+  res.status(204).end();
 });
 
 // ---------------------------------------------------------------- log webhook

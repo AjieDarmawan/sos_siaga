@@ -42,12 +42,15 @@ class SiagaSOS {
     http.Client? httpClient,
     QueueStore? queueStore,
     QueueStore? historyStore,
+    QueueStore? contactsStore,
   })  : baseUrl = baseUrl.replaceAll(RegExp(r'/+$'), ''),
         _http = httpClient ?? http.Client(),
         _queue = queueStore ?? SharedPrefsQueueStore('siagasos.queue.${apiKey.length > 16 ? apiKey.substring(0, 16) : apiKey}'),
         // Riwayat per pengguna: kasir lain yang login di perangkat yang sama tidak melihat laporan orang lain.
         _history = historyStore ??
-            SharedPrefsQueueStore('siagasos.history.${apiKey.length > 16 ? apiKey.substring(0, 16) : apiKey}.${user?.ref ?? '-'}') {
+            SharedPrefsQueueStore('siagasos.history.${apiKey.length > 16 ? apiKey.substring(0, 16) : apiKey}.${user?.ref ?? '-'}'),
+        _contacts = contactsStore ??
+            SharedPrefsQueueStore('siagasos.contacts.${apiKey.length > 16 ? apiKey.substring(0, 16) : apiKey}.${user?.ref ?? '-'}') {
     final m = RegExp(r'^pk_(live|test)_').firstMatch(apiKey);
     if (m == null) {
       throw const SiagaSOSError(0, 'invalid_api_key', 'apiKey harus publishable key (pk_live_... / pk_test_...)');
@@ -72,6 +75,7 @@ class SiagaSOS {
   final http.Client _http;
   final QueueStore _queue;
   final QueueStore _history;
+  final QueueStore _contacts;
   final _reports = <String, ActiveReport>{};
   final _pollers = <String, Timer>{};
   final _locators = <String, Timer>{};
@@ -149,6 +153,8 @@ class SiagaSOS {
     } catch (_) {
       loc = null; // tanpa lokasi tetap terkirim
     }
+    // Kontak darurat hanya untuk SOS (pengaduan tidak memicu WhatsApp). Gagal baca → SOS tetap jalan tanpa kontak.
+    final contacts = kind == ReportKind.sos ? await emergencyContacts() : const <EmergencyContact>[];
     final item = <String, dynamic>{
       'localId': _uuid(),
       'idem': _uuid(),
@@ -161,6 +167,7 @@ class SiagaSOS {
         if (loc != null) 'location': loc.toJson(),
         if (user != null) 'reporter': user!.toJson(),
         if (metadata != null) 'metadata': metadata,
+        if (contacts.isNotEmpty) 'emergency_contacts': contacts.map((c) => c.toJson()).toList(),
         'device': {'platform': _platform(), 'sdk_version': 'flutter-$sdkVersion'},
         'client_created_at': DateTime.now().toUtc().toIso8601String(),
       },
@@ -222,6 +229,29 @@ class SiagaSOS {
       createdAt: r.createdAt,
     ));
     return r;
+  }
+
+  // ------------------------------------------------------------------ kontak darurat
+  /// Kontak darurat pribadi pengguna ini (per perangkat + [user]). Ikut dikabari WhatsApp setiap SOS.
+  Future<List<EmergencyContact>> emergencyContacts() async {
+    try {
+      return (await _contacts.load()).map(EmergencyContact.fromJson).where((c) => c.phone.isNotEmpty).toList();
+    } catch (_) {
+      return [];
+    }
+  }
+
+  /// Simpan kontak darurat (maks. [maxEmergencyContacts]). Nomor dinormalisasi ke 62xx; nomor tidak valid → [ArgumentError].
+  Future<void> setEmergencyContacts(List<EmergencyContact> contacts) async {
+    if (contacts.length > maxEmergencyContacts) throw ArgumentError('Maksimal $maxEmergencyContacts kontak darurat');
+    final out = <EmergencyContact>[];
+    for (final c in contacts) {
+      final n = toWhatsAppNumber(c.phone);
+      if (n == null) throw ArgumentError('Nomor WhatsApp tidak valid: ${c.phone}');
+      if (out.any((o) => o.phone == n)) continue;
+      out.add(EmergencyContact(name: c.name.trim(), phone: n));
+    }
+    await _contacts.save(out.map((c) => c.toJson()).toList());
   }
 
   // ------------------------------------------------------------------ riwayat

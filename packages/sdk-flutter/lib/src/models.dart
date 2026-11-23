@@ -86,6 +86,37 @@ class ActiveReport {
   String toString() => 'ActiveReport($localId, id=$id, $status)';
 }
 
+/// Kontak darurat pribadi pelapor: dikabari WhatsApp oleh server saat SOS (maks. [maxEmergencyContacts]).
+/// Disimpan di perangkat ([SiagaSOS.setEmergencyContacts]) dan dikirim bersama setiap SOS.
+class EmergencyContact {
+  const EmergencyContact({required this.name, required this.phone});
+  final String name;
+  /// Nomor WhatsApp ternormalisasi 62xxxxxxxxxx.
+  final String phone;
+
+  Map<String, dynamic> toJson() => {'name': name, 'phone': phone};
+  factory EmergencyContact.fromJson(Map<String, dynamic> j) =>
+      EmergencyContact(name: j['name'] as String? ?? '', phone: j['phone'] as String? ?? '');
+
+  @override
+  bool operator ==(Object other) => other is EmergencyContact && other.name == name && other.phone == phone;
+  @override
+  int get hashCode => Object.hash(name, phone);
+}
+
+const maxEmergencyContacts = 3;
+
+/// 08xx / +62xx / 62xx / 8xx → 62xx. Null bila bukan nomor Indonesia yang masuk akal (sama dengan server).
+String? toWhatsAppNumber(String phone) {
+  var d = phone.replaceAll(RegExp(r'\D'), '');
+  if (d.startsWith('0')) {
+    d = '62${d.substring(1)}';
+  } else if (d.startsWith('8')) {
+    d = '62$d';
+  }
+  return RegExp(r'^62[0-9]{8,13}$').hasMatch(d) ? d : null;
+}
+
 /// Satu laporan di riwayat perangkat ([SiagaSOS.history]): yang pernah terkirim dari perangkat ini
 /// oleh pengguna yang sama. Status diperbarui dari server saat riwayat dibuka.
 class ReportRecord {

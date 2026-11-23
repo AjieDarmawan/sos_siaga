@@ -320,7 +320,7 @@ const NEXT: Partial<Record<ReportStatus, { to: ReportStatus; label: string; vari
   in_progress: [{ to: 'resolved', label: 'Tandai selesai', variant: 'primary' }, { to: 'false_alarm', label: 'Alarm palsu', variant: 'default' }],
 };
 
-const EVENT_LABEL: Record<string, string> = { created: 'Laporan dibuat', status_changed: 'Status diubah', cancelled: 'Dibatalkan pelapor', note: 'Catatan', media: 'Lampiran' };
+const EVENT_LABEL: Record<string, string> = { created: 'Laporan dibuat', status_changed: 'Status diubah', cancelled: 'Dibatalkan pelapor', note: 'Catatan', media: 'Lampiran', whatsapp: 'WhatsApp' };
 
 function DetailPanel({ report: r, detail, onClose, onChanged }: { report: Report; detail: ReportDetail | null; onClose: () => void; onChanged: (r: Report) => void }) {
   const toast = useToast();

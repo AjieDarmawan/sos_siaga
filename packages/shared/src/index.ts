@@ -32,6 +32,26 @@ export const locationSchema = z.object({
 });
 export type Location = z.infer<typeof locationSchema>;
 
+/** 08xx / +62xx / 62xx / 8xx → 62xx (format nomor WhatsApp). null bila bukan nomor Indonesia yang masuk akal. */
+export function toWhatsAppNumber(phone: string): string | null {
+  let d = String(phone ?? '').replace(/\D/g, '');
+  if (d.startsWith('0')) d = `62${d.slice(1)}`;
+  else if (d.startsWith('8')) d = `62${d}`;
+  return /^62[0-9]{8,13}$/.test(d) ? d : null;
+}
+
+/** Nomor WhatsApp yang dikabari saat SOS. Maks. 3 per laporan (pelapor memilih di perangkat). */
+export const MAX_EMERGENCY_CONTACTS = 3;
+export const emergencyContactSchema = z.object({
+  name: z.string().trim().max(80).optional(),
+  phone: z.string().max(32).transform((p, ctx) => {
+    const n = toWhatsAppNumber(p);
+    if (!n) ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Nomor WhatsApp tidak valid (contoh 0812xxxxxxx)' });
+    return n ?? p;
+  }),
+});
+export type EmergencyContact = z.infer<typeof emergencyContactSchema>;
+
 export const createReportSchema = z.object({
   kind: z.enum(REPORT_KINDS).default('sos'),
   source_key: z.string().min(1).max(64).regex(/^[a-z0-9][a-z0-9._-]*$/i).optional(),
@@ -57,6 +77,8 @@ export const createReportSchema = z.object({
     .optional(),
   metadata: z.record(z.unknown()).optional(),
   client_created_at: z.string().datetime().optional(),
+  /** Kontak darurat pribadi pelapor (hanya untuk SOS; diabaikan pada pengaduan). */
+  emergency_contacts: z.array(emergencyContactSchema).max(MAX_EMERGENCY_CONTACTS).optional(),
 }).refine((v) => v.kind !== 'pengaduan' || (v.message?.trim().length ?? 0) >= 5, {
   message: 'Pengaduan wajib berisi uraian (minimal 5 karakter)', path: ['message'],
 });

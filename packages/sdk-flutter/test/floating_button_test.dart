@@ -322,6 +322,60 @@ void main() {
     sos.dispose();
     await tester.pumpWidget(const SizedBox());
   });
+
+  testWidgets('SOSFloatingButton: Nomor darurat disimpan di perangkat dan ikut terkirim bersama SOS', (tester) async {
+    tester.view.physicalSize = const Size(400, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final s = FakeServer();
+    final sos = make(s);
+    await tester.pumpWidget(MaterialApp(
+      home: const SizedBox(),
+      builder: (context, child) => SOSFloatingButton(client: sos, holdSeconds: 0, sosLabel: 'EWS Alert', onCall: (_) {}, child: child!),
+    ));
+    await tester.pump();
+    await tester.tap(find.byKey(const ValueKey('siagasos-fab')));
+    await pumpFrames(tester, 8);
+    await tester.tap(find.byKey(const ValueKey('siagasos-report')));
+    await pumpFrames(tester, 8);
+    expect(find.text('Nomor darurat'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('siagasos-contacts')));
+    await pumpFrames(tester, 8);
+    expect(find.byKey(const ValueKey('siagasos-contacts-sheet')), findsOneWidget);
+
+    // Nomor tidak valid ditolak; nomor valid dinormalisasi ke 62xx.
+    await tester.enterText(find.byKey(const ValueKey('siagasos-contact-phone')), '123');
+    await tester.pump();
+    await tester.tap(find.byKey(const ValueKey('siagasos-contact-add')));
+    await tester.pump();
+    expect(find.textContaining('Nomor WhatsApp tidak valid'), findsOneWidget);
+    await tester.enterText(find.byKey(const ValueKey('siagasos-contact-name')), 'Istri');
+    await tester.enterText(find.byKey(const ValueKey('siagasos-contact-phone')), '0813-3333-4444');
+    await tester.pump();
+    await tester.tap(find.byKey(const ValueKey('siagasos-contact-add')));
+    await pumpFrames(tester, 4);
+    expect(find.text('Istri'), findsOneWidget);
+    expect(find.text('+6281333334444'), findsOneWidget);
+    expect((await sos.emergencyContacts()).map((c) => c.phone), ['6281333334444']);
+    await tester.tap(find.byTooltip('Tutup'));
+    await pumpFrames(tester, 4);
+
+    // SOS membawa kontak darurat; pengaduan tidak.
+    await tester.tap(find.byKey(const ValueKey('siagasos-fab')));
+    await pumpFrames(tester, 8);
+    await tester.tap(find.text('EWS Alert'));
+    await pumpFrames(tester, 8);
+    final post = s.requests.firstWhere((q) => q.url.path == '/v1/sdk/reports');
+    expect((jsonDecode(post.body) as Map)['emergency_contacts'], [
+      {'name': 'Istri', 'phone': '6281333334444'}
+    ]);
+    await sos.complain(category: 'parkir_liar', message: 'Parkir liar di depan toko');
+    final complaint = s.requests.lastWhere((q) => q.url.path == '/v1/sdk/reports');
+    expect((jsonDecode(complaint.body) as Map).containsKey('emergency_contacts'), isFalse);
+
+    sos.dispose();
+    await tester.pumpWidget(const SizedBox());
+  });
 }
 
 class _FakeSiren implements SosSiren {

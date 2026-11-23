@@ -68,7 +68,7 @@ Halaman: registrasi 3 langkah, verifikasi email, status verifikasi + unggah doku
 | Method | Path | |
 |---|---|---|
 | GET | `/v1/sdk/config` | kategori SOS & pengaduan (`complaint_categories`), teks tombol, durasi tahan, teks penerima |
-| POST | `/v1/sdk/reports` | buat laporan (wajib `Idempotency-Key`); `kind: 'pengaduan'` = laporan non-darurat (uraian wajib, tanpa alarm & lokasi live) |
+| POST | `/v1/sdk/reports` | buat laporan (wajib `Idempotency-Key`); `kind: 'pengaduan'` = laporan non-darurat (uraian wajib, tanpa alarm & lokasi live); `emergency_contacts` (maks. 3 `{name, phone}`) = kontak darurat pribadi yang ikut dikabari WhatsApp saat SOS |
 | GET | `/v1/sdk/reports/:id` | status untuk pengguna |
 | POST | `/v1/sdk/reports/:id/locations` | live location; balasan `accepted:false` = berhenti |
 | POST | `/v1/sdk/reports/:id/cancel` | batal, hanya selama `open` |
@@ -82,7 +82,7 @@ Halaman: registrasi 3 langkah, verifikasi email, status verifikasi + unggah doku
 ### Portal
 - Auth: `POST /portal/auth/{register,verify-email,resend-verification,login,accept-invite}`, `GET /portal/me`
 - Onboarding: `GET /portal/onboarding/status`, `POST /portal/onboarding/documents` (multipart `doc_type` + `file`), `POST /portal/onboarding/submit`
-- App & kunci: `/portal/apps` (CRUD), `/portal/apps/:id/keys` (buat, `/:keyId/rotate`, `/:keyId/revoke`), `/portal/apps/:id/sources`, `/portal/apps/:id/webhooks`
+- App & kunci: `/portal/apps` (CRUD), `/portal/apps/:id/keys` (buat, `/:keyId/rotate`, `/:keyId/revoke`), `/portal/apps/:id/sources`, `/portal/apps/:id/recipients` (Penerima SOS WhatsApp: GET/POST, `PATCH|DELETE /:recipientId`; `source_id` null = semua source), `/portal/apps/:id/webhooks`
 - Laporan: `GET /portal/reports` (+ `media_count`), `GET|PATCH /portal/reports/:id` (+ `media[]` dengan URL baca 15 menit), `POST /portal/reports/:id/media` + `/:mediaId/complete` (lampiran petugas), `GET /portal/reports/export.csv`, `GET /portal/reports/stream` (SSE, `?access_token=`)
 - Tim: `GET /portal/team`, `POST /portal/team/invites`, `PATCH /portal/team/:userId`
 

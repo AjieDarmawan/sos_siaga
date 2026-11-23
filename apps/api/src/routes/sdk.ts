@@ -7,6 +7,7 @@ import { enforce, hit } from '../lib/rateLimit.js';
 import { publishableKeyAuth } from '../middleware/keyAuth.js';
 import { changeReport, loadReport, onReportCreated, publicReport } from '../lib/reports.js';
 import { publish } from '../lib/realtime.js';
+import { dispatchSosWhatsApp } from '../lib/sosRecipients.js';
 import { config } from '../config.js';
 import { completeMediaUpload, createMediaSchema, createMediaUpload } from '../lib/media.js';
 
@@ -80,13 +81,14 @@ sdkRouter.post('/reports', async (req, res) => {
 
     const ins = await c.query(
       `INSERT INTO reports (app_id, account_id, source_id, mode, category, reporter_ref, reporter_name, reporter_phone,
-         message, lat, lng, accuracy_m, device, metadata, ip, idempotency_key, client_created_at, kind)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)
+         message, lat, lng, accuracy_m, device, metadata, ip, idempotency_key, client_created_at, kind, emergency_contacts)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)
        ON CONFLICT (app_id, idempotency_key) DO NOTHING RETURNING *`,
       [k.appId, k.accountId, sourceId, k.mode, body.category, body.reporter?.ref ?? null, body.reporter?.name ?? null,
         body.reporter?.phone ?? null, body.message ?? null, body.location?.lat ?? null, body.location?.lng ?? null,
         body.location?.accuracy_m ?? null, body.device ? JSON.stringify(body.device) : null,
-        body.metadata ? JSON.stringify(body.metadata) : null, req.ip ?? null, idem, body.client_created_at ?? null, body.kind],
+        body.metadata ? JSON.stringify(body.metadata) : null, req.ip ?? null, idem, body.client_created_at ?? null, body.kind,
+        body.kind === 'sos' && body.emergency_contacts?.length ? JSON.stringify(body.emergency_contacts) : null],
     );
     if (!ins.rows[0]) {
       // balapan dua retry bersamaan
@@ -107,6 +109,8 @@ sdkRouter.post('/reports', async (req, res) => {
   });
 
   res.status(result.replay ? 200 : 201).set('Idempotent-Replayed', String(result.replay)).json(publicReport(result.report));
+  // Setelah commit & respons: WA ke Penerima SOS + kontak darurat. Tidak ditunggu, tidak memblokir jalur SOS.
+  if (!result.replay) void dispatchSosWhatsApp(result.report, k.appName);
 });
 
 sdkRouter.get('/reports/:id', async (req, res) => {
