@@ -80,7 +80,7 @@ Legenda: ✅ selesai & teruji · 🟡 sebagian · ⬜ belum
 - ✅ `SOSFloatingButton` Flutter: tombol kecil melayang (pasang di `MaterialApp.builder`), geser + tempel tepi + posisi diingat, area kosong tembus sentuhan, menu tahan-kirim / Telepon 110 (`fallback_phone`) / 112, panel status + batal + Foto/Video/Suara lewat callback `onCapture` (SDK tetap tanpa plugin kamera). 1 widget test
 - ✅ Laporan pengaduan: `reports.kind` (`sos`|`pengaduan`, migrasi 003), `complaint_categories` di config, Flutter `complain()` + menu ke-4 di `SOSFloatingButton` (gaya tombol gradien tata-warga). Portal: badge Pengaduan tanpa alarm. Polmas: tampil sebagai jenis pengaduan
 - ✅ Flutter `SOSFloatingButton` gaya tata-warga + menu **Riwayat laporan** (`SiagaSOS.history()`, riwayat lokal per pengguna)
-- ⬜ `SOSFloatingButton` Android native & iOS (termasuk menu pengaduan). Prioritas berikutnya
+- ✅ `SOSFloatingButton` Android native (sekali ketuk kirim, diuji di HP Redmi Android 15). ⬜ iOS
 - ⬜ React Native, publish pub.dev / Maven / SPM, contoh app mobile + uji emulator
 
 ### Frontend
@@ -279,3 +279,4 @@ pnpm -r typecheck
 - Teruji: **17/17 test JVM** (+8 `FeaturesTest`), AAR release ±216 KB (dulu ±73 KB, UI tombol melayang).
 - **Belum diuji visual**: emulator `Pixel_7_API_35` gagal start ("No initial system image" untuk image ps16k). `adb install` tanpa `-s` masuk ke HP fisik yang tersambung USB (Redmi 24117RN76O) — app sample terpasang di sana; ke depan selalu pakai `adb -s <serial>`.
 
+- Uji di HP (adb reverse): menu, keterangan status, titik SOS aktif tampil benar; SOS test dari HP masuk API (platform android, Android 15). Atas permintaan user, default `Options.holdSeconds = 0` (sekali ketuk seperti tata-warga). Flutter masih default ikut portal (3 dtk) kecuali diberi `holdSeconds: 0`.

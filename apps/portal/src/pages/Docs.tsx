@@ -333,7 +333,7 @@ await sos.attach(r.localId, bytes, contentType: 'image/jpeg');`}</Code>
   builder: (context, child) => SOSFloatingButton(
     client: sos,
     category: 'kriminal',
-    holdSeconds: 0,                                 // sekali ketuk (gaya EWS); null = tahan N detik dari portal
+    holdSeconds: 0,                                 // default: sekali ketuk (gaya EWS); 3 = tahan 3 dtk; null = ikut portal
     sosLabel: 'EWS Alert',
     siren: mySiren,                                 // opsional: SosSiren dari app (audioplayers)
     onCall: (phone) => launchUrl(Uri(scheme: 'tel', path: phone)),
@@ -359,7 +359,7 @@ await sos.attach(r.localId, bytes, contentType: 'image/jpeg');`}</Code>
               ['onCall', '(phone) → void', 'Menelepon nomor darurat. Kosong = tombol telepon disembunyikan.'],
               ['onCapture', '(context, kind) → CapturedMedia?', 'Kamera/mikrofon app Anda: video TKP setelah SOS, foto pengaduan. Kosong = tanpa lampiran.'],
               ['onOpenUrl', '(url) → void', 'Membuka peta lokasi dan lampiran dari detail riwayat (mis. url_launcher). Kosong = tombol Buka peta disembunyikan.'],
-              ['holdSeconds', 'int?', '0 = sekali ketuk; null = ikut "tahan N detik" di Pengaturan app.'],
+              ['holdSeconds', 'int?', 'Default 0 = sekali ketuk (gaya EWS). N = tahan N detik; null = ikut "tahan N detik" di Pengaturan app. Sama di Android (Options.holdSeconds).'],
               ['sosLabel / sosColors / callLabel', 'String / List<Color> / String', 'Teks & warna tombol kirim SOS, awalan tombol telepon.', "'Kirim SOS' / merah / 'Telepon'"],
               ['siren', 'SosSiren?', 'Sirene di HP pelapor; tombol bulat berubah jadi SENYAP selama berbunyi.'],
               ['tkpPrompt / tkpSeconds', 'bool / int', 'Ajakan rekam TKP setelah SOS terkirim dan batas durasinya.', 'true / 5'],

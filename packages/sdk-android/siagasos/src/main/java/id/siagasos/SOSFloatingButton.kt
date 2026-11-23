@@ -68,7 +68,7 @@ interface SosSiren {
 /**
  * Tombol SOS kecil yang melayang di atas semua Activity (padanan `SOSFloatingButton` Flutter / `DraggableSosMenu` tata-warga).
  *
- * Ketuk → **Kirim SOS** (tahan N detik, sekali ketuk bila `holdSeconds = 0`), **Telepon 110**, **Telepon 112**, dan
+ * Ketuk → **Kirim SOS** (sekali ketuk; opsional tahan N detik lewat [Options.holdSeconds]), **Telepon 110**, **Telepon 112**, dan
  * **Laporan** → Pengaduan / Riwayat laporan / Nomor darurat. Setelah SOS terkirim: sirene (opsional) dan ajakan
  * "Rekam kondisi TKP?" → [Options.onCapture] video → catatan → dikirim ke petugas.
  *
@@ -86,8 +86,11 @@ class SOSFloatingButton private constructor(private val app: Application, val cl
     class Options {
         var category: String = "general"
         var message: String? = null
-        /** Override durasi tahan; null = ikut portal. 0 = sekali ketuk langsung kirim. */
-        var holdSeconds: Int? = null
+        /**
+         * Default 0 = sekali ketuk langsung kirim (seperti EWS tata-warga). Isi N > 0 untuk tahan N detik
+         * (mencegah salah tekan), atau null untuk ikut `hold_seconds` dari portal.
+         */
+        var holdSeconds: Int? = 0
         /** Menelepon nomor darurat. Default: buka dialer (`ACTION_DIAL`, tanpa izin CALL_PHONE). null = sembunyikan tombol telepon. */
         var onCall: ((Activity, String) -> Unit)? = { a, phone -> runCatching { a.startActivity(Intent(Intent.ACTION_DIAL, Uri.parse("tel:$phone"))) } }
         /** Nomor kedua di menu. Nomor pertama memakai `fallback_phone` portal (default 110). */

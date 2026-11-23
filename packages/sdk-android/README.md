@@ -46,6 +46,32 @@ sos.attach(current.localId, File(audioPath).readBytes(), "audio/mp4", durationS 
 
 - Belum ada: tombol melayang dan menu **Laporan pengaduan** (sudah ada di Flutter, lihat `packages/sdk-flutter`).
 
+## Tombol SOS melayang (`SOSFloatingButton`)
+
+Pasang sekali di `Application.onCreate`, tombol tampil di semua Activity (gaya EWS tata-warga):
+
+```kotlin
+class App : Application() {
+    override fun onCreate() {
+        super.onCreate()
+        val sos = SiagaSOS.create(this, apiKey = "pk_live_...", user = SosUser(ref = uid, name = nama),
+            sourceKey = "kios-12", sourceLabel = "Kios 12")
+        SOSFloatingButton.install(this, sos, SOSFloatingButton.Options().apply {
+            onCapture = MediaCapture { activity, kind, done -> /* buka kamera, lalu */ done(CapturedMedia(bytes, "video/mp4", 5.0)) }
+            siren = mySiren          // opsional, implementasi SosSiren (suara diputar app)
+            hideIn = { it is LoginActivity }
+        })
+    }
+}
+```
+
+- Ketuk tombol bulat → **Kirim SOS** (sekali ketuk; `holdSeconds = 3` untuk tahan dulu), **Telepon 110** (`fallback_phone` portal) & **112** (default buka dialer), **Laporan** → Pengaduan / Riwayat laporan (+ detail, batal salah tekan) / Nomor darurat.
+- Setelah SOS terkirim: sirene (tombol jadi **SENYAP**) dan ajakan **Rekam kondisi TKP?** → `onCapture` video → catatan → dikirim ke petugas.
+- Bisa digeser, menempel ke tepi, posisi diingat; area kosong tidak menangkap sentuhan. Tanpa AndroidX, mengikuti mode gelap.
+- API di baliknya juga bisa dipakai langsung: `complain()`, `history()`, `reportDetail()`, `addNote()`, `setEmergencyContacts()`.
+
+Contoh app: modul `sample` (bundle `id.demosiaga.kurir`). Isi `local.properties`: `siagasos.key=pk_test_...` dan `siagasos.url=http://10.0.2.2:4000` (emulator) atau `http://127.0.0.1:4000` + `adb reverse tcp:4000 tcp:4000` (HP via USB), lalu `./gradlew :sample:installDebug`.
+
 ## Test
 
 ```bash

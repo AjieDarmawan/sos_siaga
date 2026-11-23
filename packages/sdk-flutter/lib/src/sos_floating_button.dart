@@ -31,7 +31,7 @@ abstract class SosSiren {
 /// Tombol SOS kecil yang melayang di atas semua halaman.
 ///
 /// Ketuk → 4 aksi bertumpuk (gaya `DraggableSosMenu` tata-warga): **Kirim SOS** (tahan N detik, atau sekali
-/// ketuk bila `holdSeconds: 0`), **Telepon 110**, **Telepon 112**, dan **Laporan** → sub-menu Pengaduan
+/// ketuk; `holdSeconds: N` untuk tahan N detik), **Telepon 110**, **Telepon 112**, dan **Laporan** → sub-menu Pengaduan
 /// ([SiagaSOS.complain]) / Riwayat laporan ([SiagaSOS.history]).
 ///
 /// Setelah SOS terkirim: [siren] berbunyi (tombol bulat jadi "SENYAP"), lalu popup "Rekam kondisi TKP?" →
@@ -58,7 +58,7 @@ class SOSFloatingButton extends StatefulWidget {
     required this.child,
     this.category = 'general',
     this.message,
-    this.holdSeconds,
+    this.holdSeconds = 0,
     this.onCall,
     this.secondaryPhone = '112',
     this.onCapture,
@@ -87,7 +87,8 @@ class SOSFloatingButton extends StatefulWidget {
   final String category;
   final String? message;
 
-  /// Override durasi tahan; null = ikut pengaturan app di portal.
+  /// Default 0 = sekali ketuk langsung kirim (seperti EWS tata-warga). N > 0 = tahan N detik (cegah salah tekan);
+  /// null = ikut `hold_seconds` dari portal.
   final int? holdSeconds;
 
   /// Menelepon nomor darurat (mis. url_launcher `tel:`). Null = tombol telepon disembunyikan.
