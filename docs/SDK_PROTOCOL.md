@@ -29,10 +29,9 @@ Base URL default: `https://api.siagasos.id` (bisa dioverride untuk staging / lok
    2. `PUT upload.url` dengan **persis** `upload.headers` dan body file (ukuran harus sama dengan `size_bytes`). Ini langsung ke object storage, bukan ke API; jangan kirim `X-SOS-Key`.
    3. `POST /v1/sdk/reports/:id/media/:mediaId/complete` → `MediaPublic { id, kind, content_type, size_bytes, status:'ready' }`.
    Bila laporan masih di antrian, tunggu sampai terkirim (event `sent`) dulu.
-8. **Catatan pelapor**: `POST /v1/sdk/reports/:id/notes` `{note}` (1–1000 karakter) → `201` + status publik. Dipakai setelah rekam TKP; tampil di timeline dashboard. 409 `report_closed` bila status sudah akhir, 422 `invalid_note`.
    Batas: foto 10 MB, video 60 MB, suara 15 MB, 10 lampiran per laporan. MIME: lihat `apps/api/src/lib/media.ts`.
-
-8. **Pengaduan** (non-darurat, menu "Laporan pengaduan" di tombol melayang): sama dengan trigger, body `kind: 'pengaduan'`,
+8. **Catatan pelapor**: `POST /v1/sdk/reports/:id/notes` `{note}` (1–1000 karakter) → `201` + status publik. Dipakai setelah rekam TKP; tampil di timeline dashboard. 409 `report_closed` bila status sudah akhir, 422 `invalid_note`.
+9. **Pengaduan** (non-darurat, menu "Laporan pengaduan" di tombol melayang): sama dengan trigger, body `kind: 'pengaduan'`,
    `category` dari `complaint_categories`, `message` **wajib** (≥ 5 karakter, 422 bila kurang). Server tidak mengirim email darurat
    ke responder, kuota per pengguna terpisah dari SOS (5/jam), dan `/locations` selalu `accepted:false` (jangan kirim lokasi live).
    SDK boleh polling lebih jarang (Flutter: 8× `pollInterval`). Dashboard tenant & Polmas menampilkannya sebagai pengaduan tanpa alarm.
@@ -40,7 +39,7 @@ Base URL default: `https://api.siagasos.id` (bisa dioverride untuk staging / lok
 ## Error
 
 Body selalu `{ "error": { "code", "message", "details"? } }`. SDK membungkusnya menjadi `SiagaSOSError(status, code, message)`.
-Kode penting: `invalid_api_key`, `wrong_key_type`, `origin_not_allowed`, `bundle_not_allowed`, `origin_required`, `account_not_approved`, `rate_limited`, `reporter_rate_limited`, `test_quota_exceeded`, `cannot_cancel`, `unknown_source`, `media_too_large`, `unsupported_media_type`, `upload_missing`, `report_closed`.
+Kode penting: `invalid_api_key`, `wrong_key_type`, `origin_not_allowed`, `bundle_not_allowed`, `origin_required`, `account_not_approved`, `rate_limited`, `reporter_rate_limited`, `test_quota_exceeded`, `cannot_cancel`, `unknown_source`, `media_too_large`, `unsupported_media_type`, `upload_missing`, `report_closed`, `invalid_note`.
 
 ## API publik minimal per SDK
 
