@@ -36,6 +36,23 @@ class FakeServer {
       status = 'cancelled';
       return http.Response(jsonEncode({'id': 'rep-1', 'status': 'cancelled', 'status_message': null}), 200);
     }
+    if (p == '/v1/sdk/reports/rep-1/detail') {
+      return http.Response(jsonEncode({
+        'id': 'rep-1', 'kind': 'pengaduan', 'status': status, 'mode': 'test', 'category': 'parkir_liar',
+        'created_at': '2026-11-23T08:00:00Z', 'acknowledged_at': '2026-11-23T08:05:00Z', 'resolved_at': '2026-11-23T09:00:00Z',
+        'status_message': 'Petugas sudah menertibkan parkir', 'message': 'Parkir liar menutup gang setiap malam',
+        'location': {'lat': -6.2, 'lng': 106.8, 'accuracy_m': 10},
+        'timeline': [
+          {'type': 'created', 'actor': 'Anda', 'to_status': 'open', 'note': null, 'created_at': '2026-11-23T08:00:00Z'},
+          {'type': 'media', 'actor': 'Anda', 'to_status': null, 'note': 'Foto ditambahkan', 'created_at': '2026-11-23T08:01:00Z'},
+          {'type': 'status_changed', 'actor': 'Bripka Andi', 'to_status': 'acknowledged', 'note': 'Menuju lokasi', 'created_at': '2026-11-23T08:05:00Z'},
+          {'type': 'status_changed', 'actor': 'Bripka Andi', 'to_status': 'resolved', 'note': 'Sudah ditertibkan', 'created_at': '2026-11-23T09:00:00Z'},
+        ],
+        'media': [
+          {'id': 'm-1', 'kind': 'video', 'content_type': 'video/mp4', 'duration_s': 5, 'uploaded_by': 'reporter', 'created_at': '2026-11-23T08:01:00Z', 'url': 'https://storage.test/v.mp4'},
+        ],
+      }), 200);
+    }
     if (p == '/v1/sdk/reports/rep-1/notes') return http.Response(jsonEncode({'id': 'rep-1', 'status': status, 'status_message': null}), 201);
     if (req.url.host == 'storage.test') return http.Response('', 200);
     if (p == '/v1/sdk/reports/rep-1/media/m-1/complete') {

@@ -113,12 +113,14 @@ void main() {
     final s = FakeServer();
     final sos = make(s);
     ActiveReport? complaint;
+    final opened = <String>[];
     await tester.pumpWidget(MaterialApp(
       home: const SizedBox(),
       builder: (context, child) => SOSFloatingButton(
         client: sos,
         onCall: (_) {},
         onComplaintSent: (r) => complaint = r,
+        onOpenUrl: opened.add,
         onCapture: (context, kind) async => CapturedMedia(bytes: Uint8List.fromList([1, 2, 3]), contentType: 'image/jpeg'),
         child: const Scaffold(body: SizedBox()),
       ),
@@ -198,6 +200,33 @@ void main() {
     expect(find.text('Parkir liar'), findsOneWidget);
     expect(find.text('Parkir liar menutup gang setiap malam'), findsOneWidget);
     expect(find.text('Selesai'), findsOneWidget);
+
+    // Ketuk laporan → detail: status, uraian, lokasi (Buka peta), lampiran, riwayat status + catatan petugas.
+    await tester.tap(find.byKey(const ValueKey('siagasos-history-item-rep-1')));
+    for (var i = 0; i < 20; i++) {
+      await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 10)));
+      await tester.pump(const Duration(milliseconds: 20));
+    }
+    expect(find.text('Detail laporan'), findsOneWidget);
+    expect(find.text('Petugas sudah menertibkan parkir'), findsOneWidget);
+    expect(find.text('Parkir liar menutup gang setiap malam'), findsOneWidget);
+    expect(find.text('Lampiran (1)'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('siagasos-detail-map')));
+    expect(opened, ['https://www.google.com/maps?q=-6.2,106.8']);
+    await tester.tap(find.byKey(const ValueKey('siagasos-media-m-1')));
+    expect(opened.last, 'https://storage.test/v.mp4');
+    final detailScroll = find.descendant(of: find.byKey(const ValueKey('siagasos-history-sheet')), matching: find.byType(Scrollable)).first;
+    await tester.scrollUntilVisible(find.text('Sudah ditertibkan'), 120, scrollable: detailScroll);
+    expect(find.text('Riwayat status'), findsOneWidget);
+    expect(find.text('Diterima petugas'), findsOneWidget);
+    expect(find.textContaining('Bripka Andi'), findsNWidgets(2));
+    await tester.pump(const Duration(milliseconds: 50));
+    await tester.tap(find.byKey(const ValueKey('siagasos-detail-back')));
+    for (var i = 0; i < 10; i++) {
+      await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 10)));
+      await tester.pump(const Duration(milliseconds: 20));
+    }
+    expect(find.text('Riwayat laporan'), findsOneWidget);
 
     sos.dispose();
     await tester.pumpWidget(const SizedBox());

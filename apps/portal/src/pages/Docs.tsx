@@ -329,31 +329,41 @@ await sos.attach(r.localId, bytes, contentType: 'image/jpeg');`}</Code>
             <h3 id="floating">Tombol melayang (Flutter)</h3>
             <p>Pasang sekali di root app: tombol SOS kecil tampil di semua halaman, bisa digeser, menempel ke tepi, dan posisinya diingat. Area di luar tombol tidak menangkap sentuhan.</p>
             <Code lang="dart">{`MaterialApp(
+  navigatorKey: navigatorKey,                       // kamera TKP dibuka dari atas Navigator
   builder: (context, child) => SOSFloatingButton(
     client: sos,
     category: 'kriminal',
-    onCall: (phone) => launchUrl(Uri(scheme: 'tel', path: phone)),   // url_launcher
-    onCapture: (context, kind) async {                                 // opsional: kamera / mikrofon
+    holdSeconds: 0,                                 // sekali ketuk (gaya EWS); null = tahan N detik dari portal
+    sosLabel: 'EWS Alert',
+    siren: mySiren,                                 // opsional: SosSiren dari app (audioplayers)
+    onCall: (phone) => launchUrl(Uri(scheme: 'tel', path: phone)),
+    onOpenUrl: (url) => launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication),
+    onCapture: (context, kind) async {              // video TKP / foto pengaduan dari kamera app Anda
       final x = await ImagePicker().pickImage(source: ImageSource.camera, imageQuality: 70);
       return x == null ? null : CapturedMedia(bytes: await x.readAsBytes(), contentType: 'image/jpeg');
     },
-    onComplaintSent: (r) => analytics.log('pengaduan', r.id),
     child: child!,
   ),
   home: const HomePage(),
 )`}</Code>
-            <p>Ketuk tombol → 4 aksi bertumpuk:</p>
+            <p>Ketuk tombol → 4 aksi bertumpuk, lebarnya mengikuti label terpanjang:</p>
             <Props rows={[
-              ['Kirim SOS', 'tahan N detik', 'Mengirim laporan darurat (durasi tahan dari Pengaturan app). Setelah terkirim: status realtime, batal (salah tekan), Foto / Video / Suara.'],
+              ['Kirim SOS / EWS Alert', 'ketuk atau tahan', 'Mengirim laporan darurat. Setelah terkirim: sirene (bila ada), lalu ajakan "Rekam kondisi TKP?" → video + catatan ke petugas.'],
               ['Telepon 110', 'onCall', 'Nomor dari "Nomor cadangan" di Pengaturan app.', '110'],
               ['Telepon 112', 'onCall', 'Nomor kedua, atur dengan secondaryPhone.', '112'],
-              ['Laporan pengaduan', 'form', 'Laporan non-darurat: jenis, uraian, foto opsional. Lihat Laporan pengaduan.'],
+              ['Laporan', 'kartu sub-menu', 'Pengaduan (form non-darurat), Riwayat laporan, dan Nomor darurat.'],
             ]} />
+            <p><b>Riwayat laporan</b> menampilkan SOS & pengaduan yang pernah dikirim dari perangkat ini. Ketuk satu laporan untuk melihat <b>detail</b>: status & pesan petugas, waktu dikirim/diterima/selesai, uraian, lokasi (tombol <i>Buka peta</i>), lampiran foto/video, dan riwayat status lengkap dengan catatan petugas. SOS yang belum direspons bisa dibatalkan dari sini. Data diambil dari <code>GET /v1/sdk/reports/:id/detail</code>; nomor HP pelapor dan penerima tidak pernah dikirim ke perangkat.</p>
             <Props rows={[
               ['client', 'SiagaSOS', 'Instance klien.'],
               ['onCall', '(phone) → void', 'Menelepon nomor darurat. Kosong = tombol telepon disembunyikan.'],
-              ['onCapture', '(context, kind) → CapturedMedia?', 'Mengambil foto/video/suara dari app Anda. Kosong = tombol lampiran disembunyikan.'],
-              ['complaint', 'bool', 'Tampilkan menu Laporan pengaduan.', 'true'],
+              ['onCapture', '(context, kind) → CapturedMedia?', 'Kamera/mikrofon app Anda: video TKP setelah SOS, foto pengaduan. Kosong = tanpa lampiran.'],
+              ['onOpenUrl', '(url) → void', 'Membuka peta lokasi dan lampiran dari detail riwayat (mis. url_launcher). Kosong = tombol Buka peta disembunyikan.'],
+              ['holdSeconds', 'int?', '0 = sekali ketuk; null = ikut "tahan N detik" di Pengaturan app.'],
+              ['sosLabel / sosColors / callLabel', 'String / List<Color> / String', 'Teks & warna tombol kirim SOS, awalan tombol telepon.', "'Kirim SOS' / merah / 'Telepon'"],
+              ['siren', 'SosSiren?', 'Sirene di HP pelapor; tombol bulat berubah jadi SENYAP selama berbunyi.'],
+              ['tkpPrompt / tkpSeconds', 'bool / int', 'Ajakan rekam TKP setelah SOS terkirim dan batas durasinya.', 'true / 5'],
+              ['complaint / history / emergencyContacts', 'bool', 'Tampilkan Pengaduan / Riwayat laporan / Nomor darurat di sub-menu Laporan.', 'true'],
               ['onSent / onComplaintSent', '(ActiveReport) → void', 'Dipanggil setelah SOS / pengaduan diterima server.'],
               ['secondaryPhone', 'String?', 'Nomor kedua di menu.', "'112'"],
               ['visible', 'bool', 'false = sembunyikan (mis. di halaman login) tanpa melepas widget.', 'true'],

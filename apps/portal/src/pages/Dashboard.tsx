@@ -410,7 +410,7 @@ function DetailPanel({ report: r, detail, onClose, onChanged }: { report: Report
                 <li key={e.id}>
                   <span>
                     <strong>{e.to_status ? `${EVENT_LABEL[e.type] ?? e.type}: ${REPORT_STATUS[e.to_status as ReportStatus]?.label ?? e.to_status}` : EVENT_LABEL[e.type] ?? e.type}</strong>
-                    <span className="muted"> · {fmtTime(e.created_at)} · {e.actor_name ?? (e.actor_kind === 'reporter' ? 'Pelapor' : e.actor_kind === 'server' ? 'Server klien' : 'Sistem')}</span>
+                    <span className="muted"> · {fmtTime(e.created_at)} · {e.actor_name ?? (e.actor_kind === 'reporter' ? 'Pelapor' : e.actor_kind === 'responder' ? 'Satpam (app)' : e.actor_kind === 'server' ? 'Server klien' : 'Sistem')}</span>
                     {e.note && <span style={{ display: 'block', color: 'var(--text-2)' }}>{e.note}</span>}
                   </span>
                 </li>

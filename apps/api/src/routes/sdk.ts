@@ -9,19 +9,25 @@ import { changeReport, loadReport, onReportCreated, publicReport } from '../lib/
 import { publish } from '../lib/realtime.js';
 import { dispatchSosWhatsApp } from '../lib/sosRecipients.js';
 import { config } from '../config.js';
+import { dispatchSosPush } from '../lib/responders.js';
+import { contactsRouter, responderRouter } from './responder.js';
 import { completeMediaUpload, createMediaSchema, createMediaUpload, listReadyMedia } from '../lib/media.js';
 
 /** /v1/sdk — dipanggil @siagasos/js dan SDK native dengan publishable key. */
 export const sdkRouter = Router();
 
 // Preflight boleh dari mana saja; Origin sebenarnya dicek di publishableKeyAuth terhadap allowed_origins.
-sdkRouter.use(cors({ origin: true, credentials: false, allowedHeaders: ['Content-Type', 'X-SOS-Key', 'X-SOS-Bundle', 'Idempotency-Key'], maxAge: 600 }));
+sdkRouter.use(cors({ origin: true, credentials: false, allowedHeaders: ['Content-Type', 'X-SOS-Key', 'X-SOS-Bundle', 'X-SOS-Responder', 'Idempotency-Key'], maxAge: 600 }));
 sdkRouter.use(publishableKeyAuth);
 sdkRouter.use(async (req, _res, next) => {
   await enforce(`key:${req.key!.keyId}`, 120, 60);
   await enforce(`ip:${req.ip}`, 60, 60);
   next();
 });
+
+// Nomor Darurat pelapor (sinkron dari perangkat) + login & kerja satpam (OTP WA, push FCM).
+sdkRouter.use('/contacts', contactsRouter);
+sdkRouter.use('/responder', responderRouter);
 
 sdkRouter.get('/config', (req, res) => {
   const k = req.key!;
@@ -110,7 +116,11 @@ sdkRouter.post('/reports', async (req, res) => {
 
   res.status(result.replay ? 200 : 201).set('Idempotent-Replayed', String(result.replay)).json(publicReport(result.report));
   // Setelah commit & respons: WA ke Penerima SOS + kontak darurat. Tidak ditunggu, tidak memblokir jalur SOS.
-  if (!result.replay) void dispatchSosWhatsApp(result.report, k.appName);
+  if (!result.replay) {
+    void dispatchSosWhatsApp(result.report, k.appName);
+    // Push alarm + sirene ke HP satpam yang login dengan nomor di kontak darurat laporan ini.
+    void dispatchSosPush(result.report, k.appName);
+  }
 });
 
 sdkRouter.get('/reports/:id', async (req, res) => {
@@ -145,7 +155,7 @@ sdkRouter.get('/reports/:id/detail', async (req, res) => {
       }
       timeline.push({
         type: e.type,
-        actor: e.actor_kind === 'reporter' ? 'Anda' : e.actor_kind === 'user' ? (e.actor_name ?? 'Petugas') : e.actor_kind === 'server' ? 'Petugas' : 'Sistem',
+        actor: e.actor_kind === 'reporter' ? 'Anda' : e.actor_kind === 'responder' ? 'Satpam' : e.actor_kind === 'user' ? (e.actor_name ?? 'Petugas') : e.actor_kind === 'server' ? 'Petugas' : 'Sistem',
         to_status: e.to_status,
         note: e.note,
         created_at: e.created_at,

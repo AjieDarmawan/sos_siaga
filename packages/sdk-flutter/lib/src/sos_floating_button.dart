@@ -79,6 +79,7 @@ class SOSFloatingButton extends StatefulWidget {
     this.tkpPrompt = true,
     this.tkpSeconds = 5,
     this.emergencyContacts = true,
+    this.onOpenUrl,
   });
 
   final SiagaSOS client;
@@ -138,6 +139,9 @@ class SOSFloatingButton extends StatefulWidget {
   final int tkpSeconds;
   /// Menu "Nomor darurat" (Laporan → Nomor darurat): maks. 3 nomor WhatsApp pribadi yang ikut dikabari saat SOS.
   final bool emergencyContacts;
+  /// Membuka tautan di luar app (peta lokasi, foto/video lampiran) dari detail riwayat, mis. url_launcher.
+  /// Null = tombol "Buka peta" disembunyikan dan lampiran hanya ditampilkan (foto) tanpa bisa dibuka.
+  final void Function(String url)? onOpenUrl;
 
   @override
   State<SOSFloatingButton> createState() => _SOSFloatingButtonState();
@@ -283,7 +287,7 @@ class _SOSFloatingButtonState extends State<SOSFloatingButton> with SingleTicker
         onError: widget.onError,
       ));
 
-  void _openHistory() => _openSheet(() => _HistorySheet(client: widget.client, onClose: _closeSheet));
+  void _openHistory() => _openSheet(() => _HistorySheet(client: widget.client, onClose: _closeSheet, onOpenUrl: widget.onOpenUrl));
 
   void _openContacts() => _openSheet(() => _ContactsSheet(client: widget.client, onClose: _closeSheet));
 
@@ -1141,9 +1145,10 @@ class _SheetFrame extends StatelessWidget {
 
 /// "Riwayat laporan": SOS & pengaduan yang pernah dikirim dari perangkat ini, dengan status terbaru dari server.
 class _HistorySheet extends StatefulWidget {
-  const _HistorySheet({required this.client, required this.onClose});
+  const _HistorySheet({required this.client, required this.onClose, this.onOpenUrl});
   final SiagaSOS client;
   final VoidCallback onClose;
+  final void Function(String url)? onOpenUrl;
 
   @override
   State<_HistorySheet> createState() => _HistorySheetState();
@@ -1154,6 +1159,8 @@ class _HistorySheetState extends State<_HistorySheet> {
   bool _loading = true;
   String? _cancelling; // id laporan yang sedang dibatalkan
   String? _error;
+  /// Laporan yang sedang dibuka detailnya (null = daftar).
+  ReportRecord? _open;
 
   @override
   void initState() {
@@ -1197,6 +1204,25 @@ class _HistorySheetState extends State<_HistorySheet> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final items = _items;
+    final open = _open;
+    if (open != null) {
+      return _SheetFrame(
+        sheetKey: const ValueKey('siagasos-history-sheet'),
+        onDismiss: widget.onClose,
+        scroll: false,
+        child: _ReportDetailView(
+          key: ValueKey(open.id),
+          client: widget.client,
+          record: open,
+          onBack: () {
+            setState(() => _open = null);
+            _reload();
+          },
+          onClose: widget.onClose,
+          onOpenUrl: widget.onOpenUrl,
+        ),
+      );
+    }
     return _SheetFrame(
       sheetKey: const ValueKey('siagasos-history-sheet'),
       onDismiss: widget.onClose,
@@ -1257,6 +1283,7 @@ class _HistorySheetState extends State<_HistorySheet> {
                 final cancellable = r.kind == ReportKind.sos && r.status == SosStatus.open;
                 return _HistoryTile(
                   r,
+                  onTap: () => setState(() => _open = r),
                   cancelling: _cancelling == r.id,
                   onCancel: cancellable && _cancelling == null ? () => _cancel(r) : null,
                 );
@@ -1269,8 +1296,10 @@ class _HistorySheetState extends State<_HistorySheet> {
 }
 
 class _HistoryTile extends StatelessWidget {
-  const _HistoryTile(this.r, {this.onCancel, this.cancelling = false});
+  const _HistoryTile(this.r, {this.onCancel, this.onTap, this.cancelling = false});
   final ReportRecord r;
+  /// Buka detail laporan.
+  final VoidCallback? onTap;
   /// Null = tidak bisa dibatalkan (sudah ditangani / pengaduan).
   final VoidCallback? onCancel;
   final bool cancelling;
@@ -1298,7 +1327,13 @@ class _HistoryTile extends StatelessWidget {
     final (label, color) = _status(r.status);
     final title = sos ? 'SOS darurat' : complaintCategoryLabel(r.category);
     final done = r.resolvedAt ?? r.acknowledgedAt;
-    return Container(
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        key: ValueKey('siagasos-history-item-${r.id}'),
+        borderRadius: BorderRadius.circular(14),
+        onTap: onTap,
+        child: Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(14),
@@ -1363,7 +1398,14 @@ class _HistoryTile extends StatelessWidget {
               ),
           ]),
         ),
+        if (onTap != null)
+          Padding(
+            padding: const EdgeInsets.only(left: 4, top: 8),
+            child: Icon(Icons.chevron_right_rounded, color: theme.colorScheme.outline),
+          ),
       ]),
+        ),
+      ),
     );
   }
 }
@@ -1973,6 +2015,322 @@ class _ContactsSheetState extends State<_ContactsSheet> {
         Text('Petugas keamanan & penerima SOS yang diatur pengelola tetap dikabari. Pesan berisi nama, lokasi, dan link peta.',
             textAlign: TextAlign.center, style: theme.textTheme.labelSmall?.copyWith(color: theme.colorScheme.outline)),
       ]),
+    );
+  }
+}
+
+/// Detail satu laporan di "Riwayat laporan": status, waktu, uraian, lokasi, lampiran, riwayat status.
+class _ReportDetailView extends StatefulWidget {
+  const _ReportDetailView({
+    super.key,
+    required this.client,
+    required this.record,
+    required this.onBack,
+    required this.onClose,
+    this.onOpenUrl,
+  });
+  final SiagaSOS client;
+  final ReportRecord record;
+  final VoidCallback onBack;
+  final VoidCallback onClose;
+  final void Function(String url)? onOpenUrl;
+
+  @override
+  State<_ReportDetailView> createState() => _ReportDetailViewState();
+}
+
+class _ReportDetailViewState extends State<_ReportDetailView> {
+  ReportDetail? _d;
+  String? _error;
+  bool _loading = true;
+  bool _cancelling = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    try {
+      final d = await widget.client.reportDetail(widget.record.id);
+      if (mounted) setState(() => _d = d);
+    } on SiagaSOSError catch (e) {
+      if (mounted) setState(() => _error = e.message);
+    } catch (_) {
+      if (mounted) setState(() => _error = 'Detail belum bisa dimuat. Periksa koneksi lalu coba lagi.');
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  Future<void> _cancel() async {
+    HapticFeedback.selectionClick();
+    setState(() => _cancelling = true);
+    try {
+      await widget.client.cancel(widget.record.id, reason: 'Salah tekan');
+    } on SiagaSOSError catch (e) {
+      if (mounted) setState(() => _error = e.message);
+    } catch (_) {
+      if (mounted) setState(() => _error = 'Gagal membatalkan. Periksa koneksi lalu coba lagi.');
+    }
+    if (mounted) setState(() => _cancelling = false);
+    await _load();
+  }
+
+  static String _timelineLabel(ReportTimelineEntry e) => switch (e.type) {
+        'created' => 'Laporan dikirim',
+        'status_changed' => e.toStatus == null ? 'Status diperbarui' : _HistoryTile._status(e.toStatus!).$1,
+        'cancelled' => 'Dibatalkan',
+        'note' => 'Catatan',
+        'media' => 'Lampiran',
+        'whatsapp' => 'WhatsApp',
+        _ => e.type,
+      };
+
+  static IconData _timelineIcon(ReportTimelineEntry e) => switch (e.type) {
+        'created' => Icons.send_rounded,
+        'status_changed' => switch (e.toStatus) {
+            SosStatus.resolved => Icons.check_circle_rounded,
+            SosStatus.falseAlarm => Icons.block_rounded,
+            _ => Icons.support_agent_rounded,
+          },
+        'cancelled' => Icons.cancel_rounded,
+        'note' => Icons.sticky_note_2_rounded,
+        'media' => Icons.attach_file_rounded,
+        'whatsapp' => Icons.chat_rounded,
+        _ => Icons.circle,
+      };
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final d = _d;
+    final r = widget.record;
+    final status = d?.status ?? r.status;
+    final (label, color) = _HistoryTile._status(status);
+    final sos = (d?.kind ?? r.kind) == ReportKind.sos;
+    final title = sos ? 'SOS darurat' : complaintCategoryLabel(d?.category ?? r.category);
+    final muted = theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.outline);
+    final section = theme.textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w700);
+
+    Widget info(String k, String v) => Padding(
+          padding: const EdgeInsets.only(bottom: 4),
+          child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            SizedBox(width: 92, child: Text(k, style: muted)),
+            Expanded(child: Text(v, style: theme.textTheme.bodySmall?.copyWith(fontWeight: FontWeight.w600))),
+          ]),
+        );
+
+    return Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+      _Grip(theme),
+      Row(children: [
+        IconButton(key: const ValueKey('siagasos-detail-back'), onPressed: widget.onBack, icon: const Icon(Icons.arrow_back_rounded), tooltip: 'Kembali'),
+        Expanded(child: Text('Detail laporan', style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700))),
+        _loading
+            ? const Padding(padding: EdgeInsets.all(12), child: SizedBox.square(dimension: 20, child: CircularProgressIndicator(strokeWidth: 2.2)))
+            : IconButton(onPressed: _load, icon: const Icon(Icons.refresh_rounded), tooltip: 'Muat ulang'),
+        IconButton(onPressed: widget.onClose, icon: const Icon(Icons.close_rounded), tooltip: 'Tutup'),
+      ]),
+      Flexible(
+        child: ListView(shrinkWrap: true, padding: EdgeInsets.zero, children: [
+          // Status
+          Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(color: color.withValues(alpha: 0.08), borderRadius: BorderRadius.circular(16)),
+            child: Row(children: [
+              Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(color: color.withValues(alpha: 0.15), shape: BoxShape.circle),
+                child: Icon(sos ? Icons.notifications_active_rounded : Icons.campaign_rounded, color: color),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text(title, style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w800)),
+                  const SizedBox(height: 2),
+                  Text(label, key: const ValueKey('siagasos-detail-status'), style: TextStyle(color: color, fontWeight: FontWeight.w800)),
+                  if ((d?.statusMessage ?? r.statusMessage)?.isNotEmpty == true)
+                    Text((d?.statusMessage ?? r.statusMessage)!, style: theme.textTheme.bodySmall),
+                ]),
+              ),
+            ]),
+          ),
+          const SizedBox(height: 14),
+          info('No. laporan', (r.id.length > 8 ? r.id.substring(0, 8) : r.id).toUpperCase()),
+          info('Dikirim', _HistoryTile._when(d?.createdAt ?? r.createdAt)),
+          if ((d?.acknowledgedAt ?? r.acknowledgedAt) != null) info('Diterima', _HistoryTile._when((d?.acknowledgedAt ?? r.acknowledgedAt)!)),
+          if ((d?.resolvedAt ?? r.resolvedAt) != null) info(status == SosStatus.cancelled ? 'Dibatalkan' : 'Selesai', _HistoryTile._when((d?.resolvedAt ?? r.resolvedAt)!)),
+          if (!sos) info('Jenis', complaintCategoryLabel(d?.category ?? r.category)),
+          if ((d?.message ?? r.message)?.trim().isNotEmpty == true) ...[
+            const SizedBox(height: 10),
+            Text('Uraian', style: section),
+            const SizedBox(height: 4),
+            Text((d?.message ?? r.message)!.trim(), style: theme.textTheme.bodyMedium),
+          ],
+          if (d?.location != null) ...[
+            const SizedBox(height: 14),
+            Text('Lokasi', style: section),
+            const SizedBox(height: 4),
+            Row(children: [
+              Icon(Icons.place_rounded, size: 18, color: theme.colorScheme.primary),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  '${d!.location!.lat.toStringAsFixed(5)}, ${d.location!.lng.toStringAsFixed(5)}'
+                  '${d.location!.accuracyM != null ? ' (±${d.location!.accuracyM!.round()} m)' : ''}',
+                  style: theme.textTheme.bodySmall,
+                ),
+              ),
+              if (widget.onOpenUrl != null)
+                TextButton(
+                  key: const ValueKey('siagasos-detail-map'),
+                  onPressed: () => widget.onOpenUrl!('https://www.google.com/maps?q=${d.location!.lat},${d.location!.lng}'),
+                  child: const Text('Buka peta'),
+                ),
+            ]),
+          ],
+          if (d != null && d.media.isNotEmpty) ...[
+            const SizedBox(height: 14),
+            Text('Lampiran (${d.media.length})', style: section),
+            const SizedBox(height: 8),
+            Wrap(spacing: 8, runSpacing: 8, children: [for (final m in d.media) _MediaThumb(m, onOpen: widget.onOpenUrl)]),
+          ],
+          if (d != null && d.timeline.isNotEmpty) ...[
+            const SizedBox(height: 14),
+            Text('Riwayat status', style: section),
+            const SizedBox(height: 8),
+            for (var i = 0; i < d.timeline.length; i++)
+              _TimelineRow(
+                icon: _timelineIcon(d.timeline[i]),
+                title: _timelineLabel(d.timeline[i]),
+                meta: '${d.timeline[i].actor} · ${_HistoryTile._when(d.timeline[i].createdAt)}',
+                note: d.timeline[i].type == 'created' ? null : d.timeline[i].note,
+                last: i == d.timeline.length - 1,
+                color: i == d.timeline.length - 1 ? color : theme.colorScheme.outline,
+              ),
+          ],
+          if (_error != null) ...[
+            const SizedBox(height: 10),
+            Text(_error!, style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.error)),
+          ],
+          if (sos && status == SosStatus.open) ...[
+            const SizedBox(height: 12),
+            OutlinedButton.icon(
+              key: const ValueKey('siagasos-detail-cancel'),
+              onPressed: _cancelling ? null : _cancel,
+              style: OutlinedButton.styleFrom(
+                foregroundColor: theme.colorScheme.error,
+                side: BorderSide(color: theme.colorScheme.error.withValues(alpha: 0.4)),
+                minimumSize: const Size.fromHeight(46),
+              ),
+              icon: _cancelling
+                  ? const SizedBox.square(dimension: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                  : const Icon(Icons.cancel_outlined),
+              label: const Text('Batalkan (salah tekan)'),
+            ),
+          ],
+          const SizedBox(height: 8),
+        ]),
+      ),
+    ]);
+  }
+}
+
+class _TimelineRow extends StatelessWidget {
+  const _TimelineRow({required this.icon, required this.title, required this.meta, required this.last, required this.color, this.note});
+  final IconData icon;
+  final String title;
+  final String meta;
+  final String? note;
+  final bool last;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return IntrinsicHeight(
+      child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        SizedBox(
+          width: 28,
+          child: Column(children: [
+            Container(
+              width: 26,
+              height: 26,
+              decoration: BoxDecoration(color: color.withValues(alpha: 0.12), shape: BoxShape.circle),
+              child: Icon(icon, size: 15, color: color),
+            ),
+            if (!last) Expanded(child: Container(width: 2, color: theme.colorScheme.outlineVariant)),
+          ]),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Padding(
+            padding: EdgeInsets.only(bottom: last ? 0 : 12, top: 3),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(title, style: theme.textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w700)),
+              Text(meta, style: theme.textTheme.labelSmall?.copyWith(color: theme.colorScheme.outline)),
+              if (note != null && note!.trim().isNotEmpty) ...[
+                const SizedBox(height: 3),
+                Text(note!.trim(), style: theme.textTheme.bodySmall),
+              ],
+            ]),
+          ),
+        ),
+      ]),
+    );
+  }
+}
+
+/// Kotak lampiran: foto tampil langsung, video/suara berupa ikon putar. Ketuk = buka lewat app host.
+class _MediaThumb extends StatelessWidget {
+  const _MediaThumb(this.m, {this.onOpen});
+  final ReportMediaItem m;
+  final void Function(String url)? onOpen;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final url = m.url;
+    final fallback = Container(
+      color: m.kind == MediaKind.image ? theme.colorScheme.surfaceContainerHighest : const Color(0xFF1F2937),
+      child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+        Icon(
+          switch (m.kind) {
+            MediaKind.image => Icons.image_rounded,
+            MediaKind.video => Icons.play_circle_fill_rounded,
+            MediaKind.audio => Icons.graphic_eq_rounded,
+          },
+          color: m.kind == MediaKind.image ? theme.colorScheme.outline : Colors.white,
+          size: 30,
+        ),
+        if (m.durationS != null)
+          Text('${m.durationS!.round()} dtk', style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w700)),
+      ]),
+    );
+    return Semantics(
+      button: url != null && onOpen != null,
+      label: switch (m.kind) { MediaKind.image => 'Foto', MediaKind.video => 'Video', MediaKind.audio => 'Rekaman suara' },
+      child: InkWell(
+        key: ValueKey('siagasos-media-${m.id}'),
+        borderRadius: BorderRadius.circular(12),
+        onTap: url != null && onOpen != null ? () => onOpen!(url) : null,
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(12),
+          child: SizedBox(
+            width: 92,
+            height: 92,
+            child: m.kind == MediaKind.image && url != null
+                ? Image.network(url, fit: BoxFit.cover, errorBuilder: (_, __, ___) => fallback)
+                : fallback,
+          ),
+        ),
+      ),
     );
   }
 }

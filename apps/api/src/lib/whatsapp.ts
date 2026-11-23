@@ -103,3 +103,34 @@ export async function sendSosWhatsApp(
     return { status: 'failed', provider: providerName, error: (err as Error).message };
   }
 }
+
+/**
+ * Kode OTP login responder (satpam) lewat WhatsApp. Hanya MetaDev: template METADEV_OTP_TEMPLATE_NAME (default
+ * `kode_otp`, harus APPROVED, 1 parameter body = kode). Provider lain / belum diatur → 'stub' (kode hanya di log).
+ */
+export async function sendOtpWhatsApp(
+  to: string,
+  code: string,
+  { env = process.env, fetchImpl = globalThis.fetch }: { env?: NodeJS.ProcessEnv; fetchImpl?: typeof fetch } = {},
+): Promise<WaResult> {
+  const providerName = waProviderName(env);
+  if (providerName !== 'metadev' || !PROVIDERS.metadev!.configured(env)) {
+    logger.info({ provider: providerName, to, code }, 'WA OTP responder (stub, tidak dikirim)');
+    return { status: 'stub', provider: providerName };
+  }
+  try {
+    const base = (env.METADEV_BASE_URL || 'https://api-bot.mkasir.id').replace(/\/$/, '');
+    const template = env.METADEV_OTP_TEMPLATE_NAME || 'kode_otp';
+    const res = await fetchImpl(`${base}/v1/templates/${encodeURIComponent(template)}/send-test`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${env.METADEV_API_KEY}` },
+      body: JSON.stringify({ account_id: env.METADEV_ACCOUNT_ID, to, language: env.METADEV_OTP_LANGUAGE || 'id', body_parameters: [code] }),
+      signal: AbortSignal.timeout(TIMEOUT_MS),
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}: ${(await res.text().catch(() => '')).slice(0, 200)}`);
+    return { status: 'sent', provider: providerName };
+  } catch (err) {
+    logger.warn({ provider: providerName, to, err: (err as Error).message }, 'WA OTP gagal');
+    return { status: 'failed', provider: providerName, error: (err as Error).message };
+  }
+}
