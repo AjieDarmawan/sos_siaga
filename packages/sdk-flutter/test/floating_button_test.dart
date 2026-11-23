@@ -33,7 +33,7 @@ void main() {
       builder: (context, child) => SOSFloatingButton(
         client: sos,
         holdSeconds: 1,
-        tkpPrompt: false, // panel status lama (Foto/Video/Suara)
+        tkpPrompt: false, // tanpa ajakan rekam TKP
         onCall: calls.add,
         onSent: (r) => sent = r,
         onCapture: (context, kind) async => CapturedMedia(bytes: Uint8List.fromList([1, 2, 3]), contentType: 'image/jpeg'),
@@ -64,20 +64,35 @@ void main() {
     await g.up();
     await pumpFrames(tester, 4);
     expect(sent?.id, 'rep-1');
-    expect(find.textContaining('Menunggu petugas'), findsOneWidget);
-    expect(find.text('Batalkan (salah tekan)'), findsOneWidget);
+    // Seperti tata-warga: menu tetap sama selama SOS aktif (tanpa mode "AKTIF"/panel status);
+    // status di keterangan menu + titik kecil di tombol bulat.
+    expect(find.byKey(const ValueKey('siagasos-hold')), findsOneWidget);
+    expect(find.textContaining('SOS aktif: Terkirim. Menunggu petugas'), findsOneWidget);
+    expect(find.byKey(const ValueKey('siagasos-fab-active')), findsOneWidget);
+    expect(find.text('AKTIF'), findsNothing);
 
-    // Foto → unggah lewat presigned URL → complete.
-    await tester.tap(find.text('Foto'));
-    for (var i = 0; i < 100 && !s.requests.any((q) => q.url.path.endsWith('/complete')); i++) {
+    // Batal salah tekan lewat Laporan → Riwayat laporan.
+    await tester.tap(find.byKey(const ValueKey('siagasos-report')));
+    await pumpFrames(tester, 8);
+    await tester.tap(find.byKey(const ValueKey('siagasos-history')));
+    for (var i = 0; i < 20; i++) {
       await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 10)));
-      await tester.pump(const Duration(milliseconds: 10));
+      await tester.pump(const Duration(milliseconds: 20));
     }
-    expect(s.requests.any((q) => q.url.path == '/v1/sdk/reports/rep-1/media/m-1/complete'), isTrue);
+    await tester.tap(find.byKey(const ValueKey('siagasos-cancel-rep-1')));
+    for (var i = 0; i < 20; i++) {
+      await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 10)));
+      await tester.pump(const Duration(milliseconds: 20));
+    }
+    final cancel = s.requests.lastWhere((q) => q.url.path == '/v1/sdk/reports/rep-1/cancel');
+    expect(jsonDecode(cancel.body), {'reason': 'Salah tekan'});
+    expect(find.text('Dibatalkan'), findsOneWidget);
+    expect(find.byKey(const ValueKey('siagasos-cancel-rep-1')), findsNothing);
+    expect(find.byKey(const ValueKey('siagasos-fab-active')), findsNothing);
+    await tester.tap(find.byTooltip('Tutup'));
+    await pumpFrames(tester, 4);
 
-    // Tutup menu, geser ke kiri atas → menempel ke tepi kiri dan disimpan.
-    await tester.tap(find.byKey(const ValueKey('siagasos-fab')));
-    await tester.pump();
+    // Geser ke kiri atas → menempel ke tepi kiri dan disimpan.
     await tester.drag(find.byKey(const ValueKey('siagasos-fab')), const Offset(-300, -500));
     await pumpFrames(tester, 6);
     final c = tester.getCenter(find.byKey(const ValueKey('siagasos-fab')));
@@ -161,8 +176,8 @@ void main() {
     expect(s.requests.any((q) => q.url.path == '/v1/sdk/reports/rep-1/media/m-1/complete'), isTrue);
     await pumpFrames(tester, 4);
     expect(find.text('Pengaduan terkirim'), findsOneWidget);
-    // Pengaduan tidak mengubah tombol bulat menjadi "AKTIF" (itu hanya untuk SOS).
-    expect(find.text('AKTIF'), findsNothing);
+    // Pengaduan tidak menandai tombol bulat (penanda hanya untuk SOS aktif).
+    expect(find.byKey(const ValueKey('siagasos-fab-active')), findsNothing);
 
     await tester.tap(find.text('Tutup'));
     await pumpFrames(tester, 4);
@@ -296,7 +311,13 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('siagasos-tkp-close')));
     await pumpFrames(tester, 4);
     expect(find.byKey(const ValueKey('siagasos-tkp')), findsNothing);
-    expect(find.text('AKTIF'), findsOneWidget);
+    // SOS masih aktif: tombol tetap "SOS" + titik penanda; menu tetap EWS/110/112/Laporan.
+    expect(find.text('AKTIF'), findsNothing);
+    expect(find.byKey(const ValueKey('siagasos-fab-active')), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('siagasos-fab')));
+    await pumpFrames(tester, 8);
+    expect(find.text('EWS Alert'), findsOneWidget);
+    expect(find.text('Laporan'), findsOneWidget);
 
     sos.dispose();
     await tester.pumpWidget(const SizedBox());

@@ -35,8 +35,8 @@ abstract class SosSiren {
 /// ([SiagaSOS.complain]) / Riwayat laporan ([SiagaSOS.history]).
 ///
 /// Setelah SOS terkirim: [siren] berbunyi (tombol bulat jadi "SENYAP"), lalu popup "Rekam kondisi TKP?" →
-/// [onCapture] video → catatan → video + [SiagaSOS.addNote] ke petugas. Tanpa [onCapture] / `tkpPrompt: false`
-/// tampil panel status (batal + Foto/Video/Suara).
+/// [onCapture] video → catatan → video + [SiagaSOS.addNote] ke petugas. Selama SOS belum selesai menu tetap sama
+/// (seperti tata-warga): status tampil di keterangan menu + titik kecil di tombol bulat, batal lewat Riwayat laporan.
 ///
 /// Pasang sekali di root app:
 /// ```dart
@@ -94,7 +94,7 @@ class SOSFloatingButton extends StatefulWidget {
   /// Nomor darurat kedua di menu. Nomor pertama memakai `fallback_phone` dari portal (default 110).
   final String? secondaryPhone;
 
-  /// Rekam TKP. Null = tombol Foto / Video / Suara disembunyikan.
+  /// Kamera/mikrofon app host: video TKP setelah SOS terkirim, foto lampiran pengaduan. Null = tanpa lampiran.
   final MediaCapture? onCapture;
   final void Function(ActiveReport report)? onSent;
   final void Function(SiagaSOSError error)? onError;
@@ -141,7 +141,6 @@ class SOSFloatingButton extends StatefulWidget {
 }
 
 const double _kEdge = 12;
-const double _kPanelWidth = 248;
 const double _kActionWidth = 196;
 
 class _SOSFloatingButtonState extends State<SOSFloatingButton> with SingleTickerProviderStateMixin {
@@ -160,9 +159,6 @@ class _SOSFloatingButtonState extends State<SOSFloatingButton> with SingleTicker
   SdkConfig? _cfg;
   ActiveReport? _report;
   StreamSubscription<ActiveReport>? _sub;
-  MediaKind? _uploading;
-  double _uploadRatio = 0;
-  final _attached = <MediaKind, int>{};
   String? _notice;
 
   /// Lembar dari bawah (pengaduan / riwayat / rekam TKP).
@@ -238,31 +234,6 @@ class _SOSFloatingButtonState extends State<SOSFloatingButton> with SingleTicker
     }
   }
 
-  Future<void> _capture(MediaKind kind) async {
-    final r = _report;
-    final capture = widget.onCapture;
-    if (r == null || capture == null || _uploading != null) return;
-    final media = await capture(context, kind);
-    if (media == null || !mounted) return;
-    setState(() {
-      _uploading = kind;
-      _uploadRatio = 0;
-      _notice = null;
-    });
-    try {
-      await widget.client.attach(r.id ?? r.localId, media.bytes,
-          contentType: media.contentType, durationS: media.durationS, onProgress: (p) => mounted ? setState(() => _uploadRatio = p) : null);
-      if (mounted) setState(() => _attached[kind] = (_attached[kind] ?? 0) + 1);
-    } on SiagaSOSError catch (e) {
-      if (mounted) setState(() => _notice = e.message);
-      widget.onError?.call(e);
-    } catch (_) {
-      if (mounted) setState(() => _notice = 'Lampiran gagal diunggah. Coba lagi.');
-    } finally {
-      if (mounted) setState(() => _uploading = null);
-    }
-  }
-
   String get _statusText {
     if (_sending) return 'Mengirim…';
     final r = _report;
@@ -325,7 +296,6 @@ class _SOSFloatingButtonState extends State<SOSFloatingButton> with SingleTicker
       // laporan yang sudah selesai tidak perlu ditampilkan lagi saat menu dibuka ulang
       if (_open && _report != null && _report!.status.isTerminal) {
         _report = null;
-        _attached.clear();
       }
     });
   }
@@ -349,7 +319,6 @@ class _SOSFloatingButtonState extends State<SOSFloatingButton> with SingleTicker
             final pos = _dragPos ?? Offset(restX, restY);
             final onLeft = pos.dx + widget.size / 2 < box.maxWidth / 2;
             final openUp = pos.dy + widget.size / 2 > box.maxHeight / 2;
-            final idle = _report == null;
 
             // Dipasang di MaterialApp.builder (di atas Navigator, tanpa Scaffold): tanpa Material,
             // teks jatuh ke gaya darurat Flutter (monospace + garis bawah kuning). Transparan = sentuhan
@@ -363,8 +332,8 @@ class _SOSFloatingButtonState extends State<SOSFloatingButton> with SingleTicker
                     right: onLeft ? null : _kEdge,
                     top: openUp ? null : pos.dy + widget.size + 10,
                     bottom: openUp ? box.maxHeight - pos.dy + 10 : null,
-                    width: (box.maxWidth - _kEdge * 2).clamp(0, idle ? _kActionWidth : _kPanelWidth),
-                    child: idle ? _actions(context, onLeft: onLeft, openUp: openUp) : _panel(context),
+                    width: (box.maxWidth - _kEdge * 2).clamp(0, _kActionWidth),
+                    child: _actions(context, onLeft: onLeft, openUp: openUp),
                   ),
                 AnimatedPositioned(
                   duration: _dragPos == null ? const Duration(milliseconds: 220) : Duration.zero,
@@ -409,9 +378,8 @@ class _SOSFloatingButtonState extends State<SOSFloatingButton> with SingleTicker
 
   /// [sirenOn] = sirene berbunyi: tombol menjadi "SENYAP" (ketuk = matikan), seperti tata-warga.
   Widget _fab(bool sirenOn) {
-    final busy = !sirenOn && (_sending || _uploading != null);
-    final colors =
-        _active && !sirenOn ? const [Color(0xFF64748B), Color(0xFF334155)] : [widget.color, Color.lerp(widget.color, Colors.black, 0.28)!];
+    final busy = !sirenOn && _sending;
+    final colors = [widget.color, Color.lerp(widget.color, Colors.black, 0.28)!];
     return Semantics(
       button: true,
       label: sirenOn ? 'Matikan sirene' : (_open ? 'Tutup menu darurat' : 'Menu darurat SOS'),
@@ -419,51 +387,63 @@ class _SOSFloatingButtonState extends State<SOSFloatingButton> with SingleTicker
       child: AnimatedScale(
         scale: _dragPos != null ? 1.08 : 1,
         duration: const Duration(milliseconds: 150),
-        child: Container(
-          width: widget.size,
-          height: widget.size,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            gradient: LinearGradient(colors: colors, begin: Alignment.topLeft, end: Alignment.bottomRight),
-            border: Border.all(color: Colors.white, width: 2.5),
-            boxShadow: [BoxShadow(color: colors.last.withValues(alpha: 0.42), blurRadius: 12, offset: const Offset(0, 5))],
-          ),
-          child: Material(
-            color: Colors.transparent,
-            shape: const CircleBorder(),
-            child: InkWell(
-              customBorder: const CircleBorder(),
-              onTap: sirenOn
-                  ? () {
-                      HapticFeedback.selectionClick();
-                      widget.siren!.stop();
-                    }
-                  : _toggle,
-              child: Center(
-                child: busy
-                    ? const SizedBox.square(dimension: 22, child: CircularProgressIndicator(strokeWidth: 2.4, color: Colors.white))
-                    : Column(mainAxisSize: MainAxisSize.min, children: [
-                        Icon(
-                            sirenOn
-                                ? Icons.volume_off_rounded
-                                : _open
-                                    ? Icons.close_rounded
-                                    : (_active ? Icons.support_agent_rounded : Icons.notifications_active_rounded),
-                            color: Colors.white,
-                            size: widget.size * 0.4),
-                        SizedBox(height: widget.size * 0.02),
-                        Text(sirenOn ? 'SENYAP' : (_open ? 'TUTUP' : (_active ? 'AKTIF' : 'SOS')),
-                            style: TextStyle(
-                                color: Colors.white,
-                                fontSize: widget.size * 0.156,
-                                fontWeight: FontWeight.w800,
-                                letterSpacing: 0.4,
-                                height: 1)),
-                      ]),
+        child: Stack(clipBehavior: Clip.none, children: [
+          Container(
+            width: widget.size,
+            height: widget.size,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              gradient: LinearGradient(colors: colors, begin: Alignment.topLeft, end: Alignment.bottomRight),
+              border: Border.all(color: Colors.white, width: 2.5),
+              boxShadow: [BoxShadow(color: colors.last.withValues(alpha: 0.42), blurRadius: 12, offset: const Offset(0, 5))],
+            ),
+            child: Material(
+              color: Colors.transparent,
+              shape: const CircleBorder(),
+              child: InkWell(
+                customBorder: const CircleBorder(),
+                onTap: sirenOn
+                    ? () {
+                        HapticFeedback.selectionClick();
+                        widget.siren!.stop();
+                      }
+                    : _toggle,
+                child: Center(
+                  child: busy
+                      ? const SizedBox.square(dimension: 22, child: CircularProgressIndicator(strokeWidth: 2.4, color: Colors.white))
+                      : Column(mainAxisSize: MainAxisSize.min, children: [
+                          Icon(sirenOn ? Icons.volume_off_rounded : (_open ? Icons.close_rounded : Icons.notifications_active_rounded),
+                              color: Colors.white, size: widget.size * 0.4),
+                          SizedBox(height: widget.size * 0.02),
+                          Text(sirenOn ? 'SENYAP' : (_open ? 'TUTUP' : 'SOS'),
+                              style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: widget.size * 0.156,
+                                  fontWeight: FontWeight.w800,
+                                  letterSpacing: 0.4,
+                                  height: 1)),
+                        ]),
+                ),
               ),
             ),
           ),
-        ),
+          // Titik kecil = ada SOS yang belum selesai (menu tetap sama seperti tata-warga; status di keterangan menu).
+          if (_active && !sirenOn)
+            Positioned(
+              right: -1,
+              top: -1,
+              child: Container(
+                key: const ValueKey('siagasos-fab-active'),
+                width: 14,
+                height: 14,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF59E0B),
+                  shape: BoxShape.circle,
+                  border: Border.all(color: Colors.white, width: 2),
+                ),
+              ),
+            ),
+        ]),
       ),
     );
   }
@@ -544,6 +524,7 @@ class _SOSFloatingButtonState extends State<SOSFloatingButton> with SingleTicker
           ];
     final note = <String>[
       if (_notice != null) _notice!,
+      if (_active) 'SOS aktif: $_statusText. Batalkan lewat Laporan → Riwayat.',
       if (cfg != null && cfg.recipientText.isNotEmpty) cfg.recipientText,
       if (widget.client.mode == SosMode.test) 'MODE TEST',
     ];
@@ -568,95 +549,6 @@ class _SOSFloatingButtonState extends State<SOSFloatingButton> with SingleTicker
         ],
         if (!openUp && caption != null) ...[const SizedBox(height: 8), caption],
       ],
-    );
-  }
-
-  /// Panel status setelah SOS terkirim: status, batal, rekam TKP, telepon.
-  Widget _panel(BuildContext context) {
-    final theme = Theme.of(context);
-    final r = _report!;
-    final cfg = _cfg;
-    final children = <Widget>[
-      Row(children: [
-        Icon(r.status.isTerminal ? Icons.check_circle_rounded : Icons.radio_button_checked_rounded,
-            color: r.status.isTerminal ? const Color(0xFF16A34A) : widget.color, size: 20),
-        const SizedBox(width: 8),
-        Expanded(child: Text(_statusText, style: theme.textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600))),
-      ]),
-    ];
-    if (r.status == SosStatus.open) {
-      children.add(Align(
-        alignment: Alignment.centerLeft,
-        child: TextButton(
-          onPressed: () => widget.client.cancel(r.localId, reason: 'Salah tekan'),
-          child: const Text('Batalkan (salah tekan)'),
-        ),
-      ));
-    }
-    if (widget.onCapture != null && widget.captureKinds.isNotEmpty && !r.status.isTerminal) {
-      children.add(Padding(
-        padding: const EdgeInsets.only(top: 8, bottom: 4),
-        child: Text('Kirim bukti ke petugas', style: theme.textTheme.labelMedium),
-      ));
-      children.add(Row(children: [
-        for (final k in widget.captureKinds) ...[
-          if (k != widget.captureKinds.first) const SizedBox(width: 6),
-          Expanded(child: _mediaButton(k)),
-        ],
-      ]));
-      if (_uploading != null) {
-        children.add(Padding(
-          padding: const EdgeInsets.only(top: 8),
-          child: LinearProgressIndicator(value: _uploadRatio, color: widget.color),
-        ));
-      }
-    }
-    if (_notice != null) {
-      children.add(Padding(
-        padding: const EdgeInsets.only(top: 8),
-        child: Text(_notice!, style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.error)),
-      ));
-    }
-    if (widget.onCall != null) {
-      final phones = <String>{cfg?.fallbackPhone ?? '110', if (widget.secondaryPhone != null) widget.secondaryPhone!};
-      children.add(const Divider(height: 20));
-      for (final p in phones) {
-        children.add(Padding(
-          padding: const EdgeInsets.only(top: 4),
-          child: FilledButton.tonalIcon(
-            onPressed: () => widget.onCall?.call(p),
-            icon: const Icon(Icons.call_rounded),
-            label: Text('Telepon $p'),
-            style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(44)),
-          ),
-        ));
-      }
-    }
-    return Material(
-      elevation: 8,
-      borderRadius: BorderRadius.circular(16),
-      color: theme.colorScheme.surface,
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: children),
-      ),
-    );
-  }
-
-  Widget _mediaButton(MediaKind k) {
-    final (icon, label) = switch (k) {
-      MediaKind.image => (Icons.photo_camera_rounded, 'Foto'),
-      MediaKind.video => (Icons.videocam_rounded, 'Video'),
-      MediaKind.audio => (Icons.mic_rounded, 'Suara'),
-    };
-    final n = _attached[k] ?? 0;
-    return OutlinedButton(
-      onPressed: _uploading == null ? () => _capture(k) : null,
-      style: OutlinedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 10), minimumSize: const Size(0, 48)),
-      child: Column(mainAxisSize: MainAxisSize.min, children: [
-        Icon(n > 0 ? Icons.check_rounded : icon, size: 20),
-        Text(n > 1 ? '$label ($n)' : label, style: const TextStyle(fontSize: 12)),
-      ]),
     );
   }
 }
@@ -1162,6 +1054,8 @@ class _HistorySheet extends StatefulWidget {
 class _HistorySheetState extends State<_HistorySheet> {
   List<ReportRecord>? _items;
   bool _loading = true;
+  String? _cancelling; // id laporan yang sedang dibatalkan
+  String? _error;
 
   @override
   void initState() {
@@ -1169,6 +1063,25 @@ class _HistorySheetState extends State<_HistorySheet> {
     // Tampilkan simpanan lokal dulu (instan), lalu perbarui status dari server.
     widget.client.history(refresh: false).then((l) => mounted && _items == null ? setState(() => _items = l) : null);
     _reload();
+  }
+
+  /// Batalkan SOS salah tekan (hanya selama status `open`; server menolak bila petugas sudah merespons).
+  Future<void> _cancel(ReportRecord r) async {
+    HapticFeedback.selectionClick();
+    setState(() {
+      _cancelling = r.id;
+      _error = null;
+    });
+    try {
+      await widget.client.cancel(r.id, reason: 'Salah tekan');
+    } on SiagaSOSError catch (e) {
+      if (mounted) setState(() => _error = e.message);
+    } catch (_) {
+      if (mounted) setState(() => _error = 'Gagal membatalkan. Periksa koneksi lalu coba lagi.');
+    }
+    if (!mounted) return;
+    setState(() => _cancelling = null);
+    await _reload();
   }
 
   Future<void> _reload() async {
@@ -1218,6 +1131,10 @@ class _HistorySheetState extends State<_HistorySheet> {
           IconButton(onPressed: widget.onClose, icon: const Icon(Icons.close_rounded), tooltip: 'Tutup'),
         ]),
         const SizedBox(height: 12),
+        if (_error != null) ...[
+          Text(_error!, style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.error)),
+          const SizedBox(height: 8),
+        ],
         if (items == null)
           const SizedBox(height: 120)
         else if (items.isEmpty)
@@ -1237,7 +1154,15 @@ class _HistorySheetState extends State<_HistorySheet> {
               shrinkWrap: true,
               itemCount: items.length,
               separatorBuilder: (_, __) => const SizedBox(height: 10),
-              itemBuilder: (_, i) => _HistoryTile(items[i]),
+              itemBuilder: (_, i) {
+                final r = items[i];
+                final cancellable = r.kind == ReportKind.sos && r.status == SosStatus.open;
+                return _HistoryTile(
+                  r,
+                  cancelling: _cancelling == r.id,
+                  onCancel: cancellable && _cancelling == null ? () => _cancel(r) : null,
+                );
+              },
             ),
           ),
       ]),
@@ -1246,8 +1171,11 @@ class _HistorySheetState extends State<_HistorySheet> {
 }
 
 class _HistoryTile extends StatelessWidget {
-  const _HistoryTile(this.r);
+  const _HistoryTile(this.r, {this.onCancel, this.cancelling = false});
   final ReportRecord r;
+  /// Null = tidak bisa dibatalkan (sudah ditangani / pengaduan).
+  final VoidCallback? onCancel;
+  final bool cancelling;
 
   static (String, Color) _status(SosStatus s) => switch (s) {
         SosStatus.queued => ('Menunggu sinyal', const Color(0xFF6B7280)),
@@ -1318,6 +1246,23 @@ class _HistoryTile extends StatelessWidget {
               '${done != null && r.status.isTerminal ? ' · selesai ${_when(done)}' : ''}',
               style: theme.textTheme.labelSmall?.copyWith(color: theme.colorScheme.outline),
             ),
+            if (onCancel != null || cancelling)
+              Align(
+                alignment: Alignment.centerLeft,
+                child: TextButton.icon(
+                  key: ValueKey('siagasos-cancel-${r.id}'),
+                  onPressed: onCancel,
+                  style: TextButton.styleFrom(
+                    foregroundColor: theme.colorScheme.error,
+                    padding: const EdgeInsets.symmetric(horizontal: 4),
+                    visualDensity: VisualDensity.compact,
+                  ),
+                  icon: cancelling
+                      ? const SizedBox.square(dimension: 14, child: CircularProgressIndicator(strokeWidth: 2))
+                      : const Icon(Icons.cancel_outlined, size: 16),
+                  label: const Text('Batalkan (salah tekan)'),
+                ),
+              ),
           ]),
         ),
       ]),
