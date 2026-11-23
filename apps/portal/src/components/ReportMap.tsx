@@ -28,6 +28,17 @@ export function ReportMap({ reports, selected, trail, onSelect }: {
   const onSelectRef = useRef(onSelect);
   onSelectRef.current = onSelect;
 
+  /** Pusatkan ke semua marker. Ditunda sampai kontainer punya ukuran: fit saat ukuran 0 membuat peta meleset (mis. ke laut). */
+  const fitAll = (force = false) => {
+    const m = map.current;
+    if (!m || (fitted.current && !force) || !markers.current.size) return;
+    const size = m.getSize();
+    if (size.x < 50 || size.y < 50) return;
+    fitted.current = true;
+    const b = L.latLngBounds([...markers.current.values()].map((x) => x.getLatLng()));
+    m.fitBounds(b.pad(0.15), { maxZoom: 15, animate: force });
+  };
+
   useEffect(() => {
     if (!el.current) return;
     const m = L.map(el.current, { zoomControl: true, attributionControl: true }).setView(JAKARTA, 11);
@@ -37,7 +48,21 @@ export function ReportMap({ reports, selected, trail, onSelect }: {
     }).addTo(m);
     trailLayer.current = L.layerGroup().addTo(m);
     map.current = m;
-    const ro = new ResizeObserver(() => m.invalidateSize());
+    // Tombol "tampilkan semua laporan" di bawah kontrol zoom
+    const FitCtl = L.Control.extend({
+      onAdd: () => {
+        const b = L.DomUtil.create('button', 'leaflet-bar map-fit');
+        b.type = 'button';
+        b.title = 'Tampilkan semua laporan';
+        b.setAttribute('aria-label', 'Tampilkan semua laporan');
+        b.innerHTML = '<svg viewBox="0 0 256 256" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M216 48v48a8 8 0 0 1-16 0V67.3l-42.3 42.4a8 8 0 0 1-11.4-11.4L188.7 56H160a8 8 0 0 1 0-16h48a8 8 0 0 1 8 8ZM98.3 146.3 56 188.7V160a8 8 0 0 0-16 0v48a8 8 0 0 0 8 8h48a8 8 0 0 0 0-16H67.3l42.4-42.3a8 8 0 0 0-11.4-11.4Z"/></svg>';
+        L.DomEvent.disableClickPropagation(b);
+        L.DomEvent.on(b, 'click', () => fitAll(true));
+        return b;
+      },
+    });
+    new FitCtl({ position: 'topleft' }).addTo(m);
+    const ro = new ResizeObserver(() => { m.invalidateSize(); fitAll(); });
     ro.observe(el.current);
     return () => { ro.disconnect(); m.remove(); map.current = null; markers.current.clear(); };
   }, []);
@@ -69,11 +94,7 @@ export function ReportMap({ reports, selected, trail, onSelect }: {
     }
     for (const [id, mk] of markers.current) if (!seen.has(id)) { mk.remove(); markers.current.delete(id); }
 
-    if (!fitted.current && seen.size) {
-      fitted.current = true;
-      const b = L.latLngBounds([...markers.current.values()].map((x) => x.getLatLng()));
-      m.fitBounds(b.pad(0.3), { maxZoom: 15 });
-    }
+    fitAll();
   }, [reports, selected]);
 
   // fokus ke laporan terpilih

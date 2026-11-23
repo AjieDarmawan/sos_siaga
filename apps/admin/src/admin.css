@@ -2,8 +2,9 @@
 :root[data-theme='dark'] .admin-mark { background: #1e293b; }
 .admin-tag { font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--sos); border: 1px solid currentColor; border-radius: 99px; padding: 0 7px; margin-left: 2px; }
 .stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; }
-.stat { padding: 18px 20px; display: grid; gap: 4px; }
-.stat .n { font-size: 30px; font-weight: 800; letter-spacing: -0.02em; line-height: 1.1; }
+.stat { padding: 18px 20px; display: grid; gap: 6px; align-content: start; }
+.stat .n { font-size: 32px; font-weight: 800; letter-spacing: -0.03em; line-height: 1.05; font-variant-numeric: tabular-nums; margin-top: 6px; }
+.stat-top { display: flex; align-items: center; justify-content: space-between; }
 .stat .l { color: var(--text-3); font-size: 13px; font-weight: 500; }
 .stat a { font-size: 13px; font-weight: 600; margin-top: 6px; }
 .otp { letter-spacing: 0.5em; font-family: var(--mono); font-size: 22px; text-align: center; }

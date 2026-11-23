@@ -206,3 +206,9 @@ pnpm -r typecheck
 - Portal: badge "Pengaduan", tanpa bunyi/notifikasi browser. Polmas: pengaduan SiagaSOS tampil sebagai jenis pengaduan (tanpa bunyi, tombol "Tidak valid").
 - Belum dicek visual di emulator. Android/iOS: `complain()` + menu pengaduan menyusul bersama tombol melayang native.
 - Dokumentasi portal `/docs`: bagian baru **SDK Mobile** (tabel Flutter/Android/iOS, contoh kode tiap platform, `SOSFloatingButton` + tabel 4 aksi & props) dan **Laporan pengaduan** (perbandingan SOS vs pengaduan, `complain()`, contoh API); `kind` di payload webhook, filter `kind` di REST, error 422 & batas pengaduan, checklist go-live mobile. Portal Pengaturan app: isian **Jenis pengaduan** (`complaint_categories`). README iOS baru; README Android mencatat menu pengaduan belum ada.
+
+### 2026-11-23 · Polesan tampilan production (skill ui-ux-pro-max)
+- Token portal/admin "Soft UI Evolution" (lihat docs/DESIGN.md). Admin: kartu ringkasan berikon & bisa diklik. App & kunci API: ikon app, label Web/Mobile, lencana kunci per mode (`LIVE ×2` saat rotasi, bukan dobel).
+- Dashboard: **bug peta** diperbaiki (kontainer setinggi daftar → peta tampak menghadap laut), ringkasan angka, filter jenis, ikon kategori, alarm/banner hanya SOS, tombol "Tampilkan semua laporan".
+- Landing: klaim usang dihapus ("segera Android"), kartu tombol melayang + pengaduan, tab kode Flutter/Android/iOS, FAQ platform diperbarui.
+- Typecheck semua paket lolos, build portal & admin lolos. Diverifikasi lewat screenshot desktop terang/gelap + mobile 390 px. Flutter SDK tidak diubah di putaran ini.
