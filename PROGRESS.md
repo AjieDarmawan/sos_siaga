@@ -227,3 +227,8 @@ pnpm -r typecheck
 - **Flutter SDK**: `holdSeconds: 0` = sekali ketuk kirim; `SosSiren` (antarmuka, suara diputar app host) → tombol bulat "SENYAP" selama sirene aktif; setelah terkirim popup **SOS terkirim · Rekam kondisi TKP?** (chip maks. N detik / lokasi otomatis / catatan) → `onCapture(video)` (lapisan SDK disembunyikan selama kamera host terbuka) → catatan → unggah video + `SiagaSOS.addNote()` → "Rekaman TKP terkirim"; batal dengan konfirmasi. `tkpPrompt: false` = panel lama. **13/13 test** (+1 alur EWS lengkap).
 - Pemakai pertama: commerceOS POS (sirene `audioplayers` + aset tata-warga, kamera TKP 5 dtk bersuara).
 - Perbaikan (uji di HP): saat kamera TKP terbuka, lapisan tombol dilepas dari `Stack` → posisi lapisan lembar bergeser → Overlay-nya dibuat ulang → crash "entry is already present in a different Overlay". Lapisan sekarang selalu ada (disembunyikan dengan `Offstage`) dan diberi key. Test alur EWS kini memakai kamera palsu dengan jeda (mereproduksi crash di kode lama), 13/13 lulus.
+
+### 2026-11-23 · `SOSFloatingButton`: tanpa mode "AKTIF" (persis tata-warga)
+- Selama SOS belum selesai, menu tetap EWS / 110 / 112 / Laporan (dulu tombol jadi abu-abu "AKTIF" dan membuka panel status berbeda — membingungkan saat SOS dari antrian offline terkirim belakangan). Status tampil di keterangan menu ("SOS aktif: …"), tombol bulat tetap merah "SOS" dengan titik kuning kecil.
+- Batal salah tekan pindah ke **Laporan → Riwayat laporan** (tombol "Batalkan (salah tekan)" pada SOS berstatus `open`). Panel status lama + tombol Foto/Video/Suara di panel dihapus; lampiran lewat alur Rekam TKP.
+- 13/13 test (test pertama kini memeriksa menu saat SOS aktif + batal lewat riwayat).
