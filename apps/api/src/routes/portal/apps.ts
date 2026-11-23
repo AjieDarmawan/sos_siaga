@@ -195,6 +195,7 @@ appsRouter.post('/:id/keys/:keyId/revoke', canManage, async (req, res) => {
 const sourceSchema = z.object({
   source_key: z.string().min(1).max(64).regex(/^[a-z0-9][a-z0-9._-]*$/, 'huruf kecil, angka, titik, minus, garis bawah'),
   label: z.string().max(120).optional(),
+  alamat: z.string().max(300).optional(),
   platform: z.enum(PLATFORMS).optional(),
 });
 
@@ -216,8 +217,8 @@ appsRouter.post('/:id/sources', canManage, async (req, res) => {
   const app = await loadApp(u, req.params.id!);
   const body = parse(sourceSchema, req.body);
   const { rows } = await withTenant(u.accountId, (c) =>
-    c.query(`INSERT INTO sources (app_id, account_id, source_key, label, platform) VALUES ($1,$2,$3,$4,$5) RETURNING *`,
-      [app.id, u.accountId, body.source_key, body.label ?? null, body.platform ?? null]),
+    c.query(`INSERT INTO sources (app_id, account_id, source_key, label, platform, alamat) VALUES ($1,$2,$3,$4,$5,$6) RETURNING *`,
+      [app.id, u.accountId, body.source_key, body.label ?? null, body.platform ?? null, body.alamat ?? null]),
   ).catch((e) => {
     if (e.code === '23505') throw new ApiError(409, 'source_exists', 'source_key sudah dipakai di app ini');
     throw e;
@@ -230,8 +231,8 @@ appsRouter.patch('/:id/sources/:sourceId', canManage, async (req, res) => {
   const app = await loadApp(u, req.params.id!);
   const body = parse(sourceSchema.omit({ source_key: true }), req.body);
   const { rows } = await withTenant(u.accountId, (c) =>
-    c.query(`UPDATE sources SET label = coalesce($3, label), platform = coalesce($4, platform) WHERE id = $1 AND app_id = $2 RETURNING *`,
-      [req.params.sourceId, app.id, body.label ?? null, body.platform ?? null]),
+    c.query(`UPDATE sources SET label = coalesce($3, label), platform = coalesce($4, platform), alamat = coalesce($5, alamat) WHERE id = $1 AND app_id = $2 RETURNING *`,
+      [req.params.sourceId, app.id, body.label ?? null, body.platform ?? null, body.alamat ?? null]),
   );
   if (!rows[0]) throw notFound('Source');
   res.json(rows[0]);

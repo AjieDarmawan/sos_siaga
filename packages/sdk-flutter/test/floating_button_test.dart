@@ -151,14 +151,18 @@ void main() {
     await pumpFrames(tester, 8);
     expect(find.byKey(const ValueKey('siagasos-complaint-sheet')), findsOneWidget);
 
-    // Tombol kirim nonaktif sampai uraian diisi.
+    // Tombol kirim nonaktif sampai bukti (min. 1), judul, dan kronologi diisi.
     FilledButton send() => tester.widget<FilledButton>(find.ancestor(of: find.text('Kirim pengaduan'), matching: find.byWidgetPredicate((w) => w is FilledButton)));
     expect(send().onPressed, isNull);
     await tester.tap(find.text('Parkir liar'));
-    await tester.enterText(find.byKey(const ValueKey('siagasos-complaint-text')), 'Parkir liar menutup gang setiap malam');
-    await tester.tap(find.text('Lampirkan foto (opsional)'));
+    await tester.tap(find.text('+ Foto'));
     await pumpFrames(tester, 2);
-    expect(find.text('Foto terlampir'), findsOneWidget);
+    await tester.enterText(find.byKey(const ValueKey('siagasos-complaint-text')), 'Parkir liar menutup gang setiap malam');
+    expect(send().onPressed, isNull); // judul belum diisi
+    await tester.enterText(find.byKey(const ValueKey('siagasos-complaint-title')), 'Motor parkir liar');
+    await tester.enterText(find.byKey(const ValueKey('siagasos-complaint-location')), 'Gang Mawar, Blok C');
+    await tester.enterText(find.byKey(const ValueKey('siagasos-complaint-witness')), 'Pak RT 08123456789');
+    await pumpFrames(tester, 2);
     expect(send().onPressed, isNotNull);
 
     await tester.ensureVisible(find.text('Kirim pengaduan'));
@@ -174,6 +178,11 @@ void main() {
     expect(body['kind'], 'pengaduan');
     expect(body['category'], 'parkir_liar');
     expect(body['message'], 'Parkir liar menutup gang setiap malam');
+    final complaintBody = body['complaint'] as Map<String, dynamic>;
+    expect(complaintBody['title'], 'Motor parkir liar');
+    expect(complaintBody['location_text'], 'Gang Mawar, Blok C');
+    expect(complaintBody['witness'], 'Pak RT 08123456789');
+    expect(complaintBody.containsKey('occurred_at'), isFalse); // tidak diisi → saat dikirim
     expect(complaint?.kind, ReportKind.pengaduan);
     expect(s.requests.any((q) => q.url.path == '/v1/sdk/reports/rep-1/media/m-1/complete'), isTrue);
     await pumpFrames(tester, 4);

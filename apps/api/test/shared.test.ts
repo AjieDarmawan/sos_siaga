@@ -38,4 +38,30 @@ describe('createReportSchema', () => {
   it('lokasi di luar rentang ditolak', () => {
     expect(createReportSchema.safeParse({ location: { lat: 91, lng: 0 } }).success).toBe(false);
   });
+
+  it('pengaduan: detail (judul, kronologi, lokasi, waktu, pelaku, saksi) diterima', () => {
+    const r = createReportSchema.safeParse({
+      kind: 'pengaduan',
+      category: 'patroli',
+      message: 'Ada motor parkir di gang tiga sejak pagi',
+      complaint: {
+        title: 'Motor parkir liar',
+        description: 'Ada motor parkir di gang tiga sejak pagi',
+        location_text: 'Gang 3, Blok C',
+        occurred_at: '2026-11-23T07:30:00.000Z',
+        suspect: 'Motor merah tanpa plat',
+        witness: '0812 3456 7890',
+      },
+    });
+    expect(r.success).toBe(true);
+  });
+
+  it('pengaduan: waktu kejadian harus ISO datetime', () => {
+    const r = createReportSchema.safeParse({
+      kind: 'pengaduan',
+      message: 'Uraian pengaduan cukup panjang',
+      complaint: { occurred_at: 'kemarin' },
+    });
+    expect(r.success).toBe(false);
+  });
 });

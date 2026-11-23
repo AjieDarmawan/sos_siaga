@@ -52,11 +52,24 @@ export const emergencyContactSchema = z.object({
 });
 export type EmergencyContact = z.infer<typeof emergencyContactSchema>;
 
+/** Isian detail pengaduan; semua opsional, batas panjang sama dengan form klien. */
+export const complaintDetailsSchema = z.object({
+  title: z.string().trim().min(1).max(120).optional(),
+  description: z.string().trim().max(1000).optional(),
+  location_text: z.string().trim().max(200).optional(),
+  occurred_at: z.string().datetime().optional(),
+  suspect: z.string().trim().max(500).optional(),
+  witness: z.string().trim().max(300).optional(),
+});
+export type ComplaintDetails = z.infer<typeof complaintDetailsSchema>;
+
 export const createReportSchema = z.object({
   kind: z.enum(REPORT_KINDS).default('sos'),
   source_key: z.string().min(1).max(64).regex(/^[a-z0-9][a-z0-9._-]*$/i).optional(),
   /** Nama tampilan source (mis. nama kios). Disimpan ke sources.label; dipakai di pesan WA SOS. */
   source_label: z.string().trim().min(1).max(120).optional(),
+  /** Alamat wilayah kios (mis. "Kel. X, Kec. Y, Kab. Z, Prov. W") untuk baris lokasi di WA SOS. Disimpan ke sources.alamat. */
+  source_alamat: z.string().trim().min(1).max(300).optional(),
   category: z.string().min(1).max(40).default('general'),
   message: z.string().max(2000).optional(),
   location: locationSchema.optional(),
@@ -81,6 +94,8 @@ export const createReportSchema = z.object({
   client_created_at: z.string().datetime().optional(),
   /** Kontak darurat pribadi pelapor (hanya untuk SOS; diabaikan pada pengaduan). */
   emergency_contacts: z.array(emergencyContactSchema).max(MAX_EMERGENCY_CONTACTS).optional(),
+  /** Detail pengaduan (form gaya Lapor Keamanan tata-warga); diabaikan pada SOS. */
+  complaint: complaintDetailsSchema.optional(),
 }).refine((v) => v.kind !== 'pengaduan' || (v.message?.trim().length ?? 0) >= 5, {
   message: 'Pengaduan wajib berisi uraian (minimal 5 karakter)', path: ['message'],
 });
