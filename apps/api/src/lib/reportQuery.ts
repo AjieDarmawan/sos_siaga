@@ -10,6 +10,7 @@ const csv = <T extends z.ZodTypeAny>(item: T) =>
 export const listQuerySchema = z.object({
   status: csv(z.enum(REPORT_STATUSES)).optional(),
   category: csv(z.string().max(40)).optional(),
+  kind: z.enum(['sos', 'pengaduan']).optional(),
   source_key: csv(z.string().max(64)).optional(),
   app_id: z.string().uuid().optional(),
   mode: z.enum(['live', 'test']).optional(),
@@ -40,6 +41,7 @@ export async function listReports(c: Db, f: ListQuery, scope: { appId?: string; 
   if (scope.forceMode) add('r.mode = ?', scope.forceMode);
   else if (f.mode) add('r.mode = ?', f.mode);
   if (f.status?.length) add('r.status = ANY(?)', f.status);
+  if (f.kind) add('r.kind = ?', f.kind);
   if (f.category?.length) add('r.category = ANY(?)', f.category);
   if (f.source_key?.length) add('s.source_key = ANY(?)', f.source_key);
   if (f.from) add('r.created_at >= ?', f.from);

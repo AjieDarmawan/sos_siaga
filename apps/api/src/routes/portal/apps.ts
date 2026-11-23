@@ -28,6 +28,7 @@ const appSchema = z.object({
   sdk_config: z
     .object({
       categories: z.array(z.string().min(1).max(40)).max(12).optional(),
+      complaint_categories: z.array(z.string().min(1).max(40)).max(12).optional(),
       button_text: z.string().max(20).optional(),
       hold_seconds: z.number().int().min(1).max(10).optional(),
       recipient_text: z.string().max(200).optional(),

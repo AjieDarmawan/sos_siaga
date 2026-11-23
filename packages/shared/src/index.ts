@@ -19,6 +19,10 @@ export type KeyMode = (typeof KEY_MODES)[number];
 export const REVIEW_DECISIONS = ['approved', 'needs_revision', 'rejected', 'suspended', 'reinstated'] as const;
 
 export const DEFAULT_CATEGORIES = ['general', 'kriminal', 'medis', 'kebakaran', 'bencana', 'kecelakaan'] as const;
+/** sos = darurat; pengaduan = laporan non-darurat (tanpa notifikasi darurat & lokasi live). */
+export const REPORT_KINDS = ['sos', 'pengaduan'] as const;
+export type ReportKind = (typeof REPORT_KINDS)[number];
+export const DEFAULT_COMPLAINT_CATEGORIES = ['ketertiban', 'kebisingan', 'parkir_liar', 'pungli', 'kehilangan', 'patroli', 'lainnya'] as const;
 
 // ---------- SDK payloads ----------
 export const locationSchema = z.object({
@@ -29,6 +33,7 @@ export const locationSchema = z.object({
 export type Location = z.infer<typeof locationSchema>;
 
 export const createReportSchema = z.object({
+  kind: z.enum(REPORT_KINDS).default('sos'),
   source_key: z.string().min(1).max(64).regex(/^[a-z0-9][a-z0-9._-]*$/i).optional(),
   category: z.string().min(1).max(40).default('general'),
   message: z.string().max(2000).optional(),
@@ -52,6 +57,8 @@ export const createReportSchema = z.object({
     .optional(),
   metadata: z.record(z.unknown()).optional(),
   client_created_at: z.string().datetime().optional(),
+}).refine((v) => v.kind !== 'pengaduan' || (v.message?.trim().length ?? 0) >= 5, {
+  message: 'Pengaduan wajib berisi uraian (minimal 5 karakter)', path: ['message'],
 });
 export type CreateReportInput = z.input<typeof createReportSchema>;
 
@@ -59,6 +66,7 @@ export const locationUpdateSchema = locationSchema.extend({ recorded_at: z.strin
 
 export interface ReportPublic {
   id: string;
+  kind: ReportKind;
   status: ReportStatus;
   mode: KeyMode;
   category: string;
@@ -73,6 +81,8 @@ export interface SdkConfig {
   app_name: string;
   mode: KeyMode;
   categories: string[];
+  /** Kategori menu "Laporan pengaduan" (slug, maks 40 karakter). */
+  complaint_categories: string[];
   button_text: string;
   hold_seconds: number;
   /** Teks wajib agar pengguna tahu laporan tidak dikirim ke 110. */

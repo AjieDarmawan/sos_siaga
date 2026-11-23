@@ -67,8 +67,8 @@ Halaman: registrasi 3 langkah, verifikasi email, status verifikasi + unggah doku
 ### SDK
 | Method | Path | |
 |---|---|---|
-| GET | `/v1/sdk/config` | kategori, teks tombol, durasi tahan, teks penerima |
-| POST | `/v1/sdk/reports` | buat laporan (wajib `Idempotency-Key`) |
+| GET | `/v1/sdk/config` | kategori SOS & pengaduan (`complaint_categories`), teks tombol, durasi tahan, teks penerima |
+| POST | `/v1/sdk/reports` | buat laporan (wajib `Idempotency-Key`); `kind: 'pengaduan'` = laporan non-darurat (uraian wajib, tanpa alarm & lokasi live) |
 | GET | `/v1/sdk/reports/:id` | status untuk pengguna |
 | POST | `/v1/sdk/reports/:id/locations` | live location; balasan `accepted:false` = berhenti |
 | POST | `/v1/sdk/reports/:id/cancel` | batal, hanya selama `open` |
@@ -76,7 +76,7 @@ Halaman: registrasi 3 langkah, verifikasi email, status verifikasi + unggah doku
 | POST | `/v1/sdk/reports/:id/media/:mediaId/complete` | konfirmasi upload; server HEAD objek lalu tampil realtime |
 
 ### Server klien
-`GET /v1/reports`, `GET|PATCH /v1/reports/:id`, `POST /v1/webhooks/test`. Kunci test hanya melihat data test.
+`GET /v1/reports` (`?kind=sos|pengaduan`), `GET|PATCH /v1/reports/:id`, `POST /v1/webhooks/test`. Kunci test hanya melihat data test.
 
 ### Portal
 - Auth: `POST /portal/auth/{register,verify-email,resend-verification,login,accept-invite}`, `GET /portal/me`

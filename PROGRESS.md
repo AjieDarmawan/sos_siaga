@@ -10,9 +10,18 @@ Legenda: ✅ selesai & teruji · 🟡 sebagian · ⬜ belum
 
 ## Posisi saat ini
 
-- **Fase:** M1 ✅ (API, landing, portal, panel admin), M2 SDK web 🟡 (belum publish npm), M3 🟡 (dashboard ✅, web push belum).
-- **Berikutnya:** cocokkan landing dengan PRD asli (belum ada di repo, minta user → `docs/PRD.md`), web push responder, consent lokasi di SDK, demo React, OpenAPI.
-- **Branch:** `main`. Commit pertama `49bbba3`.
+- **Fase:** M1 ✅ (API, landing, portal, panel admin), M2 SDK web 🟡 (belum publish npm), M3 🟡 (dashboard + media ✅, web push belum), **M4 SDK mobile 🟡 sedang dikerjakan** (Flutter/Android/iOS teruji, tombol melayang baru Flutter).
+- **Prioritas user (2026-11-21): FOKUS MOBILE DULU, web nanti.**
+- **Berikutnya, urut:**
+  1. ~~Verifikasi SDK iOS~~ ✅ 20/20 (2026-11-23).
+  2. **`SOSFloatingButton`**: Flutter ✅ (2026-11-23). **Sisa: Android (`SOSFloatingButtonView`) dan iOS (SwiftUI `.sosFloatingButton()`)** dengan perilaku sama (permintaan user, meniru `DraggableSosMenu` di `tata-warga-mobile/lib/view/widgets/draggable_sos_menu.dart`):
+     tombol bulat kecil melayang di pojok kanan bawah, bisa digeser + menempel ke tepi + posisi diingat (SharedPreferences/UserDefaults), area kosong tidak menangkap sentuhan;
+     ketuk → menu **Kirim SOS** (tahan N dtk) / **Telepon 110** / **Telepon 112** (nomor & teks dari `/v1/sdk/config`);
+     setelah terkirim → panel status + tombol **Foto / Video / Suara** (rekam TKP singkat, mirip `sos_tkp_page.dart`). Pasang sekali di root app → tampil di semua halaman. Tombol besar `SOSButton` tetap ada.
+  3. Contoh app mobile (Flutter `example/`) + uji di emulator Android (AVD `Pixel_7_API_35` tersedia).
+  4. Baru lanjut daftar penting: (1) web push responder, (2) consent lokasi/kamera/mikrofon (UU PDP) di semua SDK, (3) cron bersihkan media `pending` + retensi media, (4) kompresi video di perangkat sebelum upload.
+  5. Sesudahnya: React Native (`@siagasos/js` + opsi `bundleId`), publish SDK (npm, pub, Maven, SPM), lalu urusan web.
+- **Branch:** `main` (user commit sendiri `0ea6a5b fix`). Belum di-commit: `packages/sdk-android` (SiagaSOS.kt, SOSButtonView.kt, test/, README), seluruh `packages/sdk-ios/`, dan `SOSFloatingButton` Flutter.
 
 ## Milestone (dari PRD)
 
@@ -21,7 +30,7 @@ Legenda: ✅ selesai & teruji · 🟡 sebagian · ⬜ belum
 | M1: Backend inti (minggu 1–3) | ✅ | API, portal registrasi, landing page (`/`), panel admin UI (`apps/admin`) |
 | M2: SDK web (minggu 3–5) | 🟡 | `@siagasos/js` + `@siagasos/react` ✅, publish npm ⬜, demo React ⬜ (demo vanilla ✅) |
 | M3: Dashboard & notifikasi (minggu 5–7) | 🟡 | SSE + email ✅, UI dashboard ✅ (peta + bunyi + notifikasi browser), web push ⬜ |
-| M4: SDK Android (minggu 7–9) | ⬜ | |
+| M4: SDK mobile (minggu 7–9) | 🟡 | Flutter ✅ teruji, Android native ✅ teruji, iOS ✅ teruji (selftest 20/20), tombol melayang 🟡 (Flutter ✅, Android/iOS ⬜), React Native ⬜ |
 | M5: Pilot (minggu 10–12) | ⬜ | Uji beban, dokumentasi, 2–3 klien pilot |
 
 ## Checklist rinci
@@ -63,7 +72,14 @@ Legenda: ✅ selesai & teruji · 🟡 sebagian · ⬜ belum
 - ⬜ Publish npm (org `@siagasos`, Changesets, GitHub Actions)
 - ⬜ Persetujuan lokasi (consent) sebelum izin pertama, sesuai UU PDP
 - ✅ Demo React (`examples/react-demo`, :5176): aplikasi pelapor ala mobile dengan SOS + `SOSAttach`
-- ⬜ SDK Android, iOS, Flutter, React Native
+- ✅ Kontrak lintas SDK: [docs/SDK_PROTOCOL.md](docs/SDK_PROTOCOL.md) (header `X-SOS-Bundle` untuk mobile, antrian offline, polling, lokasi live, lampiran)
+- ✅ **Flutter** `packages/sdk-flutter` (pub `siagasos`): `SiagaSOS` (trigger, antrian offline SharedPreferences, polling, lokasi live via `locationProvider`, cancel, `attach` dengan progres), widget `SOSButton` + `SOSFloatingButton`. `flutter analyze` bersih, **11/11 test** (10 unit/widget + 1 integrasi ke API & MinIO: `SIAGASOS_IT=1 flutter test`)
+- ✅ **Android native** `packages/sdk-android` (Kotlin, tanpa dependency runtime, minSdk 21, AAR ±73 KB): `SiagaSOS.create(context, …)` / `Builder`, callback + versi `*Blocking`, `SharedPrefsQueueStore`, `AndroidLocationProvider` (LocationManager), `SOSButtonView`. **10/10 test JVM** (9 unit + 1 integrasi): `SIAGASOS_IT=1 ./gradlew :siagasos:testDebugUnitTest` (JAVA_HOME JDK 17)
+- ✅ **iOS** `packages/sdk-ios` (Swift Package, iOS 15+/macOS 12): `SiagaSOS` async/await, `UserDefaultsQueueStore`, `CoreLocationProvider`, SwiftUI `SOSButton`. **20/20** lewat `SIAGASOS_IT=1 swift run siagasos-selftest` (15 unit dengan mock `URLProtocol` + 5 integrasi ke API lokal & MinIO). Ada warning Swift 6 `NSLock` di selftest (bukan di SDK)
+- ✅ `SOSFloatingButton` Flutter: tombol kecil melayang (pasang di `MaterialApp.builder`), geser + tempel tepi + posisi diingat, area kosong tembus sentuhan, menu tahan-kirim / Telepon 110 (`fallback_phone`) / 112, panel status + batal + Foto/Video/Suara lewat callback `onCapture` (SDK tetap tanpa plugin kamera). 1 widget test
+- ✅ Laporan pengaduan: `reports.kind` (`sos`|`pengaduan`, migrasi 003), `complaint_categories` di config, Flutter `complain()` + menu ke-4 di `SOSFloatingButton` (gaya tombol gradien tata-warga). Portal: badge Pengaduan tanpa alarm. Polmas: tampil sebagai jenis pengaduan
+- ⬜ `SOSFloatingButton` Android native & iOS (termasuk menu pengaduan). Prioritas berikutnya
+- ⬜ React Native, publish pub.dev / Maven / SPM, contoh app mobile + uji emulator
 
 ### Frontend
 - ✅ Landing page di `apps/portal` route `/` (F-20): 7 bagian, animasi CSS + IntersectionObserver (dengan fallback scroll), Lighthouse prod 94/100/100/100. **Belum dicocokkan dengan PRD asli.**
@@ -107,6 +123,9 @@ pnpm -r typecheck
 - **Redis lokal (:6379) dipakai bersama project lain**, jadi `.env` dev memakai `redis://localhost:6379/9`. Pub/sub tidak terpisah per DB index, tapi channel `rt:acc:*` cukup unik.
 - Konteks tenant: semua akses ke tabel ber-RLS harus lewat `withTenant(accountId, fn)`. Admin/job lintas tenant memakai `withPlatform(fn)`.
 - Cache kunci in-process 30 detik. `invalidateKeyCache()` hanya membersihkan instance lokal; instance lain mengikuti TTL (tetap ≤ 60 detik sesuai PRD).
+- **Mobile toolchain di mesin ini:** Flutter 3.47, Android SDK (platform 23–36, AVD `Pixel_7_API_35`), JDK 17 untuk Gradle (`JAVA_HOME=$(/usr/libexec/java_home -v 17)`), Gradle 8.13 + AGP 8.11.1 + Kotlin 2.2.21 ter-cache. **Tidak ada Xcode penuh** (hanya Command Line Tools): Swift package bisa `swift build/run` di macOS, tapi tidak ada XCTest/simulator iOS, makanya ada `siagasos-selftest`.
+- Unit test Android dikompilasi terhadap `android.jar`: `com.sun.net.httpserver` tidak ada, pakai `FakeHttpServer` (ServerSocket). Hindari `java.time` di kode SDK (minSdk 21).
+- Data demo mobile: app "Aplikasi Kurir (Android)" bundle `id.demosiaga.kurir`, kunci live di portal → dipakai uji integrasi SDK mobile.
 - **Port 5173 dipakai project lain (`sekolahkita`)**, jadi portal jalan di :5174. Saat dev, jalankan API dengan `PORTAL_URL=http://localhost:5174` supaya tautan verifikasi/undangan benar.
 - **Route portal baru harus di-mount dengan `app.use(path, portalCors)`**, bukan hanya `app.get(..., portalCors, ...)`, karena preflight OPTIONS dari browser tidak ter-handle (bug ini sempat terjadi di `/portal/me`). Smoke test via fetch Node tidak mendeteksinya.
 - Tile peta: OSM standar + CSS filter. CARTO butuh API key.
@@ -153,3 +172,37 @@ pnpm -r typecheck
 - Tema: `lib/theme.ts`, `ThemeMenu`, token gelap kini di `:root[data-theme='dark']` (bukan media query), aksen via `data-accent`.
 - Bug ditemukan & diperbaiki: HEAD MinIO 403 sesaat setelah PUT (retry), tombol/banner merah kurang kontras di mode gelap.
 - Diuji: smoke 67/67 ✅ (8 cek media baru, ke MinIO sungguhan), typecheck 7 paket ✅, build ✅, E2E browser: pelapor (demo :5176) kirim foto + MP4 + rekaman mic → dashboard menampilkan & memutar ketiganya; E2E tema (klik menu, persist, tanpa kedip, mode sistem).
+
+### 2026-11-21 — Session 2 (lanjutan): SDK mobile
+- Permintaan user: SDK mobile (Flutter, Android native, dll.) dulu, lalu 4 item penting (web push, consent, retensi media, kompresi video). Kemudian user menegaskan **fokus mobile, web nanti**, dan minta **tombol SOS melayang seperti tatawarga mobile**.
+- Selesai & teruji: `docs/SDK_PROTOCOL.md`, SDK Flutter (10/10), SDK Android native (10/10), keduanya termasuk uji integrasi ke API lokal + MinIO (trigger live dengan bundle `id.demosiaga.kurir`, lampiran ready, bundle salah → `bundle_not_allowed`, file terbaca dari portal, batal).
+- Ditulis, belum terverifikasi: SDK iOS (`packages/sdk-ios`). Run `swift run siagasos-selftest` terhenti oleh user sebelum hasil keluar.
+- Saat ini, memasang SDK **tidak mengubah tampilan apa pun secara otomatis**: developer menaruh `SOSButton` (tombol bulat besar, tahan N dtk) sendiri. Tombol melayang belum ada → pekerjaan berikutnya (lihat "Posisi saat ini").
+
+### 2026-11-23 — Session 3: jalankan bersama polmas, iOS terverifikasi, tombol melayang Flutter
+- Permintaan user: jalankan siagasos + polmas (`../polmas`) berdampingan, DB login berjenjang polmas di Postgres :5433 (sama dengan siagasos), lalu lengkapi yang kurang di siagasos.
+- polmas (repo terpisah): DB `polmas` + role `polmas_app` di :5433, dev server `npx vite --port 5177` (5173 = sekolahkita, 5174–5176 = siagasos).
+- Sempat salah sasaran: login berjenjang dibuat dulu di `tip-media-intelligence` (DB `tip_auth` di :5433, belum di-commit) sebelum user meralat ke polmas.
+- Diverifikasi: `pnpm smoke` 67/67 ✅, `pnpm -r typecheck` ✅, SDK iOS selftest 20/20 ✅ (pertama kali lolos), Flutter 11/11 ✅.
+- Baru: `packages/sdk-flutter/lib/src/sos_floating_button.dart` + `test/floating_button_test.dart`, README Flutter.
+- Jebakan: di widget test, upload `StreamedRequest` lewat `MockClient` tidak selesai di fake-async; harus diselingi `tester.runAsync(...)` + `pump`.
+- Belum: `SOSFloatingButton` Android & iOS, contoh app Flutter + uji emulator, lalu daftar penting (web push, consent UU PDP, cron media pending, kompresi video).
+
+
+### 2026-11-23 — Session 4: rencana integrasi ke Polmas
+- Permintaan user: klien memasang SDK/kunci SiagaSOS → laporan masuk DB siagasos → tampil juga di dashboard Polmas per satuan (pilot klien: tata-warga).
+- Hasil: rencana [docs/INTEGRASI_POLMAS.md](docs/INTEGRASI_POLMAS.md) (wilayah PostGIS per laporan, `share_polmas` per app, API mitra `/partner/v1` + RLS `withPartner()`, proxy di server Polmas, tata-warga lewat SDK Flutter + webhook ke tata-warga-be). Belum ada kode; 6 keputusan terbuka di §8.
+- Temuan: PostGIS 3.5.6 tersedia di :5433. tata-warga-mobile sudah punya SOS sendiri (`/sos`, `/keamanan/sos`) ke tata-warga-be.
+
+### 2026-11-23 · Polmas: konsol SOS memakai data nyata SiagaSOS
+- Repo `../polmas`: halaman Laporan & SOS dirombak jadi pusat komando (peta SOS langsung, statistik, strip SOS geser, arus laporan, panel detail dengan kontak pelapor + media TKP dari MinIO). Data contoh tetap ada, ditambah SOS nyata dari DB SiagaSOS lewat proxy server Polmas `/api/sos` → `/v1/reports` (kunci `sk_live_` per app di `polmas/.env.local`), polling 5 dtk + bunyi saat SOS baru.
+- Aksi petugas Polmas → `PATCH /v1/reports/:id` (acknowledged / in_progress / resolved / false_alarm + catatan "[satuan · petugas]"). "Teruskan ke 110" = in_progress + catatan (diingat di browser).
+- Dibuat 2 kunci secret live baru untuk app demo (kunci lama tetap aktif) dan 3 SOS live contoh di Kota Bogor (Aplikasi Kurir).
+- Belum: API mitra `/partner/v1` dengan cakupan wilayah di server (docs/INTEGRASI_POLMAS.md tahap 1–3). Sekarang cakupan Polsek masih di UI (kecamatan terdekat ±4 km).
+
+### 2026-11-23 · Laporan pengaduan di tombol melayang
+- API: migrasi `003_report_kind.sql` (`reports.kind`), `createReportSchema.kind` (pengaduan wajib uraian ≥ 5), `complaint_categories` di `/v1/sdk/config` + portal `sdk_config`, kuota pengaduan terpisah (5/jam per reporter), tanpa email darurat, `/locations` → `accepted:false`, filter `?kind=` di `/v1/reports`. Smoke **72/72** (+5 cek pengaduan).
+- Flutter: `SiagaSOS.complain()`, `ReportKind`, `SdkConfig.complaintCategories`; `SOSFloatingButton` jadi 4 tombol gradien (Kirim SOS tahan / Telepon 110 / Telepon 112 / Laporan pengaduan) + lembar form (jenis, uraian, foto opsional, status terkirim/antrian). `flutter analyze` bersih, **12/12** test (11 + integrasi). Perbaikan: nomor laporan pendek tidak lagi crash.
+- Portal: badge "Pengaduan", tanpa bunyi/notifikasi browser. Polmas: pengaduan SiagaSOS tampil sebagai jenis pengaduan (tanpa bunyi, tombol "Tidak valid").
+- Belum dicek visual di emulator. Android/iOS: `complain()` + menu pengaduan menyusul bersama tombol melayang native.
+- Dokumentasi portal `/docs`: bagian baru **SDK Mobile** (tabel Flutter/Android/iOS, contoh kode tiap platform, `SOSFloatingButton` + tabel 4 aksi & props) dan **Laporan pengaduan** (perbandingan SOS vs pengaduan, `complain()`, contoh API); `kind` di payload webhook, filter `kind` di REST, error 422 & batas pengaduan, checklist go-live mobile. Portal Pengaturan app: isian **Jenis pengaduan** (`complaint_categories`). README iOS baru; README Android mencatat menu pengaduan belum ada.

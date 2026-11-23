@@ -1,7 +1,7 @@
 import { useState, type FormEvent, type KeyboardEvent } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { ArrowLeft, ArrowsClockwise, Key, Plus, Prohibit, X } from '@phosphor-icons/react';
-import { DEFAULT_CATEGORIES } from '@siagasos/shared';
+import { DEFAULT_CATEGORIES, DEFAULT_COMPLAINT_CATEGORIES } from '@siagasos/shared';
 import { api, ApiError } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { catLabel, fmtAgo, fmtDate } from '../lib/format';
@@ -232,7 +232,8 @@ function SettingsTab({ app, onSaved }: { app: App; onSaved: (a: App) => void }) 
   });
   const cfg0: SdkConfig = app.sdk_config ?? {};
   const [cfg, setCfg] = useState({
-    categories: cfg0.categories ?? [...DEFAULT_CATEGORIES], button_text: cfg0.button_text ?? '', hold_seconds: cfg0.hold_seconds ?? 3,
+    categories: cfg0.categories ?? [...DEFAULT_CATEGORIES],
+    complaint_categories: cfg0.complaint_categories ?? [...DEFAULT_COMPLAINT_CATEGORIES], button_text: cfg0.button_text ?? '', hold_seconds: cfg0.hold_seconds ?? 3,
     recipient_text: cfg0.recipient_text ?? '', fallback_phone: cfg0.fallback_phone ?? '', live_location_interval_s: cfg0.live_location_interval_s ?? 15,
   });
   const [busy, setBusy] = useState(false);
@@ -244,7 +245,7 @@ function SettingsTab({ app, onSaved }: { app: App; onSaved: (a: App) => void }) 
     setBusy(true);
     setErr(null);
     try {
-      const sdk_config: SdkConfig = { categories: cfg.categories, hold_seconds: cfg.hold_seconds, live_location_interval_s: cfg.live_location_interval_s };
+      const sdk_config: SdkConfig = { categories: cfg.categories, complaint_categories: cfg.complaint_categories, hold_seconds: cfg.hold_seconds, live_location_interval_s: cfg.live_location_interval_s };
       if (cfg.button_text) sdk_config.button_text = cfg.button_text;
       if (cfg.recipient_text) sdk_config.recipient_text = cfg.recipient_text;
       if (cfg.fallback_phone) sdk_config.fallback_phone = cfg.fallback_phone;
@@ -308,6 +309,10 @@ function SettingsTab({ app, onSaved }: { app: App; onSaved: (a: App) => void }) 
               <ChipList id="cats" value={cfg.categories} onChange={(v) => setCfg({ ...cfg, categories: v.slice(0, 12) })} placeholder="tambah kategori" validate={(s) => (s.length > 40 ? 'Maks. 40 karakter' : null)} />
             </Field>
             <p className="small muted">{cfg.categories.map(catLabel).join(' · ')}</p>
+            <Field label="Jenis pengaduan" htmlFor="complaint-cats" hint="Menu &quot;Laporan pengaduan&quot; di tombol melayang SDK. Maks. 12">
+              <ChipList id="complaint-cats" value={cfg.complaint_categories} onChange={(v) => setCfg({ ...cfg, complaint_categories: v.slice(0, 12) })} placeholder="tambah jenis pengaduan" validate={(s) => (s.length > 40 ? 'Maks. 40 karakter' : null)} />
+            </Field>
+            <p className="small muted">{cfg.complaint_categories.map(catLabel).join(' · ')}</p>
             <div className="grid-2">
               <TextField label="Teks tombol" placeholder="SOS" maxLength={20} value={cfg.button_text} onChange={(e) => setCfg({ ...cfg, button_text: e.target.value })} />
               <TextField label="Tahan tombol (detik)" type="number" min={1} max={10} value={cfg.hold_seconds} onChange={(e) => setCfg({ ...cfg, hold_seconds: Math.min(10, Math.max(1, Number(e.target.value) || 1)) })} hint="Mencegah tekan tidak sengaja" />

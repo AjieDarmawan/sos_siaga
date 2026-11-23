@@ -6,3 +6,4 @@ export 'src/models.dart';
 export 'src/storage.dart' show QueueStore, SharedPrefsQueueStore, MemoryQueueStore;
 export 'src/client.dart';
 export 'src/sos_button.dart';
+export 'src/sos_floating_button.dart';

@@ -124,7 +124,20 @@ class SiagaSOS {
   // ------------------------------------------------------------------ trigger + antrian
   /// Kirim SOS. Tidak pernah melempar karena jaringan: bila offline, laporan masuk antrian
   /// (status [SosStatus.queued]) dan dikirim otomatis. Error permanen dilempar sebagai [SiagaSOSError].
-  Future<ActiveReport> trigger({String category = 'general', String? message, Map<String, dynamic>? metadata}) async {
+  Future<ActiveReport> trigger({String category = 'general', String? message, Map<String, dynamic>? metadata}) =>
+      _submit(ReportKind.sos, category: category, message: message, metadata: metadata);
+
+  /// Kirim laporan pengaduan (non-darurat), mis. dari menu "Laporan pengaduan" di [SOSFloatingButton].
+  /// [message] wajib (min. 5 karakter). Perilaku antrian offline sama dengan [trigger], tetapi tanpa lokasi live
+  /// dan tanpa notifikasi darurat ke responder. Lokasi saat dikirim tetap disertakan bila tersedia.
+  Future<ActiveReport> complain({required String category, required String message, Map<String, dynamic>? metadata}) {
+    if (message.trim().length < 5) {
+      throw const SiagaSOSError(422, 'validation_failed', 'Uraian pengaduan minimal 5 karakter');
+    }
+    return _submit(ReportKind.pengaduan, category: category, message: message.trim(), metadata: metadata);
+  }
+
+  Future<ActiveReport> _submit(ReportKind kind, {required String category, String? message, Map<String, dynamic>? metadata}) async {
     SosLocation? loc;
     try {
       loc = await locationProvider?.call().timeout(locationTimeout);
@@ -136,6 +149,7 @@ class SiagaSOS {
       'idem': _uuid(),
       'createdAt': DateTime.now().toUtc().toIso8601String(),
       'body': {
+        if (kind == ReportKind.pengaduan) 'kind': 'pengaduan',
         'category': category,
         if (message != null) 'message': message,
         if (sourceKey != null) 'source_key': sourceKey,
@@ -154,6 +168,7 @@ class SiagaSOS {
       mode: mode,
       category: category,
       createdAt: DateTime.now(),
+      kind: kind,
     );
     _reports[queued.localId] = queued;
     await _queue.save([...await _queue.load(), item]);
@@ -186,6 +201,7 @@ class SiagaSOS {
       mode: mode,
       category: (item['body'] as Map)['category'] as String,
       createdAt: prev?.createdAt ?? DateTime.now(),
+      kind: _kindOf(item),
     );
     _reports[localId] = r;
     _sentCtl.add(r);
@@ -193,6 +209,9 @@ class SiagaSOS {
     _track(r);
     return r;
   }
+
+  static ReportKind _kindOf(Map<String, dynamic> item) =>
+      (item['body'] as Map)['kind'] == 'pengaduan' ? ReportKind.pengaduan : ReportKind.sos;
 
   Future<void> _removeFromQueue(String localId) async =>
       _queue.save((await _queue.load()).where((i) => i['localId'] != localId).toList());
@@ -207,7 +226,8 @@ class SiagaSOS {
         _reports.putIfAbsent(localId, () => ActiveReport(
               localId: localId, id: null, status: SosStatus.queued, mode: mode,
               category: (item['body'] as Map)['category'] as String? ?? 'general',
-              createdAt: DateTime.tryParse(item['createdAt'] as String? ?? '') ?? DateTime.now()));
+              createdAt: DateTime.tryParse(item['createdAt'] as String? ?? '') ?? DateTime.now(),
+              kind: _kindOf(item)));
         try {
           await _send(item);
           _retryDelay = const Duration(seconds: 2);
@@ -236,12 +256,14 @@ class SiagaSOS {
   // ------------------------------------------------------------------ status + lokasi live
   void _track(ActiveReport r) {
     if (r.status.isTerminal || _disposed) return;
-    _pollers[r.localId] ??= Timer.periodic(pollInterval, (_) async {
+    // Pengaduan bisa terbuka berhari-hari: polling jarang, tanpa lokasi live.
+    final complaint = r.kind == ReportKind.pengaduan;
+    _pollers[r.localId] ??= Timer.periodic(complaint ? pollInterval * 8 : pollInterval, (_) async {
       try {
         _update(r.localId, await _request('GET', '/v1/sdk/reports/${r.id}'));
       } catch (_) {/* coba lagi di tick berikutnya */}
     });
-    if (liveLocation && locationProvider != null && !_locators.containsKey(r.localId)) {
+    if (!complaint && liveLocation && locationProvider != null && !_locators.containsKey(r.localId)) {
       getConfig().then((cfg) {
         if (_disposed || _locators.containsKey(r.localId)) return;
         _locators[r.localId] = Timer.periodic(Duration(seconds: cfg.liveLocationIntervalS), (_) => _sendLocation(r.localId));

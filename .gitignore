@@ -4,3 +4,10 @@ dist/
 storage/
 *.log
 .DS_Store
+
+# build artefak SDK native
+.build/
+.swiftpm/
+build/
+.gradle/
+local.properties
