@@ -365,6 +365,13 @@ class SiagaSOS {
 
   Future<Map<String, dynamic>> getReport(String id) => _request('GET', '/v1/sdk/reports/$id');
 
+  /// Catatan pelapor untuk petugas (mis. keterangan rekaman TKP). Tampil di timeline dashboard.
+  /// Bila laporan masih di antrian offline, menunggu sampai terkirim (maks. [waitTimeout]).
+  Future<void> addNote(String idOrLocalId, String note, {Duration waitTimeout = const Duration(minutes: 2)}) async {
+    final id = await _waitForServerId(idOrLocalId, waitTimeout);
+    await _request('POST', '/v1/sdk/reports/$id/notes', body: {'note': note.trim()});
+  }
+
   ActiveReport? _find(String idOrLocalId) =>
       _reports[idOrLocalId] ?? _reports.values.where((r) => r.id == idOrLocalId).firstOrNull;
 

@@ -72,6 +72,7 @@ Halaman: registrasi 3 langkah, verifikasi email, status verifikasi + unggah doku
 | GET | `/v1/sdk/reports/:id` | status untuk pengguna |
 | POST | `/v1/sdk/reports/:id/locations` | live location; balasan `accepted:false` = berhenti |
 | POST | `/v1/sdk/reports/:id/cancel` | batal, hanya selama `open` |
+| POST | `/v1/sdk/reports/:id/notes` | catatan pelapor `{note}` (mis. keterangan rekaman TKP) → timeline `note`; 409 bila laporan sudah ditutup |
 | POST | `/v1/sdk/reports/:id/media` | minta presigned PUT untuk foto/video/suara (`content_type`, `size_bytes`) |
 | POST | `/v1/sdk/reports/:id/media/:mediaId/complete` | konfirmasi upload; server HEAD objek lalu tampil realtime |
 
