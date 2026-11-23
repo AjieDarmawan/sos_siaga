@@ -7,7 +7,7 @@ Tombol darurat SiagaSOS untuk aplikasi Flutter (Android & iOS): kirim SOS dengan
 ```yaml
 dependencies:
   siagasos:
-    git: { url: git@gitlab.com:technosoft-indo-prima/sos_siaga.git, path: packages/sdk-flutter }
+    git: { url: https://github.com/AjieDarmawan/sos_siaga.git, path: packages/sdk-flutter }
 ```
 
 Di portal SiagaSOS → **App & kunci API**, daftarkan package name / bundle id aplikasi Anda (mis. `com.perusahaan.app`) di **Bundle id Android / iOS**.

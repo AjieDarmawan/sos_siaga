@@ -7,20 +7,27 @@ import { enforce, hit } from '../lib/rateLimit.js';
 import { publishableKeyAuth } from '../middleware/keyAuth.js';
 import { changeReport, loadReport, onReportCreated, publicReport } from '../lib/reports.js';
 import { publish } from '../lib/realtime.js';
+import { dispatchSosWhatsApp } from '../lib/sosRecipients.js';
 import { config } from '../config.js';
-import { completeMediaUpload, createMediaSchema, createMediaUpload } from '../lib/media.js';
+import { dispatchSosPush } from '../lib/responders.js';
+import { contactsRouter, responderRouter } from './responder.js';
+import { completeMediaUpload, createMediaSchema, createMediaUpload, listReadyMedia } from '../lib/media.js';
 
 /** /v1/sdk — dipanggil @siagasos/js dan SDK native dengan publishable key. */
 export const sdkRouter = Router();
 
 // Preflight boleh dari mana saja; Origin sebenarnya dicek di publishableKeyAuth terhadap allowed_origins.
-sdkRouter.use(cors({ origin: true, credentials: false, allowedHeaders: ['Content-Type', 'X-SOS-Key', 'X-SOS-Bundle', 'Idempotency-Key'], maxAge: 600 }));
+sdkRouter.use(cors({ origin: true, credentials: false, allowedHeaders: ['Content-Type', 'X-SOS-Key', 'X-SOS-Bundle', 'X-SOS-Responder', 'Idempotency-Key'], maxAge: 600 }));
 sdkRouter.use(publishableKeyAuth);
 sdkRouter.use(async (req, _res, next) => {
   await enforce(`key:${req.key!.keyId}`, 120, 60);
   await enforce(`ip:${req.ip}`, 60, 60);
   next();
 });
+
+// Nomor Darurat pelapor (sinkron dari perangkat) + login & kerja satpam (OTP WA, push FCM).
+sdkRouter.use('/contacts', contactsRouter);
+sdkRouter.use('/responder', responderRouter);
 
 sdkRouter.get('/config', (req, res) => {
   const k = req.key!;
@@ -80,13 +87,14 @@ sdkRouter.post('/reports', async (req, res) => {
 
     const ins = await c.query(
       `INSERT INTO reports (app_id, account_id, source_id, mode, category, reporter_ref, reporter_name, reporter_phone,
-         message, lat, lng, accuracy_m, device, metadata, ip, idempotency_key, client_created_at, kind)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)
+         message, lat, lng, accuracy_m, device, metadata, ip, idempotency_key, client_created_at, kind, emergency_contacts)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)
        ON CONFLICT (app_id, idempotency_key) DO NOTHING RETURNING *`,
       [k.appId, k.accountId, sourceId, k.mode, body.category, body.reporter?.ref ?? null, body.reporter?.name ?? null,
         body.reporter?.phone ?? null, body.message ?? null, body.location?.lat ?? null, body.location?.lng ?? null,
         body.location?.accuracy_m ?? null, body.device ? JSON.stringify(body.device) : null,
-        body.metadata ? JSON.stringify(body.metadata) : null, req.ip ?? null, idem, body.client_created_at ?? null, body.kind],
+        body.metadata ? JSON.stringify(body.metadata) : null, req.ip ?? null, idem, body.client_created_at ?? null, body.kind,
+        body.kind === 'sos' && body.emergency_contacts?.length ? JSON.stringify(body.emergency_contacts) : null],
     );
     if (!ins.rows[0]) {
       // balapan dua retry bersamaan
@@ -107,12 +115,71 @@ sdkRouter.post('/reports', async (req, res) => {
   });
 
   res.status(result.replay ? 200 : 201).set('Idempotent-Replayed', String(result.replay)).json(publicReport(result.report));
+  // Setelah commit & respons: WA ke Penerima SOS + kontak darurat. Tidak ditunggu, tidak memblokir jalur SOS.
+  if (!result.replay) {
+    void dispatchSosWhatsApp(result.report, k.appName);
+    // Push alarm + sirene ke HP satpam yang login dengan nomor di kontak darurat laporan ini.
+    void dispatchSosPush(result.report, k.appName);
+  }
 });
 
 sdkRouter.get('/reports/:id', async (req, res) => {
   const k = req.key!;
   const r = await withTenant(k.accountId, (c) => loadReport(c, req.params.id!, k.appId));
   res.set('Cache-Control', 'no-store').json(publicReport(r));
+});
+
+/**
+ * Detail untuk "Riwayat laporan" di perangkat pelapor: uraian, lokasi, timeline, dan media (URL baca 15 menit).
+ * Tanpa data pribadi lain: nomor HP/device/IP pelapor tidak dikirim, hasil WhatsApp hanya diringkas (nomor penerima
+ * SOS tidak dibuka ke pelapor). Hanya pemegang id laporan (UUID acak dari respons POST) yang bisa membacanya.
+ */
+sdkRouter.get('/reports/:id/detail', async (req, res) => {
+  const k = req.key!;
+  const out = await withTenant(k.accountId, async (c) => {
+    const r = await loadReport(c, req.params.id!, k.appId);
+    const ev = await c.query(
+      `SELECT e.type, e.actor_kind, e.to_status, e.note, e.created_at, u.full_name AS actor_name
+       FROM report_events e LEFT JOIN users u ON u.id = e.actor_id
+       WHERE e.report_id = $1 ORDER BY e.created_at, e.id`,
+      [r.id],
+    );
+    const timeline: { type: string; actor: string; to_status: string | null; note: string | null; created_at: string }[] = [];
+    let wa: { sent: number; failed: number; at: string } | null = null;
+    for (const e of ev.rows) {
+      if (e.type === 'whatsapp') {
+        wa ??= { sent: 0, failed: 0, at: e.created_at };
+        if (/: terkirim$/.test(e.note ?? '')) wa.sent++;
+        else if (/: gagal/.test(e.note ?? '')) wa.failed++;
+        continue;
+      }
+      timeline.push({
+        type: e.type,
+        actor: e.actor_kind === 'reporter' ? 'Anda' : e.actor_kind === 'responder' ? 'Satpam' : e.actor_kind === 'user' ? (e.actor_name ?? 'Petugas') : e.actor_kind === 'server' ? 'Petugas' : 'Sistem',
+        to_status: e.to_status,
+        note: e.note,
+        created_at: e.created_at,
+      });
+    }
+    if (wa && (wa.sent || wa.failed)) {
+      timeline.push({
+        type: 'whatsapp', actor: 'Sistem', to_status: null, created_at: wa.at,
+        note: `WhatsApp terkirim ke ${wa.sent} penerima${wa.failed ? `, ${wa.failed} gagal` : ''}`,
+      });
+      timeline.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+    }
+    const media = (await listReadyMedia(c, r.id)).map((m) => ({
+      id: m.id, kind: m.kind, content_type: m.content_type, duration_s: m.duration_s, uploaded_by: m.uploaded_by, created_at: m.created_at, url: m.url,
+    }));
+    return {
+      ...publicReport(r),
+      message: r.message ?? null,
+      location: r.lat == null ? null : { lat: r.lat, lng: r.lng, accuracy_m: r.accuracy_m },
+      timeline,
+      media,
+    };
+  });
+  res.set('Cache-Control', 'no-store').json(out);
 });
 
 sdkRouter.post('/reports/:id/locations', async (req, res) => {

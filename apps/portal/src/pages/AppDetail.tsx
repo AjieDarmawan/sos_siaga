@@ -1,6 +1,6 @@
 import { useState, type FormEvent, type KeyboardEvent } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { ArrowLeft, ArrowsClockwise, Key, Plus, Prohibit, X } from '@phosphor-icons/react';
+import { ArrowLeft, ArrowsClockwise, Key, Plus, Prohibit, Trash, WhatsappLogo, X } from '@phosphor-icons/react';
 import { DEFAULT_CATEGORIES, DEFAULT_COMPLAINT_CATEGORIES } from '@siagasos/shared';
 import { api, ApiError } from '../lib/api';
 import { useAuth } from '../lib/auth';
@@ -10,8 +10,8 @@ import { TestModeNotice } from '../components/Layout';
 import { Alert, Badge, Button, CopyButton, Empty, Field, KeyBox, Modal, Spinner, TextField, useLoad, useToast } from '../components/ui';
 import { NewKeysModal, type NewKeys } from './Apps';
 
-type Tab = 'keys' | 'settings' | 'sources' | 'webhooks';
-const TABS: [Tab, string][] = [['keys', 'Kunci API'], ['settings', 'Pengaturan'], ['sources', 'Source'], ['webhooks', 'Log webhook']];
+type Tab = 'keys' | 'settings' | 'recipients' | 'sources' | 'webhooks';
+const TABS: [Tab, string][] = [['keys', 'Kunci API'], ['settings', 'Pengaturan'], ['recipients', 'Penerima SOS'], ['sources', 'Source'], ['webhooks', 'Log webhook']];
 
 export function AppDetailPage() {
   const id = useParams().id!;
@@ -42,6 +42,7 @@ export function AppDetailPage() {
       <div role="tabpanel" id={`panel-${tab}`} aria-labelledby={`tab-${tab}`}>
         {tab === 'keys' && <KeysTab app={app} reload={reload} />}
         {tab === 'settings' && <SettingsTab app={app} onSaved={(a) => setData({ ...a, keys: app.keys })} />}
+        {tab === 'recipients' && <RecipientsTab app={app} />}
         {tab === 'sources' && <SourcesTab app={app} />}
         {tab === 'webhooks' && <WebhooksTab app={app} />}
       </div>
@@ -371,6 +372,96 @@ function SourcesTab({ app }: { app: App }) {
             <tbody>
               {data.data.map((s) => (
                 <tr key={s.id}><td><code>{s.source_key}</code></td><td>{s.label ?? '—'}</td><td>{s.platform ?? '—'}</td><td>{s.report_count}</td><td className="small muted">{fmtDate(s.created_at)}</td></tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------- penerima SOS (WhatsApp)
+interface Recipient { id: string; name: string; phone: string; source_id: string | null; source_key: string | null; source_label: string | null; active: boolean; created_at: string }
+
+function RecipientsTab({ app }: { app: App }) {
+  const { can } = useAuth();
+  const toast = useToast();
+  const manage = can('owner', 'admin');
+  const { data, loading, reload } = useLoad(() => api<{ data: Recipient[] }>(`/portal/apps/${app.id}/recipients`), [app.id]);
+  const sources = useLoad(() => api<{ data: Source[] }>(`/portal/apps/${app.id}/sources`), [app.id]);
+  const [f, setF] = useState({ name: '', phone: '', source_id: '' });
+  const [busy, setBusy] = useState<string | null>(null);
+
+  async function add(e: FormEvent) {
+    e.preventDefault();
+    setBusy('add');
+    try {
+      await api(`/portal/apps/${app.id}/recipients`, { body: { name: f.name, phone: f.phone, source_id: f.source_id || null } });
+      setF({ name: '', phone: '', source_id: f.source_id });
+      toast('Penerima SOS ditambahkan');
+      void reload();
+    } catch (e) { toast(e instanceof ApiError ? e.detailMessage : String(e), 'error'); } finally { setBusy(null); }
+  }
+
+  async function toggle(r: Recipient) {
+    setBusy(r.id);
+    try {
+      await api(`/portal/apps/${app.id}/recipients/${r.id}`, { method: 'PATCH', body: { active: !r.active } });
+      void reload();
+    } catch (e) { toast(e instanceof ApiError ? e.detailMessage : String(e), 'error'); } finally { setBusy(null); }
+  }
+
+  async function remove(r: Recipient) {
+    if (!window.confirm(`Hapus ${r.name} (${r.phone}) dari penerima SOS?`)) return;
+    setBusy(r.id);
+    try {
+      await api(`/portal/apps/${app.id}/recipients/${r.id}`, { method: 'DELETE' });
+      toast('Penerima SOS dihapus');
+      void reload();
+    } catch (e) { toast(e instanceof ApiError ? e.detailMessage : String(e), 'error'); } finally { setBusy(null); }
+  }
+
+  return (
+    <div className="stack">
+      <p className="muted small">
+        Setiap SOS live dari app ini dikirim ke nomor WhatsApp di bawah: nama pelapor, lokasi (app · source), dan link Google Maps.
+        Kontak darurat pribadi yang diatur pelapor di aplikasi (maks. 3) ikut dikabari. Pengaduan tidak memicu WhatsApp.
+        Hasil pengiriman tiap nomor tercatat di timeline laporan.
+      </p>
+      {manage && (
+        <form className="card card-pad row" style={{ alignItems: 'flex-end' }} onSubmit={add}>
+          <div style={{ flex: '1 1 160px' }}><TextField label="Nama" placeholder="Pos satpam" value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} /></div>
+          <div style={{ flex: '1 1 160px' }}><TextField label="Nomor WhatsApp" placeholder="0812xxxxxxx" inputMode="tel" value={f.phone} onChange={(e) => setF({ ...f, phone: e.target.value })} /></div>
+          <Field label="Cakupan" htmlFor="rcpt-source">
+            <select id="rcpt-source" className="select" value={f.source_id} onChange={(e) => setF({ ...f, source_id: e.target.value })}>
+              <option value="">Semua source</option>
+              {sources.data?.data.map((s) => <option key={s.id} value={s.id}>{s.label ? `${s.label} (${s.source_key})` : s.source_key}</option>)}
+            </select>
+          </Field>
+          <Button type="submit" variant="primary" loading={busy === 'add'} disabled={!f.name.trim() || !f.phone.trim()}><Plus size={14} />Tambah</Button>
+        </form>
+      )}
+      <div className="card table-wrap">
+        {loading && !data ? <Spinner /> : !data?.data.length ? (
+          <Empty icon={<WhatsappLogo size={32} />} title="Belum ada penerima SOS">Tambahkan nomor pos satpam / pengelola yang harus dikabari saat ada SOS.</Empty>
+        ) : (
+          <table className="table">
+            <thead><tr><th>Nama</th><th>WhatsApp</th><th>Cakupan</th><th>Status</th>{manage && <th />}</tr></thead>
+            <tbody>
+              {data.data.map((r) => (
+                <tr key={r.id}>
+                  <td>{r.name}</td>
+                  <td className="mono small">+{r.phone}</td>
+                  <td>{r.source_id ? <code>{r.source_label ?? r.source_key}</code> : <span className="muted">Semua source</span>}</td>
+                  <td>{r.active ? <Badge tone="ok">Aktif</Badge> : <Badge tone="muted">Nonaktif</Badge>}</td>
+                  {manage && (
+                    <td style={{ whiteSpace: 'nowrap', textAlign: 'right' }}>
+                      <Button size="sm" loading={busy === r.id} onClick={() => void toggle(r)}>{r.active ? 'Nonaktifkan' : 'Aktifkan'}</Button>{' '}
+                      <Button size="sm" variant="danger" aria-label={`Hapus ${r.name}`} disabled={busy === r.id} onClick={() => void remove(r)}><Trash size={14} /></Button>
+                    </td>
+                  )}
+                </tr>
               ))}
             </tbody>
           </table>

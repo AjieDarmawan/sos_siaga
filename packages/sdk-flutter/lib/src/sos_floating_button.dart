@@ -78,6 +78,8 @@ class SOSFloatingButton extends StatefulWidget {
     this.siren,
     this.tkpPrompt = true,
     this.tkpSeconds = 5,
+    this.emergencyContacts = true,
+    this.onOpenUrl,
   });
 
   final SiagaSOS client;
@@ -135,13 +137,17 @@ class SOSFloatingButton extends StatefulWidget {
 
   /// Batas durasi video TKP yang ditampilkan di ajakan rekam (kamera tetap diatur app host).
   final int tkpSeconds;
+  /// Menu "Nomor darurat" (Laporan → Nomor darurat): maks. 3 nomor WhatsApp pribadi yang ikut dikabari saat SOS.
+  final bool emergencyContacts;
+  /// Membuka tautan di luar app (peta lokasi, foto/video lampiran) dari detail riwayat, mis. url_launcher.
+  /// Null = tombol "Buka peta" disembunyikan dan lampiran hanya ditampilkan (foto) tanpa bisa dibuka.
+  final void Function(String url)? onOpenUrl;
 
   @override
   State<SOSFloatingButton> createState() => _SOSFloatingButtonState();
 }
 
 const double _kEdge = 12;
-const double _kActionWidth = 196;
 
 class _SOSFloatingButtonState extends State<SOSFloatingButton> with SingleTickerProviderStateMixin {
   late final AnimationController _hold = AnimationController(vsync: this);
@@ -281,7 +287,9 @@ class _SOSFloatingButtonState extends State<SOSFloatingButton> with SingleTicker
         onError: widget.onError,
       ));
 
-  void _openHistory() => _openSheet(() => _HistorySheet(client: widget.client, onClose: _closeSheet));
+  void _openHistory() => _openSheet(() => _HistorySheet(client: widget.client, onClose: _closeSheet, onOpenUrl: widget.onOpenUrl));
+
+  void _openContacts() => _openSheet(() => _ContactsSheet(client: widget.client, onClose: _closeSheet));
 
   void _closeSheet() {
     if (mounted) setState(() => _sheet = null);
@@ -332,8 +340,10 @@ class _SOSFloatingButtonState extends State<SOSFloatingButton> with SingleTicker
                     right: onLeft ? null : _kEdge,
                     top: openUp ? null : pos.dy + widget.size + 10,
                     bottom: openUp ? box.maxHeight - pos.dy + 10 : null,
-                    width: (box.maxWidth - _kEdge * 2).clamp(0, _kActionWidth),
-                    child: _actions(context, onLeft: onLeft, openUp: openUp),
+                    child: ConstrainedBox(
+                      constraints: BoxConstraints(maxWidth: (box.maxWidth - _kEdge * 2).clamp(0, double.infinity)),
+                      child: _actions(context, onLeft: onLeft, openUp: openUp),
+                    ),
                   ),
                 AnimatedPositioned(
                   duration: _dragPos == null ? const Duration(milliseconds: 220) : Duration.zero,
@@ -455,48 +465,39 @@ class _SOSFloatingButtonState extends State<SOSFloatingButton> with SingleTicker
     final cfg = _cfg;
     final first = cfg?.fallbackPhone ?? '110';
     final second = widget.secondaryPhone != null && widget.secondaryPhone != first ? widget.secondaryPhone : null;
-    final complaint = widget.complaint
-        ? _ActionButton(
-            key: const ValueKey('siagasos-complaint'),
-            label: 'Pengaduan',
-            icon: Icons.campaign_rounded,
-            colors: const [Color(0xFFFDBA74), Color(0xFFFB923C), Color(0xFFEA580C)],
-            onTap: _openComplaint,
-          )
-        : null;
-    final history = widget.history
-        ? _ActionButton(
-            key: const ValueKey('siagasos-history'),
-            label: 'Riwayat laporan',
-            icon: Icons.history_rounded,
-            colors: const [Color(0xFF94A3B8), Color(0xFF64748B), Color(0xFF475569)],
-            onTap: _openHistory,
-          )
-        : null;
+    final complaint = widget.complaint;
+    final history = widget.history;
+    final contacts = widget.emergencyContacts;
+    final subOptions = [if (contacts) _openContacts, if (history) _openHistory, if (complaint) _openComplaint];
+    if (_reportMenu) {
+      return _Pop(
+        key: const ValueKey('siagasos-report-panel'),
+        index: 0,
+        child: _ReportPanel(
+          onBack: () => setState(() => _reportMenu = false),
+          rows: [
+            if (complaint) const _PanelRow(ValueKey('siagasos-complaint'), 'Pengaduan', Icons.campaign_rounded, Color(0xFFEA580C)),
+            if (history) const _PanelRow(ValueKey('siagasos-history'), 'Riwayat laporan', Icons.history_rounded, Color(0xFF475569)),
+            if (contacts) const _PanelRow(ValueKey('siagasos-contacts'), 'Nomor darurat', Icons.contact_phone_rounded, Color(0xFF2563EB)),
+          ],
+          onTap: (key) => switch (key) {
+            const ValueKey('siagasos-complaint') => _openComplaint(),
+            const ValueKey('siagasos-history') => _openHistory(),
+            _ => _openContacts(),
+          },
+        ),
+      );
+    }
     // Urutan daftar = dari tombol bulat ke luar (dibalik saat menu membuka ke atas).
-    final items = _reportMenu
-        ? <Widget>[
-            _ActionButton(
-              key: const ValueKey('siagasos-back'),
-              label: 'Kembali',
-              icon: Icons.arrow_back_rounded,
-              colors: const [Color(0xFF64748B), Color(0xFF475569), Color(0xFF334155)],
-              onTap: () => setState(() => _reportMenu = false),
-            ),
-            if (history != null) history,
-            if (complaint != null) complaint,
-          ]
-        : <Widget>[
-            if (complaint != null || history != null)
+    final items = <Widget>[
+            if (subOptions.isNotEmpty)
               _ActionButton(
                 key: const ValueKey('siagasos-report'),
                 label: 'Laporan',
                 icon: Icons.assignment_rounded,
                 colors: const [Color(0xFFFDBA74), Color(0xFFFB923C), Color(0xFFEA580C)],
                 // Hanya satu pilihan yang aktif → langsung buka tanpa sub-menu.
-                onTap: complaint != null && history != null
-                    ? () => setState(() => _reportMenu = true)
-                    : (complaint != null ? _openComplaint : _openHistory),
+                onTap: subOptions.length > 1 ? () => setState(() => _reportMenu = true) : subOptions.first,
               ),
             if (widget.onCall != null) ...[
               if (second != null)
@@ -521,11 +522,10 @@ class _SOSFloatingButtonState extends State<SOSFloatingButton> with SingleTicker
               onTap: _fire,
               label: widget.sosLabel ?? (cfg?.buttonText.isNotEmpty == true ? 'Kirim ${cfg!.buttonText}' : 'Kirim SOS'),
             ),
-          ];
+    ];
+    // Hanya pesan penting: status SOS aktif cukup ditandai titik di tombol bulat.
     final note = <String>[
       if (_notice != null) _notice!,
-      if (_active) 'SOS aktif: $_statusText. Batalkan lewat Laporan → Riwayat.',
-      if (cfg != null && cfg.recipientText.isNotEmpty) cfg.recipientText,
       if (widget.client.mode == SosMode.test) 'MODE TEST',
     ];
     final ordered = openUp ? items.reversed.toList() : items;
@@ -537,25 +537,37 @@ class _SOSFloatingButtonState extends State<SOSFloatingButton> with SingleTicker
             child: Text(note.join(' · '),
                 style: TextStyle(color: _notice != null ? const Color(0xFFFCA5A5) : Colors.white, fontSize: 11.5, height: 1.3)),
           );
+    // Lebar = label terpanjang (tanpa ruang kosong), semua tombol sama lebar supaya rapi.
+    // Keterangan (error / MODE TEST) di luar IntrinsicWidth supaya tidak ikut melebarkan tombol.
+    final buttons = IntrinsicWidth(
+      key: const ValueKey('siagasos-actions'),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          for (var i = 0; i < ordered.length; i++) ...[
+            if (i > 0) const SizedBox(height: 6),
+            _Pop(index: openUp ? ordered.length - 1 - i : i, child: ordered[i]),
+          ],
+        ],
+      ),
+    );
+    if (caption == null) return buttons;
     return Column(
-      key: ValueKey(_reportMenu), // animasi muncul diputar ulang saat ganti sub-menu
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: onLeft ? CrossAxisAlignment.start : CrossAxisAlignment.end,
       children: [
-        if (openUp && caption != null) ...[caption, const SizedBox(height: 8)],
-        for (var i = 0; i < ordered.length; i++) ...[
-          if (i > 0) const SizedBox(height: 8),
-          _Pop(index: openUp ? ordered.length - 1 - i : i, child: ordered[i]),
-        ],
-        if (!openUp && caption != null) ...[const SizedBox(height: 8), caption],
+        if (openUp) ...[ConstrainedBox(constraints: const BoxConstraints(maxWidth: 220), child: caption), const SizedBox(height: 8)],
+        buttons,
+        if (!openUp) ...[const SizedBox(height: 8), ConstrainedBox(constraints: const BoxConstraints(maxWidth: 220), child: caption)],
       ],
     );
   }
 }
 
-const _kActionHeight = 48.0;
-const _kActionRadius = 12.0;
-const _kActionText = TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w600);
+const _kActionHeight = 42.0;
+const _kActionRadius = 11.0;
+const _kActionText = TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w600);
 
 BoxDecoration _actionDecoration(List<Color> colors) => BoxDecoration(
       gradient: LinearGradient(colors: colors, begin: Alignment.topLeft, end: Alignment.bottomRight),
@@ -566,7 +578,7 @@ BoxDecoration _actionDecoration(List<Color> colors) => BoxDecoration(
 
 /// Muncul bertahap saat menu dibuka.
 class _Pop extends StatelessWidget {
-  const _Pop({required this.index, required this.child});
+  const _Pop({super.key, required this.index, required this.child});
   final int index;
   final Widget child;
   @override
@@ -579,6 +591,88 @@ class _Pop extends StatelessWidget {
       );
 }
 
+/// Lingkaran putih transparan di belakang ikon tombol aksi.
+class _IconChip extends StatelessWidget {
+  const _IconChip(this.icon);
+  final IconData icon;
+  @override
+  Widget build(BuildContext context) => Container(
+        width: 30,
+        height: 30,
+        decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.22), shape: BoxShape.circle),
+        child: Icon(icon, color: Colors.white, size: 17),
+      );
+}
+
+class _PanelRow {
+  const _PanelRow(this.key, this.label, this.icon, this.color);
+  final ValueKey<String> key;
+  final String label;
+  final IconData icon;
+  final Color color;
+}
+
+/// Sub-menu "Laporan": satu kartu putih ringkas (judul ← Laporan, lalu baris pilihan), lebar mengikuti isi.
+class _ReportPanel extends StatelessWidget {
+  const _ReportPanel({required this.onBack, required this.rows, required this.onTap});
+  final VoidCallback onBack;
+  final List<_PanelRow> rows;
+  final void Function(ValueKey<String> key) onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    const ink = Color(0xFF1F2937);
+    Widget row({Key? key, required Widget leading, required String label, required VoidCallback onTap, TextStyle? style}) => InkWell(
+          key: key,
+          onTap: () {
+            HapticFeedback.lightImpact();
+            onTap();
+          },
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(10, 8, 18, 8),
+            child: Row(mainAxisSize: MainAxisSize.min, children: [
+              leading,
+              const SizedBox(width: 10),
+              Flexible(child: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, style: style)),
+            ]),
+          ),
+        );
+    return IntrinsicWidth(
+      child: Material(
+        color: Colors.white,
+        elevation: 8,
+        shadowColor: Colors.black.withValues(alpha: 0.25),
+        borderRadius: BorderRadius.circular(16),
+        clipBehavior: Clip.antiAlias,
+        child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          row(
+            key: const ValueKey('siagasos-back'),
+            leading: const SizedBox(width: 30, child: Icon(Icons.arrow_back_rounded, size: 20, color: ink)),
+            label: 'Laporan',
+            onTap: onBack,
+            style: const TextStyle(color: ink, fontSize: 14, fontWeight: FontWeight.w800),
+          ),
+          const Divider(height: 1, thickness: 1, color: Color(0xFFE5E7EB)),
+          for (final r in rows)
+            row(
+              key: r.key,
+              leading: Container(
+                width: 30,
+                height: 30,
+                decoration: BoxDecoration(color: r.color.withValues(alpha: 0.12), shape: BoxShape.circle),
+                child: Icon(r.icon, size: 17, color: r.color),
+              ),
+              label: r.label,
+              onTap: () => onTap(r.key),
+              style: const TextStyle(color: ink, fontSize: 14, fontWeight: FontWeight.w600),
+            ),
+          const SizedBox(height: 4),
+        ]),
+      ),
+    );
+  }
+}
+
 /// Tombol aksi gradien (gaya menu SOS tata-warga).
 class _ActionButton extends StatelessWidget {
   const _ActionButton({super.key, required this.label, required this.icon, required this.colors, required this.onTap});
@@ -589,7 +683,6 @@ class _ActionButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => SizedBox(
-        width: _kActionWidth,
         height: _kActionHeight,
         child: DecoratedBox(
           decoration: _actionDecoration(colors),
@@ -603,11 +696,11 @@ class _ActionButton extends StatelessWidget {
                 onTap();
               },
               child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 14),
-                child: Row(children: [
-                  Icon(icon, color: Colors.white, size: 22),
-                  const SizedBox(width: 8),
-                  Expanded(child: Text(label, overflow: TextOverflow.ellipsis, style: _kActionText)),
+                padding: const EdgeInsets.fromLTRB(6, 0, 16, 0),
+                child: Row(mainAxisSize: MainAxisSize.min, children: [
+                  _IconChip(icon),
+                  const SizedBox(width: 10),
+                  Flexible(child: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, style: _kActionText)),
                 ]),
               ),
             ),
@@ -660,26 +753,35 @@ class _HoldToSend extends StatelessWidget {
         child: AnimatedBuilder(
           animation: hold,
           builder: (context, _) => Container(
-            width: _kActionWidth,
             height: _kActionHeight,
             decoration: _actionDecoration(colors),
             clipBehavior: Clip.antiAlias,
             child: Stack(children: [
-              FractionallySizedBox(widthFactor: hold.value, child: Container(color: Colors.black.withValues(alpha: 0.22))),
+              // Positioned: lapisan progres tidak ikut menentukan lebar tombol (IntrinsicWidth di menu).
+              Positioned.fill(
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: FractionallySizedBox(widthFactor: hold.value, heightFactor: 1, child: Container(color: Colors.black.withValues(alpha: 0.22))),
+                ),
+              ),
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 14),
-                child: Row(children: [
+                padding: const EdgeInsets.fromLTRB(6, 0, 16, 0),
+                child: Row(mainAxisSize: MainAxisSize.min, children: [
                   sending
-                      ? const SizedBox.square(dimension: 20, child: CircularProgressIndicator(strokeWidth: 2.4, color: Colors.white))
-                      : const Icon(Icons.warning_amber_rounded, color: Colors.white, size: 22),
-                  const SizedBox(width: 8),
-                  Expanded(
+                      ? const SizedBox.square(
+                          dimension: 30,
+                          child: Padding(padding: EdgeInsets.all(6), child: CircularProgressIndicator(strokeWidth: 2.2, color: Colors.white)),
+                        )
+                      : const _IconChip(Icons.warning_amber_rounded),
+                  const SizedBox(width: 10),
+                  Flexible(
                     child: Text(
                       sending
                           ? 'Mengirim…'
                           : hold.value > 0
                               ? 'Tahan… ${(seconds * (1 - hold.value)).ceil()}'
                               : label,
+                      maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: _kActionText.copyWith(fontWeight: FontWeight.w700),
                     ),
@@ -1043,9 +1145,10 @@ class _SheetFrame extends StatelessWidget {
 
 /// "Riwayat laporan": SOS & pengaduan yang pernah dikirim dari perangkat ini, dengan status terbaru dari server.
 class _HistorySheet extends StatefulWidget {
-  const _HistorySheet({required this.client, required this.onClose});
+  const _HistorySheet({required this.client, required this.onClose, this.onOpenUrl});
   final SiagaSOS client;
   final VoidCallback onClose;
+  final void Function(String url)? onOpenUrl;
 
   @override
   State<_HistorySheet> createState() => _HistorySheetState();
@@ -1056,6 +1159,8 @@ class _HistorySheetState extends State<_HistorySheet> {
   bool _loading = true;
   String? _cancelling; // id laporan yang sedang dibatalkan
   String? _error;
+  /// Laporan yang sedang dibuka detailnya (null = daftar).
+  ReportRecord? _open;
 
   @override
   void initState() {
@@ -1099,6 +1204,25 @@ class _HistorySheetState extends State<_HistorySheet> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final items = _items;
+    final open = _open;
+    if (open != null) {
+      return _SheetFrame(
+        sheetKey: const ValueKey('siagasos-history-sheet'),
+        onDismiss: widget.onClose,
+        scroll: false,
+        child: _ReportDetailView(
+          key: ValueKey(open.id),
+          client: widget.client,
+          record: open,
+          onBack: () {
+            setState(() => _open = null);
+            _reload();
+          },
+          onClose: widget.onClose,
+          onOpenUrl: widget.onOpenUrl,
+        ),
+      );
+    }
     return _SheetFrame(
       sheetKey: const ValueKey('siagasos-history-sheet'),
       onDismiss: widget.onClose,
@@ -1159,6 +1283,7 @@ class _HistorySheetState extends State<_HistorySheet> {
                 final cancellable = r.kind == ReportKind.sos && r.status == SosStatus.open;
                 return _HistoryTile(
                   r,
+                  onTap: () => setState(() => _open = r),
                   cancelling: _cancelling == r.id,
                   onCancel: cancellable && _cancelling == null ? () => _cancel(r) : null,
                 );
@@ -1171,8 +1296,10 @@ class _HistorySheetState extends State<_HistorySheet> {
 }
 
 class _HistoryTile extends StatelessWidget {
-  const _HistoryTile(this.r, {this.onCancel, this.cancelling = false});
+  const _HistoryTile(this.r, {this.onCancel, this.onTap, this.cancelling = false});
   final ReportRecord r;
+  /// Buka detail laporan.
+  final VoidCallback? onTap;
   /// Null = tidak bisa dibatalkan (sudah ditangani / pengaduan).
   final VoidCallback? onCancel;
   final bool cancelling;
@@ -1200,7 +1327,13 @@ class _HistoryTile extends StatelessWidget {
     final (label, color) = _status(r.status);
     final title = sos ? 'SOS darurat' : complaintCategoryLabel(r.category);
     final done = r.resolvedAt ?? r.acknowledgedAt;
-    return Container(
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        key: ValueKey('siagasos-history-item-${r.id}'),
+        borderRadius: BorderRadius.circular(14),
+        onTap: onTap,
+        child: Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(14),
@@ -1265,7 +1398,14 @@ class _HistoryTile extends StatelessWidget {
               ),
           ]),
         ),
+        if (onTap != null)
+          Padding(
+            padding: const EdgeInsets.only(left: 4, top: 8),
+            child: Icon(Icons.chevron_right_rounded, color: theme.colorScheme.outline),
+          ),
       ]),
+        ),
+      ),
     );
   }
 }
@@ -1680,6 +1820,514 @@ class _TkpSheetState extends State<_TkpSheet> {
               const SizedBox(width: 8),
               Text(label, style: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w700)),
             ]),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// "Nomor darurat": maks. 3 nomor WhatsApp pribadi (keluarga, rekan) yang ikut dikabari setiap SOS dari perangkat ini.
+class _ContactsSheet extends StatefulWidget {
+  const _ContactsSheet({required this.client, required this.onClose});
+  final SiagaSOS client;
+  final VoidCallback onClose;
+
+  @override
+  State<_ContactsSheet> createState() => _ContactsSheetState();
+}
+
+class _ContactsSheetState extends State<_ContactsSheet> {
+  static const _green = Color(0xFF16A34A);
+  List<EmergencyContact>? _items;
+  final _name = TextEditingController();
+  final _phone = TextEditingController();
+  String? _error;
+  bool _saving = false;
+
+  @override
+  void initState() {
+    super.initState();
+    widget.client.emergencyContacts().then((l) => mounted ? setState(() => _items = l) : null);
+    _name.addListener(() => setState(() {}));
+    _phone.addListener(() => setState(() {}));
+  }
+
+  @override
+  void dispose() {
+    _name.dispose();
+    _phone.dispose();
+    super.dispose();
+  }
+
+  Future<void> _save(List<EmergencyContact> next) async {
+    setState(() {
+      _saving = true;
+      _error = null;
+    });
+    try {
+      await widget.client.setEmergencyContacts(next);
+      final fresh = await widget.client.emergencyContacts();
+      if (mounted) setState(() => _items = fresh);
+    } on ArgumentError catch (e) {
+      if (mounted) setState(() => _error = '${e.message}');
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  Future<void> _add() async {
+    final items = _items ?? const [];
+    final phone = toWhatsAppNumber(_phone.text);
+    if (phone == null) {
+      setState(() => _error = 'Nomor WhatsApp tidak valid. Contoh: 0812 3456 7890');
+      return;
+    }
+    if (items.any((c) => c.phone == phone)) {
+      setState(() => _error = 'Nomor ini sudah ada di daftar.');
+      return;
+    }
+    FocusScope.of(context).unfocus();
+    await _save([...items, EmergencyContact(name: _name.text.trim().isEmpty ? 'Kontak darurat' : _name.text.trim(), phone: phone)]);
+    if (_error == null) {
+      _name.clear();
+      _phone.clear();
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final items = _items;
+    final full = (items?.where((c) => c.active).length ?? 0) >= maxActiveEmergencyContacts || (items?.length ?? 0) >= maxEmergencyContacts;
+    return _SheetFrame(
+      sheetKey: const ValueKey('siagasos-contacts-sheet'),
+      onDismiss: _saving ? null : widget.onClose,
+      child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        _Grip(theme),
+        Row(children: [
+          Container(
+            width: 44,
+            height: 44,
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(colors: [Color(0xFF4ADE80), Color(0xFF15803D)]),
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: const Icon(Icons.contact_phone_rounded, color: Colors.white),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text('Nomor darurat', style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700)),
+              Text('Dikabari WhatsApp setiap kamu menekan SOS', style: theme.textTheme.bodySmall),
+            ]),
+          ),
+          IconButton(onPressed: _saving ? null : widget.onClose, icon: const Icon(Icons.close_rounded), tooltip: 'Tutup'),
+        ]),
+        const SizedBox(height: 14),
+        if (items == null)
+          const SizedBox(height: 80)
+        else if (items.isEmpty)
+          Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(color: theme.colorScheme.surfaceContainerHighest, borderRadius: BorderRadius.circular(14)),
+            child: Text('Belum ada nomor darurat. Tambahkan keluarga, rekan, atau satpam (maks. $maxActiveEmergencyContacts aktif) yang perlu tahu saat kamu menekan SOS.',
+                style: theme.textTheme.bodySmall?.copyWith(height: 1.4)),
+          )
+        else
+          for (final c in items)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Container(
+                padding: const EdgeInsets.fromLTRB(12, 8, 4, 8),
+                decoration: BoxDecoration(borderRadius: BorderRadius.circular(14), border: Border.all(color: theme.colorScheme.outlineVariant)),
+                child: Row(children: [
+                  Container(
+                    width: 36,
+                    height: 36,
+                    decoration: BoxDecoration(color: _green.withValues(alpha: 0.12), shape: BoxShape.circle),
+                    child: const Icon(Icons.person_rounded, size: 20, color: _green),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      Text(c.role == null ? c.name : '${c.name} · ${c.role}', style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700)),
+                      Text(c.active ? '+${c.phone}' : '+${c.phone} · nonaktif', style: theme.textTheme.bodySmall),
+                    ]),
+                  ),
+                  IconButton(
+                    key: ValueKey('siagasos-contact-del-${c.phone}'),
+                    onPressed: _saving ? null : () => _save(items.where((o) => o.phone != c.phone).toList()),
+                    icon: Icon(Icons.delete_outline_rounded, color: theme.colorScheme.error),
+                    tooltip: 'Hapus',
+                  ),
+                ]),
+              ),
+            ),
+        if (items != null && !full) ...[
+          const SizedBox(height: 10),
+          TextField(
+            key: const ValueKey('siagasos-contact-name'),
+            controller: _name,
+            enabled: !_saving,
+            textCapitalization: TextCapitalization.words,
+            decoration: InputDecoration(
+              labelText: 'Nama',
+              hintText: 'Mis. Istri, Kakak, Pemilik toko',
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
+            ),
+          ),
+          const SizedBox(height: 10),
+          TextField(
+            key: const ValueKey('siagasos-contact-phone'),
+            controller: _phone,
+            enabled: !_saving,
+            keyboardType: TextInputType.phone,
+            decoration: InputDecoration(
+              labelText: 'Nomor WhatsApp',
+              hintText: '0812 3456 7890',
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
+            ),
+          ),
+          const SizedBox(height: 12),
+          FilledButton.icon(
+            key: const ValueKey('siagasos-contact-add'),
+            onPressed: _saving || _phone.text.trim().isEmpty ? null : _add,
+            icon: _saving
+                ? const SizedBox.square(dimension: 18, child: CircularProgressIndicator(strokeWidth: 2.2, color: Colors.white))
+                : const Icon(Icons.add_rounded),
+            label: const Text('Tambah nomor'),
+            style: FilledButton.styleFrom(
+              backgroundColor: _green,
+              minimumSize: const Size.fromHeight(48),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+            ),
+          ),
+        ],
+        if (full)
+          Text('Maksimal $maxActiveEmergencyContacts nomor aktif. Hapus atau nonaktifkan salah satu untuk mengganti.',
+              textAlign: TextAlign.center, style: theme.textTheme.bodySmall),
+        if (_error != null) ...[
+          const SizedBox(height: 8),
+          Text(_error!, style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.error)),
+        ],
+        const SizedBox(height: 8),
+        Text('Petugas keamanan & penerima SOS yang diatur pengelola tetap dikabari. Pesan berisi nama, lokasi, dan link peta.',
+            textAlign: TextAlign.center, style: theme.textTheme.labelSmall?.copyWith(color: theme.colorScheme.outline)),
+      ]),
+    );
+  }
+}
+
+/// Detail satu laporan di "Riwayat laporan": status, waktu, uraian, lokasi, lampiran, riwayat status.
+class _ReportDetailView extends StatefulWidget {
+  const _ReportDetailView({
+    super.key,
+    required this.client,
+    required this.record,
+    required this.onBack,
+    required this.onClose,
+    this.onOpenUrl,
+  });
+  final SiagaSOS client;
+  final ReportRecord record;
+  final VoidCallback onBack;
+  final VoidCallback onClose;
+  final void Function(String url)? onOpenUrl;
+
+  @override
+  State<_ReportDetailView> createState() => _ReportDetailViewState();
+}
+
+class _ReportDetailViewState extends State<_ReportDetailView> {
+  ReportDetail? _d;
+  String? _error;
+  bool _loading = true;
+  bool _cancelling = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    try {
+      final d = await widget.client.reportDetail(widget.record.id);
+      if (mounted) setState(() => _d = d);
+    } on SiagaSOSError catch (e) {
+      if (mounted) setState(() => _error = e.message);
+    } catch (_) {
+      if (mounted) setState(() => _error = 'Detail belum bisa dimuat. Periksa koneksi lalu coba lagi.');
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  Future<void> _cancel() async {
+    HapticFeedback.selectionClick();
+    setState(() => _cancelling = true);
+    try {
+      await widget.client.cancel(widget.record.id, reason: 'Salah tekan');
+    } on SiagaSOSError catch (e) {
+      if (mounted) setState(() => _error = e.message);
+    } catch (_) {
+      if (mounted) setState(() => _error = 'Gagal membatalkan. Periksa koneksi lalu coba lagi.');
+    }
+    if (mounted) setState(() => _cancelling = false);
+    await _load();
+  }
+
+  static String _timelineLabel(ReportTimelineEntry e) => switch (e.type) {
+        'created' => 'Laporan dikirim',
+        'status_changed' => e.toStatus == null ? 'Status diperbarui' : _HistoryTile._status(e.toStatus!).$1,
+        'cancelled' => 'Dibatalkan',
+        'note' => 'Catatan',
+        'media' => 'Lampiran',
+        'whatsapp' => 'WhatsApp',
+        _ => e.type,
+      };
+
+  static IconData _timelineIcon(ReportTimelineEntry e) => switch (e.type) {
+        'created' => Icons.send_rounded,
+        'status_changed' => switch (e.toStatus) {
+            SosStatus.resolved => Icons.check_circle_rounded,
+            SosStatus.falseAlarm => Icons.block_rounded,
+            _ => Icons.support_agent_rounded,
+          },
+        'cancelled' => Icons.cancel_rounded,
+        'note' => Icons.sticky_note_2_rounded,
+        'media' => Icons.attach_file_rounded,
+        'whatsapp' => Icons.chat_rounded,
+        _ => Icons.circle,
+      };
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final d = _d;
+    final r = widget.record;
+    final status = d?.status ?? r.status;
+    final (label, color) = _HistoryTile._status(status);
+    final sos = (d?.kind ?? r.kind) == ReportKind.sos;
+    final title = sos ? 'SOS darurat' : complaintCategoryLabel(d?.category ?? r.category);
+    final muted = theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.outline);
+    final section = theme.textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w700);
+
+    Widget info(String k, String v) => Padding(
+          padding: const EdgeInsets.only(bottom: 4),
+          child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            SizedBox(width: 92, child: Text(k, style: muted)),
+            Expanded(child: Text(v, style: theme.textTheme.bodySmall?.copyWith(fontWeight: FontWeight.w600))),
+          ]),
+        );
+
+    return Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+      _Grip(theme),
+      Row(children: [
+        IconButton(key: const ValueKey('siagasos-detail-back'), onPressed: widget.onBack, icon: const Icon(Icons.arrow_back_rounded), tooltip: 'Kembali'),
+        Expanded(child: Text('Detail laporan', style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700))),
+        _loading
+            ? const Padding(padding: EdgeInsets.all(12), child: SizedBox.square(dimension: 20, child: CircularProgressIndicator(strokeWidth: 2.2)))
+            : IconButton(onPressed: _load, icon: const Icon(Icons.refresh_rounded), tooltip: 'Muat ulang'),
+        IconButton(onPressed: widget.onClose, icon: const Icon(Icons.close_rounded), tooltip: 'Tutup'),
+      ]),
+      Flexible(
+        child: ListView(shrinkWrap: true, padding: EdgeInsets.zero, children: [
+          // Status
+          Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(color: color.withValues(alpha: 0.08), borderRadius: BorderRadius.circular(16)),
+            child: Row(children: [
+              Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(color: color.withValues(alpha: 0.15), shape: BoxShape.circle),
+                child: Icon(sos ? Icons.notifications_active_rounded : Icons.campaign_rounded, color: color),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text(title, style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w800)),
+                  const SizedBox(height: 2),
+                  Text(label, key: const ValueKey('siagasos-detail-status'), style: TextStyle(color: color, fontWeight: FontWeight.w800)),
+                  if ((d?.statusMessage ?? r.statusMessage)?.isNotEmpty == true)
+                    Text((d?.statusMessage ?? r.statusMessage)!, style: theme.textTheme.bodySmall),
+                ]),
+              ),
+            ]),
+          ),
+          const SizedBox(height: 14),
+          info('No. laporan', (r.id.length > 8 ? r.id.substring(0, 8) : r.id).toUpperCase()),
+          info('Dikirim', _HistoryTile._when(d?.createdAt ?? r.createdAt)),
+          if ((d?.acknowledgedAt ?? r.acknowledgedAt) != null) info('Diterima', _HistoryTile._when((d?.acknowledgedAt ?? r.acknowledgedAt)!)),
+          if ((d?.resolvedAt ?? r.resolvedAt) != null) info(status == SosStatus.cancelled ? 'Dibatalkan' : 'Selesai', _HistoryTile._when((d?.resolvedAt ?? r.resolvedAt)!)),
+          if (!sos) info('Jenis', complaintCategoryLabel(d?.category ?? r.category)),
+          if ((d?.message ?? r.message)?.trim().isNotEmpty == true) ...[
+            const SizedBox(height: 10),
+            Text('Uraian', style: section),
+            const SizedBox(height: 4),
+            Text((d?.message ?? r.message)!.trim(), style: theme.textTheme.bodyMedium),
+          ],
+          if (d?.location != null) ...[
+            const SizedBox(height: 14),
+            Text('Lokasi', style: section),
+            const SizedBox(height: 4),
+            Row(children: [
+              Icon(Icons.place_rounded, size: 18, color: theme.colorScheme.primary),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  '${d!.location!.lat.toStringAsFixed(5)}, ${d.location!.lng.toStringAsFixed(5)}'
+                  '${d.location!.accuracyM != null ? ' (±${d.location!.accuracyM!.round()} m)' : ''}',
+                  style: theme.textTheme.bodySmall,
+                ),
+              ),
+              if (widget.onOpenUrl != null)
+                TextButton(
+                  key: const ValueKey('siagasos-detail-map'),
+                  onPressed: () => widget.onOpenUrl!('https://www.google.com/maps?q=${d.location!.lat},${d.location!.lng}'),
+                  child: const Text('Buka peta'),
+                ),
+            ]),
+          ],
+          if (d != null && d.media.isNotEmpty) ...[
+            const SizedBox(height: 14),
+            Text('Lampiran (${d.media.length})', style: section),
+            const SizedBox(height: 8),
+            Wrap(spacing: 8, runSpacing: 8, children: [for (final m in d.media) _MediaThumb(m, onOpen: widget.onOpenUrl)]),
+          ],
+          if (d != null && d.timeline.isNotEmpty) ...[
+            const SizedBox(height: 14),
+            Text('Riwayat status', style: section),
+            const SizedBox(height: 8),
+            for (var i = 0; i < d.timeline.length; i++)
+              _TimelineRow(
+                icon: _timelineIcon(d.timeline[i]),
+                title: _timelineLabel(d.timeline[i]),
+                meta: '${d.timeline[i].actor} · ${_HistoryTile._when(d.timeline[i].createdAt)}',
+                note: d.timeline[i].type == 'created' ? null : d.timeline[i].note,
+                last: i == d.timeline.length - 1,
+                color: i == d.timeline.length - 1 ? color : theme.colorScheme.outline,
+              ),
+          ],
+          if (_error != null) ...[
+            const SizedBox(height: 10),
+            Text(_error!, style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.error)),
+          ],
+          if (sos && status == SosStatus.open) ...[
+            const SizedBox(height: 12),
+            OutlinedButton.icon(
+              key: const ValueKey('siagasos-detail-cancel'),
+              onPressed: _cancelling ? null : _cancel,
+              style: OutlinedButton.styleFrom(
+                foregroundColor: theme.colorScheme.error,
+                side: BorderSide(color: theme.colorScheme.error.withValues(alpha: 0.4)),
+                minimumSize: const Size.fromHeight(46),
+              ),
+              icon: _cancelling
+                  ? const SizedBox.square(dimension: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                  : const Icon(Icons.cancel_outlined),
+              label: const Text('Batalkan (salah tekan)'),
+            ),
+          ],
+          const SizedBox(height: 8),
+        ]),
+      ),
+    ]);
+  }
+}
+
+class _TimelineRow extends StatelessWidget {
+  const _TimelineRow({required this.icon, required this.title, required this.meta, required this.last, required this.color, this.note});
+  final IconData icon;
+  final String title;
+  final String meta;
+  final String? note;
+  final bool last;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return IntrinsicHeight(
+      child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        SizedBox(
+          width: 28,
+          child: Column(children: [
+            Container(
+              width: 26,
+              height: 26,
+              decoration: BoxDecoration(color: color.withValues(alpha: 0.12), shape: BoxShape.circle),
+              child: Icon(icon, size: 15, color: color),
+            ),
+            if (!last) Expanded(child: Container(width: 2, color: theme.colorScheme.outlineVariant)),
+          ]),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Padding(
+            padding: EdgeInsets.only(bottom: last ? 0 : 12, top: 3),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(title, style: theme.textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w700)),
+              Text(meta, style: theme.textTheme.labelSmall?.copyWith(color: theme.colorScheme.outline)),
+              if (note != null && note!.trim().isNotEmpty) ...[
+                const SizedBox(height: 3),
+                Text(note!.trim(), style: theme.textTheme.bodySmall),
+              ],
+            ]),
+          ),
+        ),
+      ]),
+    );
+  }
+}
+
+/// Kotak lampiran: foto tampil langsung, video/suara berupa ikon putar. Ketuk = buka lewat app host.
+class _MediaThumb extends StatelessWidget {
+  const _MediaThumb(this.m, {this.onOpen});
+  final ReportMediaItem m;
+  final void Function(String url)? onOpen;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final url = m.url;
+    final fallback = Container(
+      color: m.kind == MediaKind.image ? theme.colorScheme.surfaceContainerHighest : const Color(0xFF1F2937),
+      child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+        Icon(
+          switch (m.kind) {
+            MediaKind.image => Icons.image_rounded,
+            MediaKind.video => Icons.play_circle_fill_rounded,
+            MediaKind.audio => Icons.graphic_eq_rounded,
+          },
+          color: m.kind == MediaKind.image ? theme.colorScheme.outline : Colors.white,
+          size: 30,
+        ),
+        if (m.durationS != null)
+          Text('${m.durationS!.round()} dtk', style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w700)),
+      ]),
+    );
+    return Semantics(
+      button: url != null && onOpen != null,
+      label: switch (m.kind) { MediaKind.image => 'Foto', MediaKind.video => 'Video', MediaKind.audio => 'Rekaman suara' },
+      child: InkWell(
+        key: ValueKey('siagasos-media-${m.id}'),
+        borderRadius: BorderRadius.circular(12),
+        onTap: url != null && onOpen != null ? () => onOpen!(url) : null,
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(12),
+          child: SizedBox(
+            width: 92,
+            height: 92,
+            child: m.kind == MediaKind.image && url != null
+                ? Image.network(url, fit: BoxFit.cover, errorBuilder: (_, __, ___) => fallback)
+                : fallback,
           ),
         ),
       ),

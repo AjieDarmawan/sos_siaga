@@ -86,6 +86,62 @@ class ActiveReport {
   String toString() => 'ActiveReport($localId, id=$id, $status)';
 }
 
+/// Kontak darurat pribadi pelapor (gaya "Nomor Darurat" tata-warga): yang [active] dikabari WhatsApp oleh server
+/// setiap SOS (maks. [maxActiveEmergencyContacts] aktif). Disimpan di perangkat per pengguna
+/// ([SiagaSOS.setEmergencyContacts]); app host bisa membuat halaman CRUD sendiri di atas API ini.
+class EmergencyContact {
+  const EmergencyContact({required this.name, required this.phone, this.role, this.active = true});
+  final String name;
+  /// Nomor WhatsApp ternormalisasi 62xxxxxxxxxx.
+  final String phone;
+  /// Jabatan / hubungan, opsional (mis. Satpam, Pemilik toko, Keluarga).
+  final String? role;
+  /// Hanya kontak aktif yang menerima SOS.
+  final bool active;
+
+  EmergencyContact copyWith({String? name, String? phone, String? role, bool? active, bool clearRole = false}) => EmergencyContact(
+        name: name ?? this.name,
+        phone: phone ?? this.phone,
+        role: clearRole ? null : (role ?? this.role),
+        active: active ?? this.active,
+      );
+
+  /// Bentuk yang disimpan di perangkat.
+  Map<String, dynamic> toJson() => {'name': name, 'phone': phone, if (role != null) 'role': role, 'active': active};
+
+  /// Bentuk yang dikirim ke server bersama SOS (`emergency_contacts[]`).
+  Map<String, dynamic> toReportJson() => {'name': role == null || role!.isEmpty ? name : '$name ($role)', 'phone': phone};
+
+  factory EmergencyContact.fromJson(Map<String, dynamic> j) => EmergencyContact(
+        name: j['name'] as String? ?? '',
+        phone: j['phone'] as String? ?? '',
+        role: (j['role'] as String?)?.trim().isEmpty ?? true ? null : (j['role'] as String).trim(),
+        active: j['active'] as bool? ?? true,
+      );
+
+  @override
+  bool operator ==(Object other) =>
+      other is EmergencyContact && other.name == name && other.phone == phone && other.role == role && other.active == active;
+  @override
+  int get hashCode => Object.hash(name, phone, role, active);
+}
+
+/// Maks. kontak aktif yang dikabari per SOS (sama dengan batas server & tata-warga).
+const maxActiveEmergencyContacts = 5;
+/// Maks. kontak tersimpan (aktif + nonaktif).
+const maxEmergencyContacts = 10;
+
+/// 08xx / +62xx / 62xx / 8xx → 62xx. Null bila bukan nomor Indonesia yang masuk akal (sama dengan server).
+String? toWhatsAppNumber(String phone) {
+  var d = phone.replaceAll(RegExp(r'\D'), '');
+  if (d.startsWith('0')) {
+    d = '62${d.substring(1)}';
+  } else if (d.startsWith('8')) {
+    d = '62$d';
+  }
+  return RegExp(r'^62[0-9]{8,13}$').hasMatch(d) ? d : null;
+}
+
 /// Satu laporan di riwayat perangkat ([SiagaSOS.history]): yang pernah terkirim dari perangkat ini
 /// oleh pengguna yang sama. Status diperbarui dari server saat riwayat dibuka.
 class ReportRecord {
@@ -148,6 +204,99 @@ class ReportRecord {
       );
 
   static DateTime? _date(Object? v) => v is String ? DateTime.tryParse(v)?.toLocal() : null;
+}
+
+/// Satu baris riwayat status di detail laporan ([SiagaSOS.reportDetail]).
+class ReportTimelineEntry {
+  const ReportTimelineEntry({required this.type, required this.actor, required this.createdAt, this.toStatus, this.note});
+  /// created | status_changed | cancelled | note | media | whatsapp
+  final String type;
+  /// "Anda", nama petugas, "Petugas", atau "Sistem".
+  final String actor;
+  final SosStatus? toStatus;
+  final String? note;
+  final DateTime createdAt;
+
+  factory ReportTimelineEntry.fromJson(Map<String, dynamic> j) => ReportTimelineEntry(
+        type: j['type'] as String? ?? '',
+        actor: j['actor'] as String? ?? 'Sistem',
+        toStatus: j['to_status'] == null ? null : sosStatusFromApi(j['to_status'] as String),
+        note: j['note'] as String?,
+        createdAt: DateTime.tryParse(j['created_at'] as String? ?? '')?.toLocal() ?? DateTime.now(),
+      );
+}
+
+/// Lampiran di detail laporan. [url] = URL baca sementara (± 15 menit); minta ulang detail bila kedaluwarsa.
+class ReportMediaItem {
+  const ReportMediaItem({required this.id, required this.kind, required this.contentType, required this.uploadedBy, this.url, this.durationS});
+  final String id;
+  final MediaKind kind;
+  final String contentType;
+  /// reporter (pelapor) | user (petugas) | server
+  final String uploadedBy;
+  final String? url;
+  final double? durationS;
+
+  factory ReportMediaItem.fromJson(Map<String, dynamic> j) => ReportMediaItem(
+        id: j['id'] as String,
+        kind: MediaKind.values.firstWhere((k) => k.name == j['kind'], orElse: () => MediaKind.image),
+        contentType: j['content_type'] as String? ?? '',
+        uploadedBy: j['uploaded_by'] as String? ?? 'reporter',
+        url: j['url'] as String?,
+        durationS: (j['duration_s'] as num?)?.toDouble(),
+      );
+}
+
+/// Detail laporan untuk halaman "Riwayat laporan": status, uraian, lokasi, riwayat status, dan lampiran.
+class ReportDetail {
+  const ReportDetail({
+    required this.id,
+    required this.kind,
+    required this.category,
+    required this.status,
+    required this.createdAt,
+    this.statusMessage,
+    this.message,
+    this.location,
+    this.acknowledgedAt,
+    this.resolvedAt,
+    this.timeline = const [],
+    this.media = const [],
+  });
+  final String id;
+  final ReportKind kind;
+  final String category;
+  final SosStatus status;
+  final String? statusMessage;
+  final String? message;
+  final SosLocation? location;
+  final DateTime createdAt;
+  final DateTime? acknowledgedAt;
+  final DateTime? resolvedAt;
+  final List<ReportTimelineEntry> timeline;
+  final List<ReportMediaItem> media;
+
+  static DateTime? _d(Object? v) => v is String ? DateTime.tryParse(v)?.toLocal() : null;
+
+  factory ReportDetail.fromJson(Map<String, dynamic> j) {
+    final loc = j['location'] as Map<String, dynamic>?;
+    return ReportDetail(
+      id: j['id'] as String,
+      kind: j['kind'] == 'pengaduan' ? ReportKind.pengaduan : ReportKind.sos,
+      category: j['category'] as String? ?? '',
+      status: sosStatusFromApi(j['status'] as String? ?? 'open'),
+      statusMessage: j['status_message'] as String?,
+      message: j['message'] as String?,
+      location: loc == null
+          ? null
+          : SosLocation(lat: (loc['lat'] as num).toDouble(), lng: (loc['lng'] as num).toDouble(), accuracyM: (loc['accuracy_m'] as num?)?.toDouble()),
+      createdAt: _d(j['created_at']) ?? DateTime.now(),
+      acknowledgedAt: _d(j['acknowledged_at']),
+      resolvedAt: _d(j['resolved_at']),
+      timeline: [for (final e in (j['timeline'] as List? ?? const [])) ReportTimelineEntry.fromJson(e as Map<String, dynamic>)],
+      media: [for (final m in (j['media'] as List? ?? const [])) ReportMediaItem.fromJson(m as Map<String, dynamic>)],
+    );
+  }
 }
 
 class SdkConfig {

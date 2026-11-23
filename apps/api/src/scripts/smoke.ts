@@ -239,8 +239,84 @@ async function main() {
   const pkLive = live.data.publishable.key as string;
   const noOrigin = await call('POST', '/v1/sdk/reports', { headers: { 'X-SOS-Key': pkLive, 'Idempotency-Key': uuid() }, body: payload });
   ok(noOrigin.status === 403 && noOrigin.data.error.code === 'origin_required', 'live tanpa Origin/Bundle ditolak');
-  const liveRep = await call('POST', '/v1/sdk/reports', { headers: sdkH(pkLive, { 'Idempotency-Key': uuid() }), body: { ...payload, reporter: { ref: 'user_999' } } });
+  // Penerima SOS (WhatsApp) diatur di portal; nomor dinormalisasi ke 62xx.
+  const badRcpt = await call('POST', `/portal/apps/${appId}/recipients`, { token: A.token, body: { name: 'Pos Satpam', phone: '12345' } });
+  ok(badRcpt.status === 422, 'penerima SOS: nomor tidak valid ditolak');
+  const rcpt = await call('POST', `/portal/apps/${appId}/recipients`, { token: A.token, body: { name: 'Pos Satpam', phone: '0800-1111-2222' } });
+  ok(rcpt.status === 201 && rcpt.data.phone === '6280011112222' && rcpt.data.source_id === null, 'penerima SOS dibuat (nomor jadi 62xx, semua source)');
+  const dupRcpt = await call('POST', `/portal/apps/${appId}/recipients`, { token: A.token, body: { name: 'Sama', phone: '+6280011112222' } });
+  ok(dupRcpt.status === 409, 'penerima SOS: nomor ganda di cakupan sama ditolak');
+  const tmp = await call('POST', `/portal/apps/${appId}/recipients`, { token: A.token, body: { name: 'Sementara', phone: '080099990000' } });
+  ok((await call('DELETE', `/portal/apps/${appId}/recipients/${tmp.data.id}`, { token: A.token })).status === 204, 'penerima SOS dihapus');
+  const badContacts = await call('POST', '/v1/sdk/reports', { headers: sdkH(pkLive, { 'Idempotency-Key': uuid() }),
+    body: { ...payload, emergency_contacts: Array.from({ length: 6 }, (_, i) => ({ phone: `0800000000${i}` })) } });
+  ok(badContacts.status === 422, 'kontak darurat: >5 nomor ditolak');
+  const badPhone = await call('POST', '/v1/sdk/reports', { headers: sdkH(pkLive, { 'Idempotency-Key': uuid() }), body: { ...payload, emergency_contacts: [{ phone: '123' }] } });
+  ok(badPhone.status === 422, 'kontak darurat: nomor tidak valid ditolak');
+
+  const liveRep = await call('POST', '/v1/sdk/reports', { headers: sdkH(pkLive, { 'Idempotency-Key': uuid() }), body: { ...payload, reporter: { ref: 'user_999' },
+    emergency_contacts: [{ name: 'Istri', phone: '0800 3333 4444' }, { name: 'Dobel', phone: '6280011112222' }] } });
   ok(liveRep.status === 201 && liveRep.data.mode === 'live', 'laporan live 201');
+  // WA dikirim setelah respons (tidak ditunggu jalur SOS). Nomor 0800 = nomor uji: tercatat, tidak pernah dikirimi WA sungguhan.
+  let wa: string[] = [];
+  for (let i = 0; i < 20 && wa.length < 2; i++) {
+    await new Promise((r) => setTimeout(r, 100));
+    const d = await call('GET', `/portal/reports/${liveRep.data.id}`, { token: A.token });
+    wa = d.data.timeline.filter((e: any) => e.type === 'whatsapp').map((e: any) => e.note as string);
+  }
+  ok(wa.length === 2 && wa.some((n) => n.includes('Pos Satpam (6280011112222)')) && wa.some((n) => n.includes('Istri (6280033334444, kontak pelapor)')) && wa.every((n) => n.includes('nomor uji 0800')),
+    'SOS live → WhatsApp ke penerima SOS + kontak darurat (nomor ganda sekali), tercatat di timeline');
+  // Detail untuk "Riwayat laporan" di perangkat: timeline + ringkasan WA, tanpa nomor HP pelapor / penerima.
+  const det = await call('GET', `/v1/sdk/reports/${liveRep.data.id}/detail`, { headers: sdkH(pkLive) });
+  const detText = JSON.stringify(det.data);
+  ok(det.status === 200 && det.data.location && Array.isArray(det.data.timeline) && det.data.timeline[0]?.type === 'created' && Array.isArray(det.data.media),
+    'detail laporan untuk riwayat di perangkat (lokasi, timeline, media)');
+  ok(!detText.includes('6280011112222') && !detText.includes('6280033334444') && !('reporter' in det.data),
+    'detail perangkat tidak membuka nomor penerima SOS / kontak / data pelapor');
+  // ---------------------------------------------------------------- responder (satpam login dari Nomor Darurat)
+  const guardPhone = '6280055556666';
+  const otpNo = await call('POST', '/v1/sdk/responder/otp', { headers: sdkH(pkLive), body: { phone: '0800 5555 6666' } });
+  ok(otpNo.status === 404 && otpNo.data.error.code === 'responder_not_registered', 'login satpam: nomor di luar Nomor Darurat ditolak');
+  const putC = await call('PUT', '/v1/sdk/contacts', { headers: sdkH(pkLive), body: { reporter: { ref: 'kasir_rsp', name: 'Kasir Satu' },
+    contacts: [{ name: 'Pak Satpam', role: 'Satpam', phone: '0800-5555-6666', active: true }, { name: 'Adik', phone: '080077778888', active: false }] } });
+  ok(putC.status === 200 && putC.data.count === 2, 'Nomor Darurat disinkronkan ke server');
+  const getC = await call('GET', '/v1/sdk/contacts?reporter_ref=kasir_rsp', { headers: sdkH(pkLive) });
+  ok(getC.data.contacts.length === 2 && getC.data.contacts[0].phone === guardPhone, 'Nomor Darurat dibaca ulang (62xx, aktif dulu)');
+  const otp = await call('POST', '/v1/sdk/responder/otp', { headers: sdkH(pkLive), body: { phone: guardPhone } });
+  ok(otp.status === 200 && /^\d{6}$/.test(otp.data.dev_code) && otp.data.sent === false, 'OTP satpam dibuat (nomor uji 0800: tidak dikirim WA, kode dev)');
+  const badOtp = await call('POST', '/v1/sdk/responder/verify', { headers: sdkH(pkLive), body: { phone: guardPhone, code: otp.data.dev_code === '000000' ? '111111' : '000000' } });
+  ok(badOtp.status === 422 && badOtp.data.error.code === 'otp_invalid', 'OTP salah ditolak');
+  const ver = await call('POST', '/v1/sdk/responder/verify', { headers: sdkH(pkLive),
+    body: { phone: guardPhone, code: otp.data.dev_code, device: { platform: 'android', fcm_token: 'smoke-fcm-token-123456' } } });
+  ok(ver.status === 201 && String(ver.data.token).startsWith('rsp_') && ver.data.responder.name === 'Pak Satpam (Satpam)', 'satpam login → token sesi');
+  const reuse = await call('POST', '/v1/sdk/responder/verify', { headers: sdkH(pkLive), body: { phone: guardPhone, code: otp.data.dev_code } });
+  ok(reuse.status === 422, 'OTP sekali pakai');
+  const rH = sdkH(pkLive, { 'X-SOS-Responder': ver.data.token });
+  const noTok = await call('GET', '/v1/sdk/responder/reports', { headers: sdkH(pkLive) });
+  ok(noTok.status === 401, 'endpoint satpam tanpa token ditolak');
+  const guardSos = await call('POST', '/v1/sdk/reports', { headers: sdkH(pkLive, { 'Idempotency-Key': uuid() }),
+    body: { ...payload, reporter: { ref: 'kasir_rsp', name: 'Kasir Satu' }, emergency_contacts: [{ name: 'Pak Satpam (Satpam)', phone: guardPhone }] } });
+  ok(guardSos.status === 201, 'SOS kasir yang mencantumkan nomor satpam');
+  let push: string[] = [];
+  for (let i = 0; i < 20 && !push.length; i++) {
+    await new Promise((r) => setTimeout(r, 100));
+    const d = await call('GET', `/portal/reports/${guardSos.data.id}`, { token: A.token });
+    push = d.data.timeline.filter((e: any) => e.type === 'push').map((e: any) => e.note as string);
+  }
+  ok(push.length === 1 && /1 HP satpam/.test(push[0]!), 'SOS → push alarm ke HP satpam tercatat di timeline');
+  const rList = await call('GET', '/v1/sdk/responder/reports', { headers: rH });
+  ok(rList.data.data.length === 1 && rList.data.data[0].id === guardSos.data.id && rList.data.data[0].reporter_name === 'Kasir Satu',
+    'satpam hanya melihat SOS yang mencantumkan nomornya');
+  const other = await call('GET', `/v1/sdk/responder/reports/${liveRep.data.id}`, { headers: rH });
+  ok(other.status === 404, 'SOS yang tidak mencantumkan nomornya → 404');
+  const gAck = await call('POST', `/v1/sdk/responder/reports/${guardSos.data.id}/status`, { headers: rH, body: { status: 'acknowledged' } });
+  ok(gAck.status === 200 && gAck.data.status === 'acknowledged', 'satpam menanggapi SOS');
+  const ackTl = await call('GET', `/portal/reports/${guardSos.data.id}`, { token: A.token });
+  ok(ackTl.data.timeline.some((e: any) => e.actor_kind === 'responder' && e.to_status === 'acknowledged'), 'tanggapan satpam tercatat (actor responder)');
+  await call('PUT', '/v1/sdk/contacts', { headers: sdkH(pkLive), body: { reporter: { ref: 'kasir_rsp' }, contacts: [] } });
+  const gone = await call('GET', '/v1/sdk/responder/me', { headers: rH });
+  ok(gone.status === 401 && gone.data.error.code === 'responder_not_registered', 'nomor dihapus dari Nomor Darurat → sesi satpam berakhir');
+
   for (let i = 0; i < 2; i++) await call('POST', '/v1/sdk/reports', { headers: sdkH(pkLive, { 'Idempotency-Key': uuid() }), body: { reporter: { ref: 'user_999' } } });
   const spam = await call('POST', '/v1/sdk/reports', { headers: sdkH(pkLive, { 'Idempotency-Key': uuid() }), body: { reporter: { ref: 'user_999' } } });
   ok(spam.status === 429 && spam.data.error.code === 'reporter_rate_limited', 'rate limit 3 laporan / 10 menit per reporter_ref');

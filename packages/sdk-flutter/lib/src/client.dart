@@ -42,12 +42,18 @@ class SiagaSOS {
     http.Client? httpClient,
     QueueStore? queueStore,
     QueueStore? historyStore,
+    QueueStore? contactsStore,
+    QueueStore? contactsSyncStore,
   })  : baseUrl = baseUrl.replaceAll(RegExp(r'/+$'), ''),
         _http = httpClient ?? http.Client(),
         _queue = queueStore ?? SharedPrefsQueueStore('siagasos.queue.${apiKey.length > 16 ? apiKey.substring(0, 16) : apiKey}'),
         // Riwayat per pengguna: kasir lain yang login di perangkat yang sama tidak melihat laporan orang lain.
         _history = historyStore ??
-            SharedPrefsQueueStore('siagasos.history.${apiKey.length > 16 ? apiKey.substring(0, 16) : apiKey}.${user?.ref ?? '-'}') {
+            SharedPrefsQueueStore('siagasos.history.${apiKey.length > 16 ? apiKey.substring(0, 16) : apiKey}.${user?.ref ?? '-'}'),
+        _contacts = contactsStore ??
+            SharedPrefsQueueStore('siagasos.contacts.${apiKey.length > 16 ? apiKey.substring(0, 16) : apiKey}.${user?.ref ?? '-'}'),
+        _contactsSync = contactsSyncStore ??
+            SharedPrefsQueueStore('siagasos.contacts_sync.${apiKey.length > 16 ? apiKey.substring(0, 16) : apiKey}.${user?.ref ?? '-'}') {
     final m = RegExp(r'^pk_(live|test)_').firstMatch(apiKey);
     if (m == null) {
       throw const SiagaSOSError(0, 'invalid_api_key', 'apiKey harus publishable key (pk_live_... / pk_test_...)');
@@ -55,6 +61,8 @@ class SiagaSOS {
     mode = m.group(1) == 'live' ? SosMode.live : SosMode.test;
     // kirim sisa antrian dari sesi sebelumnya
     scheduleMicrotask(flush);
+    // Nomor Darurat: kirim perubahan yang belum tersinkron, atau pulihkan dari server di perangkat baru.
+    scheduleMicrotask(() => syncEmergencyContacts().catchError((_) => false));
   }
 
   final String apiKey;
@@ -72,6 +80,8 @@ class SiagaSOS {
   final http.Client _http;
   final QueueStore _queue;
   final QueueStore _history;
+  final QueueStore _contacts;
+  final QueueStore _contactsSync;
   final _reports = <String, ActiveReport>{};
   final _pollers = <String, Timer>{};
   final _locators = <String, Timer>{};
@@ -149,6 +159,10 @@ class SiagaSOS {
     } catch (_) {
       loc = null; // tanpa lokasi tetap terkirim
     }
+    // Kontak darurat hanya untuk SOS (pengaduan tidak memicu WhatsApp). Gagal baca → SOS tetap jalan tanpa kontak.
+    final contacts = kind == ReportKind.sos
+        ? (await emergencyContacts()).where((c) => c.active).take(maxActiveEmergencyContacts).toList()
+        : const <EmergencyContact>[];
     final item = <String, dynamic>{
       'localId': _uuid(),
       'idem': _uuid(),
@@ -161,6 +175,7 @@ class SiagaSOS {
         if (loc != null) 'location': loc.toJson(),
         if (user != null) 'reporter': user!.toJson(),
         if (metadata != null) 'metadata': metadata,
+        if (contacts.isNotEmpty) 'emergency_contacts': contacts.map((c) => c.toReportJson()).toList(),
         'device': {'platform': _platform(), 'sdk_version': 'flutter-$sdkVersion'},
         'client_created_at': DateTime.now().toUtc().toIso8601String(),
       },
@@ -222,6 +237,72 @@ class SiagaSOS {
       createdAt: r.createdAt,
     ));
     return r;
+  }
+
+  // ------------------------------------------------------------------ kontak darurat
+  /// Kontak darurat pribadi pengguna ini (per perangkat + [user]). Ikut dikabari WhatsApp setiap SOS.
+  Future<List<EmergencyContact>> emergencyContacts() async {
+    try {
+      return (await _contacts.load()).map(EmergencyContact.fromJson).where((c) => c.phone.isNotEmpty).toList();
+    } catch (_) {
+      return [];
+    }
+  }
+
+  /// Simpan seluruh daftar kontak darurat (ganti total). Nomor dinormalisasi ke 62xx. [ArgumentError] bila nomor tidak
+  /// valid, nama kosong, nomor ganda, lebih dari [maxEmergencyContacts] kontak, atau lebih dari [maxActiveEmergencyContacts] aktif.
+  ///
+  /// Selalu tersimpan di perangkat dulu, lalu disinkronkan ke server (nomor di sini yang boleh login sebagai satpam
+  /// lewat [SiagaSOSResponder]). Hasil: true = sudah di server; false = belum (offline / tanpa [SosUser.ref]),
+  /// dicoba lagi otomatis saat klien dibuat ulang atau lewat [syncEmergencyContacts].
+  Future<bool> setEmergencyContacts(List<EmergencyContact> contacts) async {
+    if (contacts.length > maxEmergencyContacts) throw ArgumentError('Maksimal $maxEmergencyContacts nomor darurat');
+    if (contacts.where((c) => c.active).length > maxActiveEmergencyContacts) {
+      throw ArgumentError('Maksimal $maxActiveEmergencyContacts nomor darurat aktif');
+    }
+    final out = <EmergencyContact>[];
+    for (final c in contacts) {
+      final n = toWhatsAppNumber(c.phone);
+      if (n == null) throw ArgumentError('Nomor WhatsApp tidak valid: ${c.phone}');
+      if (c.name.trim().isEmpty) throw ArgumentError('Nama kontak wajib diisi');
+      if (out.any((o) => o.phone == n)) throw ArgumentError('Nomor +$n sudah ada di daftar');
+      final role = c.role?.trim();
+      out.add(EmergencyContact(name: c.name.trim(), phone: n, role: role == null || role.isEmpty ? null : role, active: c.active));
+    }
+    await _contacts.save(out.map((c) => c.toJson()).toList());
+    await _contactsSync.save([{'state': 'dirty'}]);
+    try {
+      return await syncEmergencyContacts();
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// Samakan Nomor Darurat perangkat dengan server. Ada perubahan lokal yang belum terkirim → PUT (ganti total).
+  /// Belum pernah sinkron: daftar lokal berisi → PUT; kosong → ambil dari server (login di perangkat baru).
+  /// true bila perangkat & server sudah sama. Butuh [SosUser.ref]; tanpa itu selalu false.
+  Future<bool> syncEmergencyContacts() async {
+    final ref = user?.ref;
+    if (ref == null || ref.isEmpty || _disposed) return false;
+    final state = (await _contactsSync.load()).firstOrNull?['state'];
+    if (state == 'synced') return true;
+    final local = await emergencyContacts();
+    if (state == 'dirty' || local.isNotEmpty) {
+      await _request('PUT', '/v1/sdk/contacts', body: {
+        'reporter': {'ref': ref, if (user?.name != null) 'name': user!.name},
+        if (sourceKey != null) 'source_key': sourceKey,
+        'contacts': local.map((c) => {'name': c.name, if (c.role != null) 'role': c.role, 'phone': c.phone, 'active': c.active}).toList(),
+      });
+    } else {
+      final data = await _request('GET', '/v1/sdk/contacts?reporter_ref=${Uri.encodeQueryComponent(ref)}');
+      final remote = ((data['contacts'] as List?) ?? const []).cast<Map<String, dynamic>>().map(EmergencyContact.fromJson).toList();
+      // Bisa saja pengguna sempat mengisi daftar selama request berjalan: jangan timpa.
+      if (remote.isNotEmpty && (await emergencyContacts()).isEmpty) {
+        await _contacts.save(remote.map((c) => c.toJson()).toList());
+      }
+    }
+    await _contactsSync.save([{'state': 'synced'}]);
+    return true;
   }
 
   // ------------------------------------------------------------------ riwayat
@@ -364,6 +445,9 @@ class SiagaSOS {
   }
 
   Future<Map<String, dynamic>> getReport(String id) => _request('GET', '/v1/sdk/reports/$id');
+
+  /// Detail laporan untuk halaman riwayat: uraian, lokasi, riwayat status (termasuk catatan petugas) dan lampiran.
+  Future<ReportDetail> reportDetail(String id) async => ReportDetail.fromJson(await _request('GET', '/v1/sdk/reports/$id/detail'));
 
   /// Catatan pelapor untuk petugas (mis. keterangan rekaman TKP). Tampil di timeline dashboard.
   /// Bila laporan masih di antrian offline, menunggu sampai terkirim (maks. [waitTimeout]).

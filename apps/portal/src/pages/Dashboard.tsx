@@ -320,7 +320,7 @@ const NEXT: Partial<Record<ReportStatus, { to: ReportStatus; label: string; vari
   in_progress: [{ to: 'resolved', label: 'Tandai selesai', variant: 'primary' }, { to: 'false_alarm', label: 'Alarm palsu', variant: 'default' }],
 };
 
-const EVENT_LABEL: Record<string, string> = { created: 'Laporan dibuat', status_changed: 'Status diubah', cancelled: 'Dibatalkan pelapor', note: 'Catatan', media: 'Lampiran' };
+const EVENT_LABEL: Record<string, string> = { created: 'Laporan dibuat', status_changed: 'Status diubah', cancelled: 'Dibatalkan pelapor', note: 'Catatan', media: 'Lampiran', whatsapp: 'WhatsApp' };
 
 function DetailPanel({ report: r, detail, onClose, onChanged }: { report: Report; detail: ReportDetail | null; onClose: () => void; onChanged: (r: Report) => void }) {
   const toast = useToast();
@@ -410,7 +410,7 @@ function DetailPanel({ report: r, detail, onClose, onChanged }: { report: Report
                 <li key={e.id}>
                   <span>
                     <strong>{e.to_status ? `${EVENT_LABEL[e.type] ?? e.type}: ${REPORT_STATUS[e.to_status as ReportStatus]?.label ?? e.to_status}` : EVENT_LABEL[e.type] ?? e.type}</strong>
-                    <span className="muted"> · {fmtTime(e.created_at)} · {e.actor_name ?? (e.actor_kind === 'reporter' ? 'Pelapor' : e.actor_kind === 'server' ? 'Server klien' : 'Sistem')}</span>
+                    <span className="muted"> · {fmtTime(e.created_at)} · {e.actor_name ?? (e.actor_kind === 'reporter' ? 'Pelapor' : e.actor_kind === 'responder' ? 'Satpam (app)' : e.actor_kind === 'server' ? 'Server klien' : 'Sistem')}</span>
                     {e.note && <span style={{ display: 'block', color: 'var(--text-2)' }}>{e.note}</span>}
                   </span>
                 </li>

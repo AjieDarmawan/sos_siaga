@@ -18,7 +18,8 @@ Base URL default: `https://api.siagasos.id` (bisa dioverride untuk staging / lok
 
 1. `GET /v1/sdk/config` → `{ app_name, mode, categories[], complaint_categories[], button_text, hold_seconds, recipient_text, fallback_phone, live_location_interval_s }`. Cache di memori.
 2. **Trigger**: ambil lokasi (timeout default 8 dtk, boleh gagal), lalu `POST /v1/sdk/reports`
-   `{ kind?, category, message?, source_key?, location?{lat,lng,accuracy_m}, reporter?{ref,name,phone}, device?{platform,sdk_version,os}, metadata?, client_created_at }`
+   `{ kind?, category, message?, source_key?, location?{lat,lng,accuracy_m}, reporter?{ref,name,phone}, device?{platform,sdk_version,os}, metadata?, client_created_at, emergency_contacts?[{name,phone}] }`
+   `emergency_contacts` (hanya SOS, maks. 5, nomor dinormalisasi ke `62xx`, tidak valid → 422): kontak darurat pribadi yang disimpan SDK di perangkat per pengguna. Server mengabari mereka + Penerima SOS app lewat WhatsApp setelah laporan tersimpan (async, tidak menunda respons; hasil per nomor di timeline `whatsapp`).
    → 201 (baru) / 200 + `Idempotent-Replayed: true` (ulangan) → `ReportPublic { id, kind, status, mode, category, created_at, acknowledged_at, resolved_at, status_message }`.
 3. **Offline**: bila gagal jaringan atau 5xx/429, simpan item ke antrian **persisten** (`localId`, `idempotencyKey`, body) dan emit `queued`. Kirim ulang dengan backoff eksponensial (2 dtk → maks 60 dtk) dan saat koneksi kembali. Error 4xx lain (kunci salah, origin) = permanen: emit `error`, buang dari antrian.
 4. **Status**: polling `GET /v1/sdk/reports/:id` tiap 4 dtk sampai status akhir (`resolved`, `cancelled`, `false_alarm`). Emit `status` hanya bila berubah.
@@ -30,6 +31,7 @@ Base URL default: `https://api.siagasos.id` (bisa dioverride untuk staging / lok
    3. `POST /v1/sdk/reports/:id/media/:mediaId/complete` → `MediaPublic { id, kind, content_type, size_bytes, status:'ready' }`.
    Bila laporan masih di antrian, tunggu sampai terkirim (event `sent`) dulu.
    Batas: foto 10 MB, video 60 MB, suara 15 MB, 10 lampiran per laporan. MIME: lihat `apps/api/src/lib/media.ts`.
+9. **Detail riwayat**: `GET /v1/sdk/reports/:id/detail` → `ReportPublic` + `message`, `location`, `timeline[{type, actor, to_status, note, created_at}]`, `media[{id, kind, content_type, duration_s, uploaded_by, url}]`. Hasil WhatsApp diringkas (`WhatsApp terkirim ke N penerima`); nomor HP pelapor / penerima tidak pernah dikirim.
 8. **Catatan pelapor**: `POST /v1/sdk/reports/:id/notes` `{note}` (1–1000 karakter) → `201` + status publik. Dipakai setelah rekam TKP; tampil di timeline dashboard. 409 `report_closed` bila status sudah akhir, 422 `invalid_note`.
 9. **Pengaduan** (non-darurat, menu "Laporan pengaduan" di tombol melayang): sama dengan trigger, body `kind: 'pengaduan'`,
    `category` dari `complaint_categories`, `message` **wajib** (≥ 5 karakter, 422 bila kurang). Server tidak mengirim email darurat
