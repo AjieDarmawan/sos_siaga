@@ -93,7 +93,7 @@ Ketuk tombol → 4 tombol gradien bertumpuk (gaya menu SOS tata-warga), **Kirim 
 
 Setelah SOS terkirim, panel menampilkan status realtime, tombol batal (salah tekan), dan **Foto / Video / Suara** bila `onCapture` diisi.
 Pengaduan tidak mengubah tombol menjadi "AKTIF", tidak memicu alarm/email darurat di dashboard, dan tidak mengirim lokasi live
-(lokasi saat dikirim tetap ikut bila tersedia). `complaint: false` menyembunyikan menu pengaduan; `onComplaintSent` dipanggil setelah terkirim.
+(lokasi saat dikirim tetap ikut bila tersedia). `captureKinds: [MediaKind.image, MediaKind.video]` membatasi jenis lampiran; `complaint: false` menyembunyikan menu pengaduan; `onComplaintSent` dipanggil setelah terkirim.
 
 Tanpa widget: `await sos.complain(category: 'kebisingan', message: 'Hajatan sampai jam 2 pagi')` (antrian offline sama dengan SOS).
 `visible: false` menyembunyikan tombol (mis. di halaman login). SDK tidak membawa plugin kamera/telepon, jadi ukuran dan izin tetap di tangan app.
