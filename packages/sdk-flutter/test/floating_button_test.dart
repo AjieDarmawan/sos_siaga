@@ -154,7 +154,11 @@ void main() {
     // Tombol kirim nonaktif sampai bukti (min. 1), judul, dan kronologi diisi.
     FilledButton send() => tester.widget<FilledButton>(find.ancestor(of: find.text('Kirim pengaduan'), matching: find.byWidgetPredicate((w) => w is FilledButton)));
     expect(send().onPressed, isNull);
-    await tester.tap(find.text('Parkir liar'));
+    // Jenis pengaduan: dropdown → pilih dari menu.
+    await tester.tap(find.byKey(const ValueKey('siagasos-complaint-category')));
+    await pumpFrames(tester, 8);
+    await tester.tap(find.text('Parkir liar').last);
+    await pumpFrames(tester, 8);
     await tester.tap(find.text('+ Foto'));
     await pumpFrames(tester, 2);
     await tester.enterText(find.byKey(const ValueKey('siagasos-complaint-text')), 'Parkir liar menutup gang setiap malam');

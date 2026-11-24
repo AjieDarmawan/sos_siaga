@@ -975,7 +975,7 @@ class _HoldToSend extends StatelessWidget {
 }
 
 /// Form "Pengaduan" (non-darurat), disamakan dengan Lapor Keamanan tata-warga: foto/video bukti (min. 1),
-/// jenis, judul, kronologi, lokasi & waktu kejadian, ciri pelaku, dan saksi. Lembar dari bawah layar.
+/// jenis, judul, kronologi, lokasi & waktu kejadian, ciri pelaku, dan saksi. Tampilan: kartu per bagian.
 class _ComplaintSheet extends StatefulWidget {
   const _ComplaintSheet({
     required this.client,
@@ -1002,28 +1002,21 @@ class _ComplaintSheet extends StatefulWidget {
 
 class _ComplaintSheetState extends State<_ComplaintSheet> {
   static const _amber = Color(0xFFD97706);
+  static const _amberSoft = Color(0xFFFFFBEB);
+  static const _amberBorder = Color(0xFFFDE68A);
+  static const _ink = Color(0xFF111827);
+  static const _muted = Color(0xFF6B7280);
+  static const _line = Color(0xFFE5E7EB);
+  static const _green = Color(0xFF16A34A);
   // Batas sama dengan Lapor Keamanan tata-warga (MEDIA_LIMITS: foto 5, video 2, video maks. 5 dtk).
   static const _maxImages = 5;
   static const _maxVideos = 2;
   static const _minDescription = 5;
   static const _maxDaysBack = 30;
-  static const _months = [
-    'Jan',
-    'Feb',
-    'Mar',
-    'Apr',
-    'Mei',
-    'Jun',
-    'Jul',
-    'Agu',
-    'Sep',
-    'Okt',
-    'Nov',
-    'Des'
-  ];
+  static const _months = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
 
-  late String _category =
-      widget.categories.isNotEmpty ? widget.categories.first : 'lainnya';
+  late String _category = widget.categories.isNotEmpty ? widget.categories.first : 'lainnya';
+  bool _categoryOpen = false;
   final _title = TextEditingController();
   final _description = TextEditingController();
   final _location = TextEditingController();
@@ -1033,8 +1026,7 @@ class _ComplaintSheetState extends State<_ComplaintSheet> {
   final List<CapturedMedia> _media = [];
   bool _sending = false;
   ActiveReport? _report;
-  double?
-      _upload; // progres unggahan berkas yang sedang berjalan; null = tidak ada
+  double? _upload; // progres unggahan berkas yang sedang berjalan; null = tidak ada
   int _uploadIndex = 0; // berkas ke-n yang sedang diunggah (1-based)
   int _mediaSent = 0;
   String? _error;
@@ -1072,9 +1064,7 @@ class _ComplaintSheetState extends State<_ComplaintSheet> {
       _media.isNotEmpty;
 
   Future<void> _addMedia(MediaKind kind) async {
-    final limitReached = kind == MediaKind.video
-        ? _videoCount >= _maxVideos
-        : _imageCount >= _maxImages;
+    final limitReached = kind == MediaKind.video ? _videoCount >= _maxVideos : _imageCount >= _maxImages;
     if (limitReached || _sending) return;
     final m = await widget.onCapture?.call(context, kind);
     if (m != null && mounted) setState(() => _media.add(m));
@@ -1090,11 +1080,9 @@ class _ComplaintSheetState extends State<_ComplaintSheet> {
       lastDate: now,
     );
     if (date == null || !mounted) return;
-    final time = await showTimePicker(
-        context: context, initialTime: TimeOfDay.fromDateTime(initial));
+    final time = await showTimePicker(context: context, initialTime: TimeOfDay.fromDateTime(initial));
     if (time == null || !mounted) return;
-    var picked =
-        DateTime(date.year, date.month, date.day, time.hour, time.minute);
+    var picked = DateTime(date.year, date.month, date.day, time.hour, time.minute);
     if (picked.isAfter(DateTime.now())) picked = DateTime.now();
     setState(() => _occurredAt = picked);
   }
@@ -1123,8 +1111,7 @@ class _ComplaintSheetState extends State<_ComplaintSheet> {
       _error = null;
     });
     try {
-      final r = await widget.client.complain(
-          category: _category, message: _description.text, details: _details());
+      final r = await widget.client.complain(category: _category, message: _description.text, details: _details());
       HapticFeedback.mediumImpact();
       if (!mounted) return;
       setState(() => _report = r);
@@ -1137,14 +1124,10 @@ class _ComplaintSheetState extends State<_ComplaintSheet> {
         });
         try {
           await widget.client.attach(r.localId, m.bytes,
-              contentType: m.contentType,
-              durationS: m.durationS,
-              onProgress: (p) => mounted ? setState(() => _upload = p) : null);
+              contentType: m.contentType, durationS: m.durationS, onProgress: (p) => mounted ? setState(() => _upload = p) : null);
           if (mounted) setState(() => _mediaSent++);
         } on SiagaSOSError catch (e) {
-          if (mounted)
-            setState(() => _error =
-                'Pengaduan terkirim, tetapi lampiran ${i + 1} gagal diunggah: ${e.message}');
+          if (mounted) setState(() => _error = 'Pengaduan terkirim, tetapi lampiran ${i + 1} gagal diunggah: ${e.message}');
           break;
         }
       }
@@ -1160,8 +1143,7 @@ class _ComplaintSheetState extends State<_ComplaintSheet> {
   String get _statusText {
     final r = _report!;
     return switch (r.status) {
-      SosStatus.queued =>
-        'Belum ada sinyal. Pengaduan disimpan dan dikirim otomatis.',
+      SosStatus.queued => 'Belum ada sinyal. Pengaduan disimpan dan dikirim otomatis.',
       SosStatus.open => 'Pengaduan terkirim. Petugas akan menindaklanjuti.',
       SosStatus.acknowledged => 'Pengaduan diterima petugas.',
       SosStatus.inProgress => 'Pengaduan sedang ditindaklanjuti.',
@@ -1183,169 +1165,222 @@ class _ComplaintSheetState extends State<_ComplaintSheet> {
 
   Widget _grip(ThemeData theme) => _Grip(theme);
 
-  Widget _required(ThemeData theme, String text, {String? trailing}) =>
-      Row(children: [
-        Expanded(
-          child: Text.rich(TextSpan(
-            text: text,
-            style: theme.textTheme.labelLarge,
-            children: const [
-              TextSpan(text: ' *', style: TextStyle(color: Color(0xFFDC2626)))
-            ],
-          )),
-        ),
-        if (trailing != null) Text(trailing, style: theme.textTheme.labelSmall),
-      ]);
+  // ---------- komponen tampilan ----------
 
-  InputDecoration _deco(ThemeData theme, String hint) => InputDecoration(
+  /// Kartu satu bagian: ikon + judul di kepala, lalu isi. [required] menambah tanda * dan [trailing] di kanan.
+  Widget _card(ThemeData theme,
+      {required IconData icon, required String title, required Widget child, bool required = false, Widget? trailing}) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: _line),
+        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 8, offset: const Offset(0, 2))],
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        Row(children: [
+          Container(
+            width: 30,
+            height: 30,
+            decoration: BoxDecoration(color: _amberSoft, borderRadius: BorderRadius.circular(10)),
+            child: Icon(icon, size: 17, color: _amber),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text.rich(TextSpan(
+              text: title,
+              style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700, color: _ink),
+              children: [
+                if (required) const TextSpan(text: ' *', style: TextStyle(color: Color(0xFFDC2626))),
+              ],
+            )),
+          ),
+          if (trailing != null) trailing,
+        ]),
+        const SizedBox(height: 12),
+        child,
+      ]),
+    );
+  }
+
+  InputDecoration _deco(ThemeData theme, String hint, {IconData? icon}) => InputDecoration(
         hintText: hint,
-        hintStyle: theme.textTheme.bodySmall,
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
+        hintStyle: theme.textTheme.bodySmall?.copyWith(color: const Color(0xFF9CA3AF)),
+        prefixIcon: icon == null ? null : Icon(icon, size: 19, color: _muted),
+        filled: true,
+        fillColor: const Color(0xFFF9FAFB),
         isDense: true,
-        contentPadding:
-            const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: const BorderSide(color: _line)),
+        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: const BorderSide(color: _line)),
+        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: const BorderSide(color: _amber, width: 1.4)),
       );
 
-  Widget _section(Widget child) =>
-      Padding(padding: const EdgeInsets.only(top: 16), child: child);
+  Widget _counter(ThemeData theme, int n, int max) => Text('$n/$max',
+      style: theme.textTheme.labelSmall?.copyWith(color: n > max ? const Color(0xFFDC2626) : _muted, fontWeight: FontWeight.w600));
+
+  /// Header gradien kuning-jingga (ikon, judul, catatan non-darurat, tutup).
+  Widget _header(ThemeData theme) => Container(
+        padding: const EdgeInsets.fromLTRB(14, 12, 6, 12),
+        decoration: BoxDecoration(
+          gradient: const LinearGradient(colors: [Color(0xFFFBBF24), _amber], begin: Alignment.topLeft, end: Alignment.bottomRight),
+          borderRadius: BorderRadius.circular(18),
+        ),
+        child: Row(children: [
+          Container(
+            width: 42,
+            height: 42,
+            decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.25), borderRadius: BorderRadius.circular(14)),
+            child: const Icon(Icons.campaign_rounded, color: Colors.white, size: 24),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(widget.label,
+                  style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800, color: Colors.white)),
+              Text('Laporkan masalah lingkungan. Bukan untuk keadaan darurat.',
+                  style: theme.textTheme.bodySmall?.copyWith(color: Colors.white.withValues(alpha: 0.92))),
+            ]),
+          ),
+          IconButton(
+            onPressed: _sending ? null : widget.onClose,
+            icon: const Icon(Icons.close_rounded, color: Colors.white),
+            tooltip: 'Tutup',
+          ),
+        ]),
+      );
 
   Widget _form(ThemeData theme) {
     final mediaFull = _imageCount >= _maxImages && _videoCount >= _maxVideos;
     final desc = _description.text.trim().length;
-    return Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          _grip(theme),
-          Row(children: [
-            Container(
-              width: 44,
-              height: 44,
-              decoration: BoxDecoration(
-                gradient:
-                    const LinearGradient(colors: [Color(0xFFFBBF24), _amber]),
-                borderRadius: BorderRadius.circular(14),
-              ),
-              child: const Icon(Icons.campaign_rounded, color: Colors.white),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(widget.label,
-                        style: theme.textTheme.titleMedium
-                            ?.copyWith(fontWeight: FontWeight.w700)),
-                    Text('Bukan untuk keadaan darurat',
-                        style: theme.textTheme.bodySmall),
-                  ]),
-            ),
-            IconButton(
-                onPressed: _sending ? null : widget.onClose,
-                icon: const Icon(Icons.close_rounded),
-                tooltip: 'Tutup'),
-          ]),
-          _section(_required(theme, 'Foto / Video Kejadian',
-              trailing:
-                  '$_imageCount/$_maxImages foto · $_videoCount/$_maxVideos video')),
-          const SizedBox(height: 4),
-          Text('Minimal 1 bukti. Video maks. 5 detik.',
-              style: theme.textTheme.bodySmall),
-          const SizedBox(height: 8),
-          Wrap(spacing: 8, runSpacing: 8, children: [
+    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, mainAxisSize: MainAxisSize.min, children: [
+      _grip(theme),
+      _header(theme),
+      const SizedBox(height: 12),
+      // Bukti: kartu pertama, paling penting.
+      _card(
+        theme,
+        icon: Icons.perm_media_rounded,
+        title: 'Foto / Video kejadian',
+        required: true,
+        trailing: _pill(theme, '${_imageCount + _videoCount} bukti', ok: _media.isNotEmpty),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text('Minimal 1 bukti. Foto maks. $_maxImages, video maks. $_maxVideos (5 detik).',
+              style: theme.textTheme.bodySmall?.copyWith(color: _muted)),
+          const SizedBox(height: 10),
+          Wrap(spacing: 10, runSpacing: 10, children: [
             for (var i = 0; i < _media.length; i++) _mediaTile(theme, i),
             if (!mediaFull && widget.onCapture != null) ...[
               if (_imageCount < _maxImages)
-                _addTile(theme, Icons.add_a_photo_rounded, 'Foto',
-                    _sending ? null : () => _addMedia(MediaKind.image)),
+                _addTile(theme, Icons.add_a_photo_rounded, 'Foto', _sending ? null : () => _addMedia(MediaKind.image)),
               if (_videoCount < _maxVideos)
-                _addTile(theme, Icons.videocam_rounded, 'Video',
-                    _sending ? null : () => _addMedia(MediaKind.video)),
+                _addTile(theme, Icons.videocam_rounded, 'Video', _sending ? null : () => _addMedia(MediaKind.video)),
             ],
           ]),
-          _section(_required(theme, 'Jenis pengaduan')),
-          const SizedBox(height: 8),
-          Wrap(spacing: 8, runSpacing: 8, children: [
-            for (final c in widget.categories)
-              ChoiceChip(
-                label: Text(complaintCategoryLabel(c)),
-                selected: _category == c,
-                onSelected:
-                    _sending ? null : (_) => setState(() => _category = c),
-                selectedColor: const Color(0xFFFDE68A),
-                showCheckmark: false,
-              ),
-          ]),
-          _section(_required(theme, 'Judul pengaduan')),
-          const SizedBox(height: 8),
-          TextField(
-            key: const ValueKey('siagasos-complaint-title'),
-            controller: _title,
-            enabled: !_sending,
-            maxLength: 120,
-            textCapitalization: TextCapitalization.sentences,
-            decoration: _deco(theme, 'Contoh: Motor parkir menutup gang Mawar'),
-          ),
-          _section(_required(theme, 'Kronologi', trailing: '$desc/1000')),
-          const SizedBox(height: 8),
-          TextField(
-            key: const ValueKey('siagasos-complaint-text'),
-            controller: _description,
-            enabled: !_sending,
-            minLines: 3,
-            maxLines: 6,
-            maxLength: 1000,
-            buildCounter: (_,
-                    {required currentLength, required isFocused, maxLength}) =>
-                const SizedBox.shrink(),
-            textCapitalization: TextCapitalization.sentences,
-            decoration: _deco(theme, 'Ceritakan urutan kejadiannya...'),
-          ),
-          _section(Text('Lokasi & waktu kejadian',
-              style: theme.textTheme.labelLarge)),
-          const SizedBox(height: 8),
+        ]),
+      ),
+      const SizedBox(height: 12),
+      _card(
+        theme,
+        icon: Icons.category_rounded,
+        title: 'Jenis pengaduan',
+        required: true,
+        child: _categoryDropdown(theme),
+      ),
+      const SizedBox(height: 12),
+      _card(
+        theme,
+        icon: Icons.title_rounded,
+        title: 'Judul pengaduan',
+        required: true,
+        trailing: _counter(theme, _title.text.trim().length, 120),
+        child: TextField(
+          key: const ValueKey('siagasos-complaint-title'),
+          controller: _title,
+          enabled: !_sending,
+          maxLength: 120,
+          buildCounter: (_, {required currentLength, required isFocused, maxLength}) => const SizedBox.shrink(),
+          textCapitalization: TextCapitalization.sentences,
+          decoration: _deco(theme, 'Contoh: Motor parkir menutup gang Mawar'),
+        ),
+      ),
+      const SizedBox(height: 12),
+      _card(
+        theme,
+        icon: Icons.notes_rounded,
+        title: 'Kronologi',
+        required: true,
+        trailing: _counter(theme, desc, 1000),
+        child: TextField(
+          key: const ValueKey('siagasos-complaint-text'),
+          controller: _description,
+          enabled: !_sending,
+          minLines: 3,
+          maxLines: 6,
+          maxLength: 1000,
+          buildCounter: (_, {required currentLength, required isFocused, maxLength}) => const SizedBox.shrink(),
+          textCapitalization: TextCapitalization.sentences,
+          decoration: _deco(theme, 'Ceritakan apa yang terjadi, urutannya, dan sejak kapan...'),
+        ),
+      ),
+      const SizedBox(height: 12),
+      _card(
+        theme,
+        icon: Icons.place_rounded,
+        title: 'Lokasi & waktu kejadian',
+        child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
           TextField(
             key: const ValueKey('siagasos-complaint-location'),
             controller: _location,
             enabled: !_sending,
             maxLength: 200,
+            buildCounter: (_, {required currentLength, required isFocused, maxLength}) => const SizedBox.shrink(),
             textCapitalization: TextCapitalization.sentences,
-            decoration: _deco(theme, 'Mis. Pos ronda Blok C'),
+            decoration: _deco(theme, 'Mis. Pos ronda Blok C', icon: Icons.location_on_outlined),
           ),
-          const SizedBox(height: 4),
+          const SizedBox(height: 10),
           InkWell(
             key: const ValueKey('siagasos-complaint-time'),
             borderRadius: BorderRadius.circular(14),
             onTap: _sending ? null : _pickOccurredAt,
-            child: InputDecorator(
-              decoration: _deco(theme, '').copyWith(
-                  prefixIcon: const Icon(Icons.schedule_rounded, size: 20)),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF9FAFB),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: _line),
+              ),
               child: Row(children: [
+                const Icon(Icons.schedule_rounded, size: 19, color: _muted),
+                const SizedBox(width: 10),
                 Expanded(
                   child: Text(
-                    _occurredAt == null
-                        ? 'Saat laporan dikirim'
-                        : _fmtOccurredAt(_occurredAt!),
-                    style: theme.textTheme.bodyMedium,
+                    _occurredAt == null ? 'Waktu kejadian: saat laporan dikirim' : 'Waktu kejadian: ${_fmtOccurredAt(_occurredAt!)}',
+                    style: theme.textTheme.bodyMedium?.copyWith(color: _occurredAt == null ? _muted : _ink),
                   ),
                 ),
                 if (_occurredAt != null)
                   IconButton(
                     visualDensity: VisualDensity.compact,
                     tooltip: 'Hapus waktu kejadian',
-                    onPressed: _sending
-                        ? null
-                        : () => setState(() => _occurredAt = null),
+                    onPressed: _sending ? null : () => setState(() => _occurredAt = null),
                     icon: const Icon(Icons.close_rounded, size: 18),
                   )
                 else
-                  const Icon(Icons.arrow_drop_down_rounded),
+                  const Icon(Icons.edit_calendar_rounded, size: 18, color: _amber),
               ]),
             ),
           ),
-          _section(Text('Ciri pelaku & saksi (opsional)',
-              style: theme.textTheme.labelLarge)),
-          const SizedBox(height: 8),
+        ]),
+      ),
+      const SizedBox(height: 12),
+      _card(
+        theme,
+        icon: Icons.person_search_rounded,
+        title: 'Ciri pelaku & saksi',
+        trailing: Text('opsional', style: theme.textTheme.labelSmall?.copyWith(color: _muted)),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
           TextField(
             key: const ValueKey('siagasos-complaint-suspect'),
             controller: _suspect,
@@ -1353,96 +1388,257 @@ class _ComplaintSheetState extends State<_ComplaintSheet> {
             minLines: 2,
             maxLines: 4,
             maxLength: 500,
+            buildCounter: (_, {required currentLength, required isFocused, maxLength}) => const SizedBox.shrink(),
             textCapitalization: TextCapitalization.sentences,
-            decoration:
-                _deco(theme, 'Ciri orang, pakaian, kendaraan, pelat nomor...'),
+            decoration: _deco(theme, 'Ciri orang, pakaian, kendaraan, pelat nomor...'),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 10),
           TextField(
             key: const ValueKey('siagasos-complaint-witness'),
             controller: _witness,
             enabled: !_sending,
             maxLength: 300,
+            buildCounter: (_, {required currentLength, required isFocused, maxLength}) => const SizedBox.shrink(),
             textCapitalization: TextCapitalization.words,
-            decoration: _deco(theme, 'Nama / nomor HP saksi'),
+            decoration: _deco(theme, 'Nama / nomor HP saksi', icon: Icons.groups_2_outlined),
           ),
-          if (_error != null) ...[
-            const SizedBox(height: 10),
-            Text(_error!,
-                style: theme.textTheme.bodySmall
-                    ?.copyWith(color: theme.colorScheme.error)),
-          ],
-          const SizedBox(height: 16),
-          FilledButton.icon(
-            key: const ValueKey('siagasos-complaint-send'),
-            onPressed: _valid && !_sending ? _send : null,
-            icon: _sending
-                ? const SizedBox.square(
-                    dimension: 18,
-                    child: CircularProgressIndicator(
-                        strokeWidth: 2.2, color: Colors.white))
-                : const Icon(Icons.send_rounded),
-            label: Text(_sending ? 'Mengirim…' : 'Kirim pengaduan'),
-            style: FilledButton.styleFrom(
-                backgroundColor: _amber,
-                minimumSize: const Size.fromHeight(52),
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16))),
+        ]),
+      ),
+      if (_error != null) ...[
+        const SizedBox(height: 12),
+        _notice(theme, _error!, error: true),
+      ],
+      const SizedBox(height: 16),
+      DecoratedBox(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(16),
+          gradient: _valid && !_sending ? const LinearGradient(colors: [Color(0xFFFBBF24), _amber]) : null,
+          color: _valid && !_sending ? null : const Color(0xFFE5E7EB),
+        ),
+        child: FilledButton.icon(
+          key: const ValueKey('siagasos-complaint-send'),
+          onPressed: _valid && !_sending ? _send : null,
+          icon: _sending
+              ? const SizedBox.square(dimension: 18, child: CircularProgressIndicator(strokeWidth: 2.2, color: Colors.white))
+              : const Icon(Icons.send_rounded),
+          label: Text(_sending ? 'Mengirim…' : 'Kirim pengaduan', style: const TextStyle(fontWeight: FontWeight.w700)),
+          style: FilledButton.styleFrom(
+            backgroundColor: Colors.transparent,
+            disabledBackgroundColor: Colors.transparent,
+            foregroundColor: Colors.white,
+            disabledForegroundColor: _muted,
+            minimumSize: const Size.fromHeight(54),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
           ),
-          if (widget.client.mode == SosMode.test)
-            Padding(
-              padding: const EdgeInsets.only(top: 8),
-              child: Text('MODE TEST',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                      color: Colors.amber.shade800,
-                      fontWeight: FontWeight.w700,
-                      fontSize: 11)),
-            ),
-        ]);
+        ),
+      ),
+      if (!_valid && !_sending)
+        Padding(
+          padding: const EdgeInsets.only(top: 8),
+          child: Text(_hint(), textAlign: TextAlign.center, style: theme.textTheme.bodySmall?.copyWith(color: _muted)),
+        ),
+      if (widget.client.mode == SosMode.test)
+        Padding(
+          padding: const EdgeInsets.only(top: 8),
+          child: Text('MODE TEST',
+              textAlign: TextAlign.center, style: TextStyle(color: Colors.amber.shade800, fontWeight: FontWeight.w700, fontSize: 11)),
+        ),
+    ]);
   }
 
-  Widget _addTile(
-          ThemeData theme, IconData icon, String label, VoidCallback? onTap) =>
-      OutlinedButton(
-        onPressed: onTap,
-        style: OutlinedButton.styleFrom(
-          minimumSize: const Size(96, 72),
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+  /// Penjelasan singkat apa yang belum lengkap (muncul di bawah tombol kirim).
+  String _hint() {
+    if (_media.isEmpty) return 'Tambahkan minimal 1 foto atau video';
+    if (_title.text.trim().isEmpty) return 'Isi judul pengaduan';
+    if (_description.text.trim().length < _minDescription) return 'Kronologi minimal $_minDescription karakter';
+    return '';
+  }
+
+  Widget _pill(ThemeData theme, String text, {required bool ok}) => Container(
+        padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
+        decoration: BoxDecoration(
+          color: ok ? const Color(0xFFDCFCE7) : const Color(0xFFF3F4F6),
+          borderRadius: BorderRadius.circular(999),
         ),
-        child: Column(mainAxisSize: MainAxisSize.min, children: [
-          Icon(icon),
-          const SizedBox(height: 4),
-          Text('+ $label', style: theme.textTheme.labelMedium),
+        child: Text(text,
+            style: theme.textTheme.labelSmall?.copyWith(fontWeight: FontWeight.w700, color: ok ? _green : _muted)),
+      );
+
+  /// Ikon per kategori bawaan; slug kustom dari portal memakai ikon umum.
+  static IconData _categoryIcon(String slug) => switch (slug) {
+        'ketertiban' => Icons.gavel_rounded,
+        'kebisingan' => Icons.volume_up_rounded,
+        'parkir_liar' => Icons.local_parking_rounded,
+        'pungli' => Icons.money_off_rounded,
+        'kehilangan' => Icons.search_off_rounded,
+        'patroli' => Icons.local_police_rounded,
+        _ => Icons.label_rounded,
+      };
+
+  /// Dropdown jenis pengaduan. Sengaja bukan DropdownButton: tombol SOS dipasang di MaterialApp.builder
+  /// (di atas Navigator), sedangkan menu DropdownButton butuh Navigator → crash. Daftar dibuka inline.
+  Widget _categoryDropdown(ThemeData theme) {
+    final items = widget.categories.isNotEmpty ? widget.categories : const ['lainnya'];
+    final value = items.contains(_category) ? _category : items.first;
+    final open = _categoryOpen && !_sending;
+
+    Widget badge(String c) => Container(
+          width: 30,
+          height: 30,
+          decoration: BoxDecoration(color: _amberSoft, borderRadius: BorderRadius.circular(9)),
+          child: Icon(_categoryIcon(c), size: 17, color: _amber),
+        );
+
+    return Container(
+      decoration: BoxDecoration(
+        color: const Color(0xFFF9FAFB),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: open ? _amber : _line, width: open ? 1.4 : 1),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Material(
+        type: MaterialType.transparency,
+        child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          Semantics(
+            button: true,
+            expanded: open,
+            label: 'Jenis pengaduan: ${complaintCategoryLabel(value)}',
+            child: InkWell(
+              key: const ValueKey('siagasos-complaint-category'),
+              onTap: _sending ? null : () => setState(() => _categoryOpen = !_categoryOpen),
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(10, 9, 10, 9),
+                child: Row(children: [
+                  badge(value),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(complaintCategoryLabel(value),
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.bodyMedium?.copyWith(color: _ink, fontWeight: FontWeight.w700)),
+                  ),
+                  AnimatedRotation(
+                    turns: open ? 0.5 : 0,
+                    duration: const Duration(milliseconds: 180),
+                    child: Icon(Icons.keyboard_arrow_down_rounded, color: _sending ? _muted : _amber),
+                  ),
+                ]),
+              ),
+            ),
+          ),
+          AnimatedSize(
+            duration: const Duration(milliseconds: 200),
+            curve: Curves.easeOutCubic,
+            alignment: Alignment.topCenter,
+            child: !open
+                ? const SizedBox(width: double.infinity)
+                : Container(
+                    color: Colors.white,
+                    child: Column(mainAxisSize: MainAxisSize.min, children: [
+                      const Divider(height: 1, color: _line),
+                      for (final c in items)
+                        InkWell(
+                          onTap: () => setState(() {
+                            _category = c;
+                            _categoryOpen = false;
+                          }),
+                          child: Container(
+                            color: c == value ? _amberSoft : null,
+                            padding: const EdgeInsets.fromLTRB(10, 8, 12, 8),
+                            child: Row(children: [
+                              badge(c),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Text(complaintCategoryLabel(c),
+                                    style: theme.textTheme.bodyMedium?.copyWith(
+                                        color: c == value ? const Color(0xFF92400E) : _ink,
+                                        fontWeight: c == value ? FontWeight.w700 : FontWeight.w500)),
+                              ),
+                              if (c == value) const Icon(Icons.check_rounded, size: 18, color: _amber),
+                            ]),
+                          ),
+                        ),
+                    ]),
+                  ),
+          ),
         ]),
+      ),
+    );
+  }
+
+  Widget _notice(ThemeData theme, String text, {bool error = false}) => Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: error ? const Color(0xFFFEF2F2) : _amberSoft,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: error ? const Color(0xFFFECACA) : _amberBorder),
+        ),
+        child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Icon(error ? Icons.error_outline_rounded : Icons.info_outline_rounded,
+              size: 18, color: error ? theme.colorScheme.error : _amber),
+          const SizedBox(width: 8),
+          Expanded(child: Text(text, style: theme.textTheme.bodySmall?.copyWith(color: error ? theme.colorScheme.error : _ink))),
+        ]),
+      );
+
+  Widget _addTile(ThemeData theme, IconData icon, String label, VoidCallback? onTap) => Semantics(
+        button: true,
+        label: 'Tambah $label',
+        child: InkWell(
+          borderRadius: BorderRadius.circular(16),
+          onTap: onTap,
+          child: Container(
+            width: 92,
+            height: 92,
+            decoration: BoxDecoration(
+              color: _amberSoft,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: _amberBorder, width: 1.4),
+            ),
+            child: Column(mainAxisSize: MainAxisSize.min, mainAxisAlignment: MainAxisAlignment.center, children: [
+              Icon(icon, color: onTap == null ? _muted : _amber, size: 26),
+              const SizedBox(height: 6),
+              Text('+ $label',
+                  style: theme.textTheme.labelMedium?.copyWith(fontWeight: FontWeight.w700, color: onTap == null ? _muted : const Color(0xFF92400E))),
+            ]),
+          ),
+        ),
       );
 
   Widget _mediaTile(ThemeData theme, int i) {
     final m = _media[i];
     final video = _isVideo(m);
     return SizedBox(
-      width: 96,
-      height: 72,
+      width: 92,
+      height: 92,
       child: Stack(fit: StackFit.expand, children: [
         ClipRRect(
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.circular(16),
           child: video
               ? Container(
-                  color: const Color(0xFF1F2937),
+                  decoration: const BoxDecoration(
+                    gradient: LinearGradient(colors: [Color(0xFF374151), Color(0xFF111827)], begin: Alignment.topLeft, end: Alignment.bottomRight),
+                  ),
                   alignment: Alignment.center,
-                  child: const Icon(Icons.play_circle_fill_rounded,
-                      color: Colors.white, size: 30),
+                  child: const Icon(Icons.play_circle_fill_rounded, color: Colors.white, size: 34),
                 )
               : Image.memory(m.bytes,
                   fit: BoxFit.cover,
                   errorBuilder: (_, __, ___) => Container(
-                      color: theme.colorScheme.surfaceContainerHighest,
-                      child: const Icon(Icons.image_rounded))),
+                      color: theme.colorScheme.surfaceContainerHighest, child: const Icon(Icons.image_rounded))),
         ),
         Positioned(
-          top: 2,
-          right: 2,
+          left: 6,
+          bottom: 6,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+            decoration: BoxDecoration(color: const Color(0xB3111827), borderRadius: BorderRadius.circular(6)),
+            child: Text(video ? 'VIDEO' : 'FOTO',
+                style: const TextStyle(color: Colors.white, fontSize: 9.5, fontWeight: FontWeight.w800, letterSpacing: 0.4)),
+          ),
+        ),
+        Positioned(
+          top: 4,
+          right: 4,
           child: Semantics(
             button: true,
             label: 'Hapus bukti',
@@ -1450,11 +1646,9 @@ class _ComplaintSheetState extends State<_ComplaintSheet> {
               customBorder: const CircleBorder(),
               onTap: _sending ? null : () => setState(() => _media.removeAt(i)),
               child: Container(
-                padding: const EdgeInsets.all(2),
-                decoration: const BoxDecoration(
-                    color: Color(0xCC111827), shape: BoxShape.circle),
-                child: const Icon(Icons.close_rounded,
-                    size: 14, color: Colors.white),
+                padding: const EdgeInsets.all(3),
+                decoration: const BoxDecoration(color: Color(0xE6111827), shape: BoxShape.circle),
+                child: const Icon(Icons.close_rounded, size: 14, color: Colors.white),
               ),
             ),
           ),
@@ -1466,66 +1660,58 @@ class _ComplaintSheetState extends State<_ComplaintSheet> {
   Widget _done(ThemeData theme) {
     final r = _report!;
     final queued = r.status == SosStatus.queued;
+    final tone = queued ? _amber : _green;
     return Column(mainAxisSize: MainAxisSize.min, children: [
       _grip(theme),
       Container(
-        width: 64,
-        height: 64,
-        decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            color: (queued ? _amber : const Color(0xFF16A34A))
-                .withValues(alpha: 0.12)),
-        child: Icon(
-            queued ? Icons.schedule_send_rounded : Icons.check_circle_rounded,
-            size: 36,
-            color: queued ? _amber : const Color(0xFF16A34A)),
+        width: 72,
+        height: 72,
+        decoration: BoxDecoration(shape: BoxShape.circle, color: tone.withValues(alpha: 0.12)),
+        child: Icon(queued ? Icons.schedule_send_rounded : Icons.check_circle_rounded, size: 40, color: tone),
       ),
-      const SizedBox(height: 12),
+      const SizedBox(height: 14),
       Text(queued ? 'Pengaduan disimpan' : 'Pengaduan terkirim',
-          style: theme.textTheme.titleMedium
-              ?.copyWith(fontWeight: FontWeight.w700)),
+          style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800)),
       const SizedBox(height: 6),
-      Text(_statusText,
-          textAlign: TextAlign.center, style: theme.textTheme.bodyMedium),
+      Text(_statusText, textAlign: TextAlign.center, style: theme.textTheme.bodyMedium?.copyWith(color: _muted)),
       if (r.id != null) ...[
-        const SizedBox(height: 10),
+        const SizedBox(height: 12),
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-          decoration: BoxDecoration(
-              color: theme.colorScheme.surfaceContainerHighest,
-              borderRadius: BorderRadius.circular(10)),
-          child: Text(
-              'No. ${(r.id!.length > 8 ? r.id!.substring(0, 8) : r.id!).toUpperCase()} · ${complaintCategoryLabel(r.category)}',
-              style: theme.textTheme.labelMedium
-                  ?.copyWith(fontWeight: FontWeight.w700)),
+          decoration: BoxDecoration(color: const Color(0xFFF3F4F6), borderRadius: BorderRadius.circular(10)),
+          child: Text('No. ${(r.id!.length > 8 ? r.id!.substring(0, 8) : r.id!).toUpperCase()} · ${complaintCategoryLabel(r.category)}',
+              style: theme.textTheme.labelMedium?.copyWith(fontWeight: FontWeight.w700)),
         ),
       ],
       if (_upload != null) ...[
-        const SizedBox(height: 14),
-        Text('Mengunggah bukti $_uploadIndex/${_media.length}…',
-            style: theme.textTheme.bodySmall),
-        const SizedBox(height: 6),
-        LinearProgressIndicator(value: _upload, color: _amber),
+        const SizedBox(height: 16),
+        Text('Mengunggah bukti $_uploadIndex/${_media.length}…', style: theme.textTheme.bodySmall),
+        const SizedBox(height: 8),
+        ClipRRect(
+          borderRadius: BorderRadius.circular(999),
+          child: LinearProgressIndicator(value: _upload, color: _amber, backgroundColor: _amberSoft, minHeight: 6),
+        ),
       ] else if (_mediaSent > 0) ...[
-        const SizedBox(height: 10),
+        const SizedBox(height: 12),
         Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-          const Icon(Icons.check_rounded, size: 18, color: Color(0xFF16A34A)),
+          const Icon(Icons.check_rounded, size: 18, color: _green),
           const SizedBox(width: 4),
           Text('$_mediaSent bukti terlampir', style: theme.textTheme.bodySmall),
         ]),
       ],
       if (_error != null) ...[
-        const SizedBox(height: 10),
-        Text(_error!,
-            textAlign: TextAlign.center,
-            style: theme.textTheme.bodySmall
-                ?.copyWith(color: theme.colorScheme.error)),
+        const SizedBox(height: 12),
+        _notice(theme, _error!, error: true),
       ],
       const SizedBox(height: 18),
       FilledButton(
         onPressed: _upload != null ? null : widget.onClose,
-        style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(48)),
-        child: const Text('Tutup'),
+        style: FilledButton.styleFrom(
+          minimumSize: const Size.fromHeight(50),
+          backgroundColor: _amber,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        ),
+        child: const Text('Tutup', style: TextStyle(fontWeight: FontWeight.w700)),
       ),
     ]);
   }
