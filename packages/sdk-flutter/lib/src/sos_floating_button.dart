@@ -168,7 +168,7 @@ class SOSFloatingButton extends StatefulWidget {
 const double _kEdge = 12;
 
 class _SOSFloatingButtonState extends State<SOSFloatingButton>
-    with SingleTickerProviderStateMixin {
+    with SingleTickerProviderStateMixin, WidgetsBindingObserver {
   late final AnimationController _hold = AnimationController(vsync: this);
 
   /// Sisi tempel: false = kanan, true = kiri. [_yFrac] = posisi vertikal 0 (atas) .. 1 (bawah).
@@ -189,6 +189,9 @@ class _SOSFloatingButtonState extends State<SOSFloatingButton>
   /// Lembar dari bawah (pengaduan / riwayat / rekam TKP).
   OverlayEntry? _sheet;
 
+  /// Navigator lokal di dalam lembar (dibutuhkan date/time picker). Dipakai untuk tombol back.
+  final _sheetNavKey = GlobalKey<NavigatorState>();
+
   /// App host sedang membuka layar kamera (halaman di Navigator, di BAWAH lapisan ini): tombol & lembar
   /// disembunyikan sementara tanpa kehilangan state.
   bool _capturing = false;
@@ -196,6 +199,7 @@ class _SOSFloatingButtonState extends State<SOSFloatingButton>
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     widget.client
         .getConfig()
         .then((c) => mounted ? setState(() => _cfg = c) : null)
@@ -213,9 +217,21 @@ class _SOSFloatingButtonState extends State<SOSFloatingButton>
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _sub?.cancel();
     _hold.dispose();
     super.dispose();
+  }
+
+  /// Tombol back Android: saat lembar terbuka, tutup dialog tanggal/jam dulu, lalu lembarnya —
+  /// jangan langsung keluar dari app. Saat kamera host terbuka (lembar disembunyikan), biarkan app yang menangani.
+  @override
+  Future<bool> didPopRoute() async {
+    if (_sheet == null || _capturing) return false;
+    final nav = _sheetNavKey.currentState;
+    if (nav != null && await nav.maybePop()) return true;
+    _closeSheet();
+    return true;
   }
 
   Future<void> _loadPosition() async {
@@ -291,7 +307,19 @@ class _SOSFloatingButtonState extends State<SOSFloatingButton>
     setState(() {
       _open = false;
       _reportMenu = false;
-      _sheet = OverlayEntry(builder: (_) => builder());
+      // Lembar dipasang di atas Navigator app (MaterialApp.builder), jadi tidak ada Navigator di atasnya.
+      // showDatePicker/showTimePicker butuh Navigator → beri Navigator lokal (transparan, tanpa animasi)
+      // supaya dialog tanggal/jam bisa dibuka dari dalam lembar.
+      _sheet = OverlayEntry(
+          builder: (_) => Navigator(
+                key: _sheetNavKey,
+                onGenerateRoute: (_) => PageRouteBuilder<void>(
+                  opaque: false,
+                  transitionDuration: Duration.zero,
+                  reverseTransitionDuration: Duration.zero,
+                  pageBuilder: (_, __, ___) => builder(),
+                ),
+              ));
     });
   }
 
@@ -1037,7 +1065,8 @@ class _ComplaintSheetState extends State<_ComplaintSheet> {
   final _location = TextEditingController();
   final _suspect = TextEditingController();
   final _witness = TextEditingController();
-  DateTime? _occurredAt; // null = saat laporan dikirim
+  // Default: waktu sekarang (saat lembar dibuka). null = saat laporan dikirim (lewat tombol hapus).
+  DateTime? _occurredAt = DateTime.now();
   final List<CapturedMedia> _media = [];
   bool _sending = false;
   ActiveReport? _report;
