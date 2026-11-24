@@ -9,9 +9,13 @@ import android.content.Intent
 import android.content.res.Configuration
 import android.graphics.Canvas
 import android.graphics.Color
+import android.graphics.ColorFilter
 import android.graphics.Paint
+import android.graphics.Path
+import android.graphics.PixelFormat
 import android.graphics.RectF
 import android.graphics.Typeface
+import android.graphics.drawable.Drawable
 import android.graphics.drawable.GradientDrawable
 import android.net.Uri
 import android.os.Bundle
@@ -33,6 +37,7 @@ import android.view.animation.DecelerateInterpolator
 import android.view.animation.LinearInterpolator
 import android.widget.EditText
 import android.widget.FrameLayout
+import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.ProgressBar
 import android.widget.ScrollView
@@ -94,8 +99,16 @@ class SOSFloatingButton private constructor(private val app: Application, val cl
         /** Menelepon nomor darurat. Default: buka dialer (`ACTION_DIAL`, tanpa izin CALL_PHONE). null = sembunyikan tombol telepon. */
         var onCall: ((Activity, String) -> Unit)? = { a, phone -> runCatching { a.startActivity(Intent(Intent.ACTION_DIAL, Uri.parse("tel:$phone"))) } }
         /** Nomor kedua di menu. Nomor pertama memakai `fallback_phone` portal (default 110). */
-        var secondaryPhone: String? = "112"
-        var callLabel: String = "Telepon"
+        var secondaryPhone: String? = null
+        var callLabel: String = "Call"
+        /** Label lengkap tombol telepon pertama (mis. "Call 110 Polri"). null = "$callLabel $nomor" (+ " Polri" untuk 110). */
+        var firstCallLabel: String? = null
+        /** Gradien tombol telepon pertama. null = indigo default. */
+        var callColors: IntArray? = intArrayOf(0xFF60A5FA.toInt(), 0xFF3B82F6.toInt(), 0xFF2563EB.toInt())
+        /** Label menu Laporan Kejadian, sub-menu Buat Laporan, dan Input Nomor (nomor darurat pribadi). */
+        var reportLabel: String = "Laporan Kejadian"
+        var complaintLabel: String = "Buat Laporan"
+        var contactsLabel: String = "Input Nomor"
         /** Kamera app host: video TKP & foto pengaduan. null = tanpa lampiran / tanpa ajakan rekam TKP. */
         var onCapture: MediaCapture? = null
         var onSent: ((ActiveReport) -> Unit)? = null
@@ -106,7 +119,7 @@ class SOSFloatingButton private constructor(private val app: Application, val cl
         /** Label tombol kirim di menu (mis. "EWS Alert"). null = "Kirim <button_text portal>". */
         var sosLabel: String? = null
         /** Gradien tombol kirim di menu (mis. kuning EWS). null = turunan [color]. */
-        var sosColors: IntArray? = null
+        var sosColors: IntArray? = intArrayOf(0xFFFF7058.toInt(), 0xFFEB334C.toInt(), 0xFFD72242.toInt())
         var complaint: Boolean = true
         var history: Boolean = true
         var emergencyContacts: Boolean = true
@@ -314,6 +327,62 @@ internal class Palette(ctx: Context) {
 internal fun Context.dp(v: Number): Int = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, v.toFloat(), resources.displayMetrics).toInt()
 internal fun View.dp(v: Number): Int = context.dp(v)
 
+/** Gaya tombol menu compact (sama dengan SDK Flutter): tinggi 38, sudut 16, border hitam, teks hitam 12.5sp, ikon di lingkaran putih. */
+internal fun applyCompact(tv: TextView, colors: IntArray, icon: Drawable) {
+    val c = tv.context
+    tv.setTextColor(Color.BLACK)
+    tv.textSize = 16f
+    tv.typeface = Typeface.DEFAULT_BOLD
+    tv.gravity = Gravity.CENTER_VERTICAL
+    tv.maxLines = 1
+    tv.ellipsize = TextUtils.TruncateAt.END
+    tv.minHeight = c.dp(40)
+    tv.setPadding(c.dp(7), 0, c.dp(16), 0)
+    tv.compoundDrawablePadding = c.dp(12)
+    tv.setCompoundDrawablesRelativeWithIntrinsicBounds(icon, null, null, null)
+    tv.background = gradient(colors, c.dp(20).toFloat()).apply { setStroke(c.dp(1.5), Color.BLACK) }
+    tv.elevation = c.dp(3).toFloat()
+}
+
+/** Lingkaran putih 24dp berisi ikon; [tint] = warna ikon (null = ikon apa adanya, mis. ilustrasi polisi). */
+internal class ChipDrawable(ctx: Context, iconRes: Int, private val tint: Int?) : Drawable() {
+    private val size = ctx.dp(30)
+    private val icon: Drawable? = ctx.getDrawable(iconRes)?.mutate()
+    private val bg = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.WHITE }
+    private val ring = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.BLACK
+        style = Paint.Style.STROKE
+        strokeWidth = ctx.dp(1.5).toFloat()
+    }
+    private val clip = Path()
+
+    override fun getIntrinsicWidth() = size
+    override fun getIntrinsicHeight() = size
+
+    override fun draw(canvas: Canvas) {
+        val b = bounds
+        val cx = b.exactCenterX()
+        val cy = b.exactCenterY()
+        val r = b.width() / 2f
+        canvas.drawCircle(cx, cy, r, bg)
+        val ic = icon ?: return
+        canvas.save()
+        clip.reset()
+        clip.addCircle(cx, cy, r, Path.Direction.CW)
+        canvas.clipPath(clip)
+        val inset = if (tint != null) (b.width() * 0.22f).toInt() else 0
+        ic.setBounds(b.left + inset, b.top + inset, b.right - inset, b.bottom - inset)
+        if (tint != null) ic.setTint(tint)
+        ic.draw(canvas)
+        canvas.restore()
+        canvas.drawCircle(cx, cy, r - ring.strokeWidth / 2f, ring)
+    }
+
+    override fun setAlpha(alpha: Int) {}
+    override fun setColorFilter(colorFilter: ColorFilter?) {}
+    override fun getOpacity(): Int = PixelFormat.TRANSLUCENT
+}
+
 internal fun rounded(color: Int, radiusPx: Float, stroke: Int? = null, strokePx: Int = 0) = GradientDrawable().apply {
     setColor(color); cornerRadius = radiusPx; stroke?.let { setStroke(strokePx, it) }
 }
@@ -442,14 +511,18 @@ internal class Layer(private val activity: Activity, private val c: SOSFloatingB
         val subs = listOfNotNull(
             if (o.complaint) "complaint" else null, if (o.history) "history" else null, if (o.emergencyContacts) "contacts" else null)
         val out = mutableListOf<View>()
-        if (subs.isNotEmpty()) out += pill("Laporan", intArrayOf(0xFFFDBA74.toInt(), 0xFFFB923C.toInt(), 0xFFEA580C.toInt())) {
+        if (subs.isNotEmpty()) out += pill(o.reportLabel, intArrayOf(0xFFFDBA74.toInt(), 0xFFFB923C.toInt(), 0xFFEA580C.toInt()),
+            ChipDrawable(context, R.drawable.siagasos_ic_clipboard, 0xFFEA580C.toInt())) {
             if (subs.size > 1) { c.reportMenu = true; c.render() } else openSub(subs.first())
         }
         if (o.onCall != null) {
-            if (second != null) out += pill("${o.callLabel} $second", intArrayOf(0xFF6EE7B7.toInt(), 0xFF34D399.toInt(), 0xFF059669.toInt())) { c.call(activity, second) }
-            out += pill("${o.callLabel} $first", intArrayOf(0xFF818CF8.toInt(), 0xFF6366F1.toInt(), 0xFF4F46E5.toInt())) { c.call(activity, first) }
+            if (second != null) out += pill("${o.callLabel} $second", intArrayOf(0xFF6EE7B7.toInt(), 0xFF34D399.toInt(), 0xFF059669.toInt()),
+                ChipDrawable(context, R.drawable.siagasos_ic_warning, 0xFF059669.toInt())) { c.call(activity, second) }
+            val firstLabel = o.firstCallLabel ?: "${o.callLabel} $first${if (first == "110") " Polri" else ""}"
+            out += pill(firstLabel, o.callColors ?: intArrayOf(0xFF818CF8.toInt(), 0xFF6366F1.toInt(), 0xFF4F46E5.toInt()),
+                ChipDrawable(context, R.drawable.siagasos_police, null)) { c.call(activity, first) }
         }
-        val label = o.sosLabel ?: c.cfg?.buttonText?.takeIf { it.isNotBlank() }?.let { "Kirim $it" } ?: "Kirim SOS"
+        val label = o.sosLabel ?: c.cfg?.buttonText?.takeIf { it.isNotBlank() }?.let { "Kirim $it" } ?: "Emergency"
         out += HoldToSend(activity, c, label, o.sosColors ?: intArrayOf(lighten(o.color, 0.12f), darken(o.color, 0.3f)))
         return out
     }
@@ -460,50 +533,65 @@ internal class Layer(private val activity: Activity, private val c: SOSFloatingB
         else -> c.openContacts(activity)
     }
 
+    /** Sub-menu Laporan, sama dengan `_ReportPanel` di SDK Flutter: kartu putih, header ← label, lalu baris ber-ikon. */
     private fun reportPanel(): View {
-        val p = Palette(context)
-        val box = LinearLayout(context).apply {
+        val ink = 0xFF1F2937.toInt()
+        val card = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
-            background = rounded(p.bg, dp(14).toFloat(), p.border, dp(1))
-            elevation = dp(6).toFloat()
-            setPadding(dp(6), dp(6), dp(6), dp(6))
-            minimumWidth = dp(220)
+            background = rounded(Color.WHITE, dp(16).toFloat())
+            elevation = dp(8).toFloat()
         }
-        fun row(label: String, color: Int, onTap: () -> Unit) = TextView(context).apply {
-            text = label
-            setTextColor(p.text)
-            textSize = 15f
-            typeface = Typeface.DEFAULT_BOLD
+        // Baris ber-padding seperti Flutter: kiri 10, kanan 18, atas-bawah 8.
+        fun rowBase(onTap: () -> Unit) = LinearLayout(context).apply {
+            orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
-            setPadding(dp(12), 0, dp(12), 0)
-            minHeight = dp(46)
-            setCompoundDrawablesRelative(dot(color), null, null, null)
-            compoundDrawablePadding = dp(12)
-            background = rounded(Color.TRANSPARENT, dp(10).toFloat())
+            setPadding(dp(10), dp(8), dp(18), dp(8))
             isClickable = true
             setOnClickListener { performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY); onTap() }
         }
         val o = c.options
-        if (o.complaint) box.addView(row("Pengaduan", 0xFFEA580C.toInt()) { c.openComplaint(activity) })
-        if (o.history) box.addView(row("Riwayat laporan", 0xFF475569.toInt()) { c.openHistory(activity) })
-        if (o.emergencyContacts) box.addView(row("Nomor darurat", 0xFF2563EB.toInt()) { c.openContacts(activity) })
-        box.addView(row("Kembali", p.muted) { c.reportMenu = false; c.render() })
-        return box
+        // Header: ← Laporan Kejadian
+        card.addView(rowBase { c.reportMenu = false; c.render() }.apply {
+            addView(ImageView(context).apply { setImageResource(R.drawable.siagasos_ic_arrow_back); setColorFilter(ink) },
+                LinearLayout.LayoutParams(dp(20), dp(20)).apply { marginEnd = dp(20) })
+            addView(TextView(context).apply {
+                text = o.reportLabel
+                setTextColor(ink)
+                textSize = 14f
+                typeface = Typeface.DEFAULT_BOLD
+                maxLines = 1
+                ellipsize = TextUtils.TruncateAt.END
+            })
+        })
+        card.addView(View(context).apply { setBackgroundColor(0xFFE5E7EB.toInt()) }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(1)))
+        // Baris pilihan: lingkaran ikon 30dp (warna 12% opacity) + ikon 17dp + label.
+        fun row(label: String, icon: Int, color: Int, onTap: () -> Unit) = rowBase(onTap).apply {
+            addView(FrameLayout(context).apply {
+                background = GradientDrawable().apply { shape = GradientDrawable.OVAL; setColor((color and 0x00FFFFFF) or (0x1F shl 24)) }
+                addView(ImageView(context).apply { setImageResource(icon); setColorFilter(color) },
+                    FrameLayout.LayoutParams(dp(17), dp(17), Gravity.CENTER))
+            }, LinearLayout.LayoutParams(dp(30), dp(30)))
+            addView(TextView(context).apply {
+                text = label
+                setTextColor(ink)
+                textSize = 14f
+                typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
+                maxLines = 1
+                ellipsize = TextUtils.TruncateAt.END
+            }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { marginStart = dp(10) })
+        }
+        if (o.complaint) card.addView(row(o.complaintLabel, R.drawable.siagasos_ic_campaign, 0xFFEA580C.toInt()) { c.openComplaint(activity) })
+        if (o.history) card.addView(row("Riwayat laporan", R.drawable.siagasos_ic_history, 0xFF475569.toInt()) { c.openHistory(activity) })
+        if (o.emergencyContacts) card.addView(row(o.contactsLabel, R.drawable.siagasos_ic_contact_phone, 0xFF2563EB.toInt()) { c.openContacts(activity) })
+        card.addView(View(context), LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(4)))
+        return card
     }
 
     private fun dot(color: Int) = GradientDrawable().apply { shape = GradientDrawable.OVAL; setColor(color); setBounds(0, 0, dp(10), dp(10)) }
 
-    private fun pill(label: String, colors: IntArray, onTap: () -> Unit) = TextView(context).apply {
+    private fun pill(label: String, colors: IntArray, icon: Drawable, onTap: () -> Unit) = TextView(context).apply {
         text = label
-        setTextColor(Color.WHITE)
-        textSize = 14f
-        typeface = Typeface.DEFAULT_BOLD
-        gravity = Gravity.CENTER_VERTICAL
-        maxLines = 1
-        minHeight = dp(42)
-        setPadding(dp(16), 0, dp(16), 0)
-        background = gradient(colors, dp(11).toFloat()).apply { setStroke(dp(1), 0x40FFFFFF) }
-        elevation = dp(3).toFloat()
+        applyCompact(this, colors, icon)
         isClickable = true
         setOnClickListener { performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY); onTap() }
     }
@@ -615,15 +703,7 @@ internal class HoldToSend(ctx: Context, private val c: SOSFloatingButton, label:
             secs <= 0 -> label
             else -> "$label · tahan $secs dtk"
         }
-        setTextColor(Color.WHITE)
-        textSize = 14f
-        typeface = Typeface.DEFAULT_BOLD
-        gravity = Gravity.CENTER_VERTICAL
-        maxLines = 1
-        minHeight = dp(42)
-        setPadding(dp(16), 0, dp(16), 0)
-        background = gradient(colors, dp(11).toFloat()).apply { setStroke(dp(1), 0x40FFFFFF) }
-        elevation = dp(3).toFloat()
+        applyCompact(this, colors, ChipDrawable(ctx, R.drawable.siagasos_ic_warning, colors.last()))
         isClickable = true
         contentDescription = if (secs <= 0) "$label. Ketuk untuk mengirim." else "$label. Tahan $secs detik untuk mengirim."
     }
@@ -633,7 +713,7 @@ internal class HoldToSend(ctx: Context, private val c: SOSFloatingButton, label:
             rect.set(0f, 0f, width * progress, height.toFloat())
             canvas.save()
             canvas.clipRect(rect)
-            canvas.drawRoundRect(0f, 0f, width.toFloat(), height.toFloat(), dp(11).toFloat(), dp(11).toFloat(), overlay)
+            canvas.drawRoundRect(0f, 0f, width.toFloat(), height.toFloat(), dp(20).toFloat(), dp(20).toFloat(), overlay)
             canvas.restore()
         }
         super.onDraw(canvas)

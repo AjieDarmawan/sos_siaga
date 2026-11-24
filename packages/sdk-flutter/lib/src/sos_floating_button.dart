@@ -65,7 +65,7 @@ class SOSFloatingButton extends StatefulWidget {
     this.message,
     this.holdSeconds = 0,
     this.onCall,
-    this.secondaryPhone = '112',
+    this.secondaryPhone,
     this.onCapture,
     this.onSent,
     this.onError,
@@ -74,12 +74,26 @@ class SOSFloatingButton extends StatefulWidget {
     this.visible = true,
     this.positionKey = 'siagasos.fab.position',
     this.complaint = true,
-    this.complaintLabel = 'Pengaduan',
+    this.complaintLabel = 'Buat Laporan',
     this.onComplaintSent,
     this.captureKinds = MediaKind.values,
     this.sosLabel,
-    this.sosColors,
-    this.callLabel = 'Telepon',
+    this.sosColors = const [
+      Color(0xFFFF7058),
+      Color(0xFFEB334C),
+      Color(0xFFD72242)
+    ],
+    this.callLabel = 'Call',
+    this.callColors = const [
+      Color(0xFF60A5FA),
+      Color(0xFF3B82F6),
+      Color(0xFF2563EB)
+    ],
+    this.firstCallLabel,
+    this.firstCallImage = const AssetImage('packages/siagasos/assets/police.png'),
+    this.compact = true,
+    this.contactsLabel = 'Input Nomor',
+    this.reportLabel = 'Laporan Kejadian',
     this.history = true,
     this.siren,
     this.tkpPrompt = true,
@@ -135,6 +149,24 @@ class SOSFloatingButton extends StatefulWidget {
 
   /// Awalan tombol telepon: `"$callLabel 110"` (mis. 'Call').
   final String callLabel;
+
+  /// Gradien tombol telepon pertama (110). Null = default SDK (indigo).
+  final List<Color>? callColors;
+
+  /// Label lengkap tombol telepon pertama (mis. 'Call 110 Polri'). Null = `"$callLabel $first"`.
+  final String? firstCallLabel;
+
+  /// Tombol menu lebih kecil dan padat (tinggi 34, ikon kecil). Default false = ukuran standar.
+  final bool compact;
+
+  /// Gambar pengganti ikon tombol telepon pertama (mode compact), mis. ilustrasi polisi.
+  final ImageProvider? firstCallImage;
+
+  /// Label menu & judul sheet "Nomor darurat". Default 'Nomor darurat'.
+  final String contactsLabel;
+
+  /// Label tombol menu laporan dan judul sub-menunya. Default 'Laporan'.
+  final String reportLabel;
 
   /// Tampilkan menu "Riwayat laporan" (status SOS & pengaduan yang pernah dikirim dari perangkat ini).
   final bool history;
@@ -356,8 +388,10 @@ class _SOSFloatingButtonState extends State<SOSFloatingButton>
       onOpenUrl: widget.onOpenUrl,
       videoPlayerBuilder: widget.videoPlayerBuilder));
 
-  void _openContacts() => _openSheet(
-      () => _ContactsSheet(client: widget.client, onClose: _closeSheet));
+  void _openContacts() => _openSheet(() => _ContactsSheet(
+      client: widget.client,
+      title: widget.contactsLabel,
+      onClose: _closeSheet));
 
   void _closeSheet() {
     if (mounted) setState(() => _sheet = null);
@@ -587,6 +621,7 @@ class _SOSFloatingButtonState extends State<SOSFloatingButton>
         key: const ValueKey('siagasos-report-panel'),
         index: 0,
         child: _ReportPanel(
+          label: widget.reportLabel,
           onBack: () => setState(() => _reportMenu = false),
           rows: [
             if (complaint)
@@ -596,7 +631,7 @@ class _SOSFloatingButtonState extends State<SOSFloatingButton>
               const _PanelRow(ValueKey('siagasos-history'), 'Riwayat laporan',
                   Icons.history_rounded, Color(0xFF475569)),
             if (contacts)
-              const _PanelRow(ValueKey('siagasos-contacts'), 'Nomor darurat',
+              _PanelRow(ValueKey('siagasos-contacts'), widget.contactsLabel,
                   Icons.contact_phone_rounded, Color(0xFF2563EB)),
           ],
           onTap: (key) => switch (key) {
@@ -612,7 +647,8 @@ class _SOSFloatingButtonState extends State<SOSFloatingButton>
       if (subOptions.isNotEmpty)
         _ActionButton(
           key: const ValueKey('siagasos-report'),
-          label: 'Laporan',
+          label: widget.reportLabel,
+          compact: widget.compact,
           icon: Icons.assignment_rounded,
           colors: const [
             Color(0xFFFDBA74),
@@ -628,6 +664,7 @@ class _SOSFloatingButtonState extends State<SOSFloatingButton>
         if (second != null)
           _ActionButton(
             label: '${widget.callLabel} $second',
+            compact: widget.compact,
             icon: Icons.emergency_rounded,
             colors: const [
               Color(0xFF6EE7B7),
@@ -637,13 +674,17 @@ class _SOSFloatingButtonState extends State<SOSFloatingButton>
             onTap: () => widget.onCall!(second),
           ),
         _ActionButton(
-          label: '${widget.callLabel} $first',
+          label: widget.firstCallLabel ??
+              '${widget.callLabel} $first${first == '110' ? ' Polri' : ''}',
+          compact: widget.compact,
+          image: widget.firstCallImage,
           icon: Icons.local_police_rounded,
-          colors: const [
-            Color(0xFF818CF8),
-            Color(0xFF6366F1),
-            Color(0xFF4F46E5)
-          ],
+          colors: widget.callColors ??
+              const [
+                Color(0xFF818CF8),
+                Color(0xFF6366F1),
+                Color(0xFF4F46E5)
+              ],
           onTap: () => widget.onCall!(first),
         ),
       ],
@@ -656,11 +697,12 @@ class _SOSFloatingButtonState extends State<SOSFloatingButton>
               Color.lerp(widget.color, Colors.black, 0.3)!
             ],
         sending: _sending,
+        compact: widget.compact,
         onTap: _fire,
         label: widget.sosLabel ??
             (cfg?.buttonText.isNotEmpty == true
                 ? 'Kirim ${cfg!.buttonText}'
-                : 'Kirim SOS'),
+                : 'Emergency'),
       ),
     ];
     // Hanya pesan penting: status SOS aktif cukup ditandai titik di tombol bulat.
@@ -722,15 +764,22 @@ class _SOSFloatingButtonState extends State<SOSFloatingButton>
 }
 
 const _kActionHeight = 42.0;
+const _kCompactHeight = 40.0;
 const _kActionRadius = 11.0;
 const _kActionText =
     TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w600);
 
-BoxDecoration _actionDecoration(List<Color> colors) => BoxDecoration(
+const _kCompactRadius = 20.0;
+
+BoxDecoration _actionDecoration(List<Color> colors,
+        {double radius = _kActionRadius, Color? border}) =>
+    BoxDecoration(
       gradient: LinearGradient(
           colors: colors, begin: Alignment.topLeft, end: Alignment.bottomRight),
-      borderRadius: BorderRadius.circular(_kActionRadius),
-      border: Border.all(color: Colors.white.withValues(alpha: 0.25)),
+      borderRadius: BorderRadius.circular(radius),
+      border: border != null
+          ? Border.all(color: border, width: 1.5)
+          : Border.all(color: Colors.white.withValues(alpha: 0.25)),
       boxShadow: [
         BoxShadow(
             color: Colors.black.withValues(alpha: 0.15),
@@ -758,16 +807,25 @@ class _Pop extends StatelessWidget {
 
 /// Lingkaran putih transparan di belakang ikon tombol aksi.
 class _IconChip extends StatelessWidget {
-  const _IconChip(this.icon);
+  const _IconChip(this.icon,
+      {this.size = 30, this.solid = false, this.accent});
   final IconData icon;
+  final double size;
+
+  /// Lingkaran putih solid dengan ikon berwarna [accent] (mode compact).
+  final bool solid;
+  final Color? accent;
   @override
   Widget build(BuildContext context) => Container(
-        width: 30,
-        height: 30,
+        width: size,
+        height: size,
         decoration: BoxDecoration(
-            color: Colors.white.withValues(alpha: 0.22),
-            shape: BoxShape.circle),
-        child: Icon(icon, color: Colors.white, size: 17),
+            color: solid ? Colors.white : Colors.white.withValues(alpha: 0.22),
+            shape: BoxShape.circle,
+            border: solid ? Border.all(color: Colors.black, width: 1.5) : null),
+        child: Icon(icon,
+            color: solid ? (accent ?? Colors.white) : Colors.white,
+            size: size * 17 / 30),
       );
 }
 
@@ -782,7 +840,11 @@ class _PanelRow {
 /// Sub-menu "Laporan": satu kartu putih ringkas (judul ← Laporan, lalu baris pilihan), lebar mengikuti isi.
 class _ReportPanel extends StatelessWidget {
   const _ReportPanel(
-      {required this.onBack, required this.rows, required this.onTap});
+      {required this.label,
+      required this.onBack,
+      required this.rows,
+      required this.onTap});
+  final String label;
   final VoidCallback onBack;
   final List<_PanelRow> rows;
   final void Function(ValueKey<String> key) onTap;
@@ -832,7 +894,7 @@ class _ReportPanel extends StatelessWidget {
                     width: 30,
                     child:
                         Icon(Icons.arrow_back_rounded, size: 20, color: ink)),
-                label: 'Laporan',
+                label: label,
                 onTap: onBack,
                 style: const TextStyle(
                     color: ink, fontSize: 14, fontWeight: FontWeight.w800),
@@ -868,36 +930,63 @@ class _ActionButton extends StatelessWidget {
       required this.label,
       required this.icon,
       required this.colors,
-      required this.onTap});
+      required this.onTap,
+      this.compact = false,
+      this.image});
   final String label;
   final IconData icon;
   final List<Color> colors;
   final VoidCallback onTap;
+  final bool compact;
+
+  /// Gambar pengganti ikon (mode compact). Null = pakai [icon].
+  final ImageProvider? image;
 
   @override
   Widget build(BuildContext context) => SizedBox(
-        height: _kActionHeight,
+        height: compact ? _kCompactHeight : _kActionHeight,
         child: DecoratedBox(
-          decoration: _actionDecoration(colors),
+          decoration: _actionDecoration(colors,
+              radius: compact ? _kCompactRadius : _kActionRadius,
+              border: compact ? Colors.black : null),
           child: Material(
             color: Colors.transparent,
-            borderRadius: BorderRadius.circular(_kActionRadius),
+            borderRadius: BorderRadius.circular(
+                compact ? _kCompactRadius : _kActionRadius),
             child: InkWell(
-              borderRadius: BorderRadius.circular(_kActionRadius),
+              borderRadius: BorderRadius.circular(
+                  compact ? _kCompactRadius : _kActionRadius),
               onTap: () {
                 HapticFeedback.lightImpact();
                 onTap();
               },
               child: Padding(
-                padding: const EdgeInsets.fromLTRB(6, 0, 16, 0),
+                padding: EdgeInsets.fromLTRB(compact ? 7 : 6, 0, 16, 0),
                 child: Row(mainAxisSize: MainAxisSize.min, children: [
-                  _IconChip(icon),
-                  const SizedBox(width: 10),
+                  if (compact && image != null)
+                    Container(
+                        width: 30,
+                        height: 30,
+                        decoration: const BoxDecoration(
+                            shape: BoxShape.circle,
+                            border: Border.fromBorderSide(
+                                BorderSide(color: Colors.black, width: 1.5))),
+                        child: ClipOval(
+                            child: Image(image: image!, width: 30, height: 30)))
+                  else
+                    _IconChip(icon,
+                        size: 30,
+                        solid: compact,
+                        accent: colors.last),
+                  SizedBox(width: compact ? 12 : 10),
                   Flexible(
                       child: Text(label,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: _kActionText)),
+                          style: compact
+                              ? _kActionText.copyWith(
+                                  fontSize: 16, color: Colors.black, fontWeight: FontWeight.w700)
+                              : _kActionText)),
                 ]),
               ),
             ),
@@ -915,7 +1004,9 @@ class _HoldToSend extends StatelessWidget {
     required this.sending,
     required this.label,
     required this.onTap,
+    this.compact = false,
   });
+  final bool compact;
   final AnimationController hold;
   final int seconds;
   final List<Color> colors;
@@ -952,10 +1043,12 @@ class _HoldToSend extends StatelessWidget {
         child: AnimatedBuilder(
           animation: hold,
           builder: (context, _) => Container(
-            height: _kActionHeight,
-            decoration: _actionDecoration(colors),
+            height: compact ? _kCompactHeight : _kActionHeight,
+            decoration: _actionDecoration(colors,
+                radius: compact ? _kCompactRadius : _kActionRadius,
+                border: compact ? Colors.black : null),
             clipBehavior: Clip.antiAlias,
-            child: Stack(children: [
+            child: Stack(alignment: Alignment.centerLeft, children: [
               // Positioned: lapisan progres tidak ikut menentukan lebar tombol (IntrinsicWidth di menu).
               Positioned.fill(
                 child: Align(
@@ -968,7 +1061,7 @@ class _HoldToSend extends StatelessWidget {
                 ),
               ),
               Padding(
-                padding: const EdgeInsets.fromLTRB(6, 0, 16, 0),
+                padding: EdgeInsets.fromLTRB(compact ? 7 : 6, 0, 16, 0),
                 child: Row(mainAxisSize: MainAxisSize.min, children: [
                   sending
                       ? const SizedBox.square(
@@ -978,7 +1071,10 @@ class _HoldToSend extends StatelessWidget {
                               child: CircularProgressIndicator(
                                   strokeWidth: 2.2, color: Colors.white)),
                         )
-                      : const _IconChip(Icons.warning_amber_rounded),
+                      : _IconChip(Icons.warning_amber_rounded,
+                          size: 30,
+                          solid: compact,
+                          accent: colors.last),
                   const SizedBox(width: 10),
                   Flexible(
                     child: Text(
@@ -989,7 +1085,10 @@ class _HoldToSend extends StatelessWidget {
                               : label,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: _kActionText.copyWith(fontWeight: FontWeight.w700),
+                      style: _kActionText.copyWith(
+                          fontWeight: FontWeight.w700,
+                          fontSize: compact ? 16 : 14,
+                          color: compact ? Colors.black : Colors.white),
                     ),
                   ),
                   if (!sending && !tap && hold.value == 0)
@@ -2772,8 +2871,10 @@ class _TkpSheetState extends State<_TkpSheet> {
 
 /// "Nomor darurat": maks. 3 nomor WhatsApp pribadi (keluarga, rekan) yang ikut dikabari setiap SOS dari perangkat ini.
 class _ContactsSheet extends StatefulWidget {
-  const _ContactsSheet({required this.client, required this.onClose});
+  const _ContactsSheet(
+      {required this.client, required this.title, required this.onClose});
   final SiagaSOS client;
+  final String title;
   final VoidCallback onClose;
 
   @override
@@ -2879,7 +2980,7 @@ class _ContactsSheetState extends State<_ContactsSheet> {
                 child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('Nomor darurat',
+                      Text(widget.title,
                           style: theme.textTheme.titleMedium
                               ?.copyWith(fontWeight: FontWeight.w700)),
                       Text('Dikabari WhatsApp setiap kamu menekan SOS',

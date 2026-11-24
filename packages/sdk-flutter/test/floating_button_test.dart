@@ -34,6 +34,7 @@ void main() {
         client: sos,
         holdSeconds: 1,
         tkpPrompt: false, // tanpa ajakan rekam TKP
+        secondaryPhone: '112',
         onCall: calls.add,
         onSent: (r) => sent = r,
         onCapture: (context, kind, source) async => CapturedMedia(bytes: Uint8List.fromList([1, 2, 3]), contentType: 'image/jpeg'),
@@ -53,9 +54,9 @@ void main() {
 
     await tester.tap(fab);
     await tester.pump();
-    expect(find.text('Telepon 110'), findsOneWidget);
-    expect(find.text('Telepon 112'), findsOneWidget);
-    await tester.tap(find.text('Telepon 112'));
+    expect(find.text('Call 110 Polri'), findsOneWidget);
+    expect(find.text('Call 112'), findsOneWidget);
+    await tester.tap(find.text('Call 112'));
     expect(calls, ['112']);
 
     // Tahan bilah kirim sampai penuh.
@@ -130,15 +131,15 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('siagasos-fab')));
     await pumpFrames(tester, 8);
 
-    // 4 aksi: Kirim SOS (tahan), Telepon 110, Telepon 112, Laporan → sub-menu Pengaduan / Riwayat laporan.
+    // 3 aksi default: Emergency (tahan), Call 110 Polri, Laporan Kejadian → sub-menu Buat Laporan / Riwayat laporan.
     expect(find.byKey(const ValueKey('siagasos-hold')), findsOneWidget);
-    expect(find.text('Telepon 110'), findsOneWidget);
-    expect(find.text('Telepon 112'), findsOneWidget);
-    expect(find.text('Laporan'), findsOneWidget);
-    expect(find.text('Pengaduan'), findsNothing);
+    expect(find.text('Call 110 Polri'), findsOneWidget);
+    expect(find.text('Call 112'), findsNothing);
+    expect(find.text('Laporan Kejadian'), findsOneWidget);
+    expect(find.text('Buat Laporan'), findsNothing);
     await tester.tap(find.byKey(const ValueKey('siagasos-report')));
     await pumpFrames(tester, 8);
-    expect(find.text('Pengaduan'), findsOneWidget);
+    expect(find.text('Buat Laporan'), findsOneWidget);
     expect(find.text('Riwayat laporan'), findsOneWidget);
     expect(find.byKey(const ValueKey('siagasos-hold')), findsNothing);
     // Kembali → menu utama.
@@ -270,6 +271,7 @@ void main() {
         holdSeconds: 0, // seperti POS: sekali ketuk, tanpa label "tahan"
         sosLabel: 'EWS Alert',
         callLabel: 'Call',
+        secondaryPhone: '112',
         child: child!,
       ),
     ));
@@ -277,17 +279,18 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('siagasos-fab')));
     await pumpFrames(tester, 8);
     expect(find.text('EWS Alert'), findsOneWidget);
-    expect(find.text('Call 110'), findsOneWidget);
+    expect(find.text('Call 110 Polri'), findsOneWidget);
     expect(find.text('Call 112'), findsOneWidget);
     // Tombol sama lebar = label terpanjang (bukan lebar tetap), tidak memenuhi layar.
-    final widths = ['EWS Alert', 'Call 110', 'Call 112', 'Laporan']
+    final widths = ['EWS Alert', 'Call 110 Polri', 'Call 112', 'Laporan Kejadian']
         .map((t) => tester.getSize(find.ancestor(of: find.text(t), matching: find.byType(DecoratedBox)).first).width)
         .toSet();
     expect(widths.length, 1);
     // Font tes (Ahem) jauh lebih lebar dari Plus Jakarta Sans; di HP ±135 px.
-    expect(widths.single, lessThan(200));
-    // Urutan atas → bawah: EWS Alert, Call 110, Call 112, Laporan, tombol bulat.
-    final ys = ['EWS Alert', 'Call 110', 'Call 112', 'Laporan'].map((t) => tester.getCenter(find.text(t)).dy).toList();
+    // "Laporan Kejadian" lebih panjang dari "Laporan", teks 16sp → batas dinaikkan (font Ahem lebih lebar).
+    expect(widths.single, lessThan(400));
+    // Urutan atas → bawah: EWS Alert, Call 110 Polri, Call 112, Laporan Kejadian, tombol bulat.
+    final ys = ['EWS Alert', 'Call 110 Polri', 'Call 112', 'Laporan Kejadian'].map((t) => tester.getCenter(find.text(t)).dy).toList();
     for (var i = 1; i < ys.length; i++) {
       expect(ys[i], greaterThan(ys[i - 1]));
     }
@@ -373,13 +376,13 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('siagasos-tkp-close')));
     await pumpFrames(tester, 4);
     expect(find.byKey(const ValueKey('siagasos-tkp')), findsNothing);
-    // SOS masih aktif: tombol tetap "SOS" + titik penanda; menu tetap EWS/110/112/Laporan.
+    // SOS masih aktif: tombol tetap "SOS" + titik penanda; menu tetap EWS/110 Polri/Laporan Kejadian.
     expect(find.text('AKTIF'), findsNothing);
     expect(find.byKey(const ValueKey('siagasos-fab-active')), findsOneWidget);
     await tester.tap(find.byKey(const ValueKey('siagasos-fab')));
     await pumpFrames(tester, 8);
     expect(find.text('EWS Alert'), findsOneWidget);
-    expect(find.text('Laporan'), findsOneWidget);
+    expect(find.text('Laporan Kejadian'), findsOneWidget);
 
     sos.dispose();
     await tester.pumpWidget(const SizedBox());
@@ -400,7 +403,7 @@ void main() {
     await pumpFrames(tester, 8);
     await tester.tap(find.byKey(const ValueKey('siagasos-report')));
     await pumpFrames(tester, 8);
-    expect(find.text('Nomor darurat'), findsOneWidget);
+    expect(find.text('Input Nomor'), findsOneWidget);
     await tester.tap(find.byKey(const ValueKey('siagasos-contacts')));
     await pumpFrames(tester, 8);
     expect(find.byKey(const ValueKey('siagasos-contacts-sheet')), findsOneWidget);

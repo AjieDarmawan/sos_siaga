@@ -334,7 +334,17 @@ await sos.attach(r.localId, bytes, contentType: 'image/jpeg');`}</Code>
     client: sos,
     category: 'kriminal',
     holdSeconds: 0,                                 // default: sekali ketuk (gaya EWS); 3 = tahan 3 dtk; null = ikut portal
-    sosLabel: 'EWS Alert',
+    compact: true,                                  // tombol menu ringkas (tinggi 38), ikon di lingkaran putih
+    sosLabel: 'Emergency',
+    sosColors: [Color(0xFFFF7058), Color(0xFFEB334C), Color(0xFFD72242)],
+    callLabel: 'Call',
+    callColors: [Color(0xFF60A5FA), Color(0xFF3B82F6), Color(0xFF2563EB)],
+    firstCallLabel: 'Call 110 Polri',
+    firstCallImage: AssetImage('assets/siagasos/police.png'), // opsional: ilustrasi polisi
+    secondaryPhone: null,                           // null = sembunyikan tombol telepon kedua
+    contactsLabel: 'Input Nomor',
+    reportLabel: 'Laporan Kejadian',
+    complaintLabel: 'Buat Laporan',
     siren: mySiren,                                 // opsional: SosSiren dari app (audioplayers)
     onCall: (phone) => launchUrl(Uri(scheme: 'tel', path: phone)),
     onOpenUrl: (url) => launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication),
@@ -346,12 +356,11 @@ await sos.attach(r.localId, bytes, contentType: 'image/jpeg');`}</Code>
   ),
   home: const HomePage(),
 )`}</Code>
-            <p>Ketuk tombol → 4 aksi bertumpuk, lebarnya mengikuti label terpanjang:</p>
+            <p>Ketuk tombol → 3 aksi bertumpuk, lebarnya mengikuti label terpanjang:</p>
             <Props rows={[
-              ['Kirim SOS / EWS Alert', 'ketuk atau tahan', 'Mengirim laporan darurat. Setelah terkirim: sirene (bila ada), lalu ajakan "Rekam kondisi TKP?" → video + catatan ke petugas.'],
-              ['Telepon 110', 'onCall', 'Nomor dari "Nomor cadangan" di Pengaturan app.', '110'],
-              ['Telepon 112', 'onCall', 'Nomor kedua, atur dengan secondaryPhone.', '112'],
-              ['Laporan', 'kartu sub-menu', 'Pengaduan (form non-darurat), Riwayat laporan, dan Nomor darurat.'],
+              ['Emergency', 'ketuk atau tahan', 'Mengirim laporan darurat. Setelah terkirim: sirene (bila ada), lalu ajakan "Rekam kondisi TKP?" → video + catatan ke petugas.'],
+              ['Call 110 Polri', 'onCall', 'Nomor dari "Nomor cadangan" di Pengaturan app.', '110'],
+              ['Laporan Kejadian', 'kartu sub-menu', 'Buat Laporan (form non-darurat), Riwayat laporan, dan Input Nomor (nomor darurat pribadi).'],
             ]} />
             <p><b>Riwayat laporan</b> menampilkan SOS & pengaduan yang pernah dikirim dari perangkat ini. Ketuk satu laporan untuk melihat <b>detail</b>: status & pesan petugas, waktu dikirim/diterima/selesai, uraian, lokasi (tombol <i>Buka peta</i>), lampiran foto/video, dan riwayat status lengkap dengan catatan petugas. SOS yang belum direspons bisa dibatalkan dari sini. Data diambil dari <code>GET /v1/sdk/reports/:id/detail</code>; nomor HP pelapor dan penerima tidak pernah dikirim ke perangkat.</p>
             <Props rows={[
@@ -360,12 +369,15 @@ await sos.attach(r.localId, bytes, contentType: 'image/jpeg');`}</Code>
               ['onCapture', '(context, kind) → CapturedMedia?', 'Kamera/mikrofon app Anda: video TKP setelah SOS, foto pengaduan. Kosong = tanpa lampiran.'],
               ['onOpenUrl', '(url) → void', 'Membuka peta lokasi dan lampiran dari detail riwayat (mis. url_launcher). Kosong = tombol Buka peta disembunyikan.'],
               ['holdSeconds', 'int?', 'Default 0 = sekali ketuk (gaya EWS). N = tahan N detik; null = ikut "tahan N detik" di Pengaturan app. Sama di Android (Options.holdSeconds).'],
-              ['sosLabel / sosColors / callLabel', 'String / List<Color> / String', 'Teks & warna tombol kirim SOS, awalan tombol telepon.', "'Kirim SOS' / merah / 'Telepon'"],
+              ['sosLabel / sosColors / callLabel', 'String / List<Color> / String', 'Teks & warna tombol kirim SOS, awalan tombol telepon.', "'Emergency' / merah / 'Call'"],
+              ['callColors / firstCallLabel / firstCallImage', 'List<Color> / String / ImageProvider', 'Warna, label lengkap, dan gambar ikon tombol telepon pertama (110).', 'biru / "Call 110 Polri" / ikon polisi'],
+              ['reportLabel / contactsLabel / complaintLabel', 'String', 'Label menu Laporan Kejadian, menu Input Nomor, dan menu Buat Laporan.', "'Laporan Kejadian' / 'Input Nomor' / 'Buat Laporan'"],
+              ['compact', 'bool', 'Tombol menu ringkas (tinggi 38, ikon di lingkaran putih).', 'true'],
               ['siren', 'SosSiren?', 'Sirene di HP pelapor; tombol bulat berubah jadi SENYAP selama berbunyi.'],
               ['tkpPrompt / tkpSeconds', 'bool / int', 'Ajakan rekam TKP setelah SOS terkirim dan batas durasinya.', 'true / 5'],
               ['complaint / history / emergencyContacts', 'bool', 'Tampilkan Pengaduan / Riwayat laporan / Nomor darurat di sub-menu Laporan.', 'true'],
               ['onSent / onComplaintSent', '(ActiveReport) → void', 'Dipanggil setelah SOS / pengaduan diterima server.'],
-              ['secondaryPhone', 'String?', 'Nomor kedua di menu.', "'112'"],
+              ['secondaryPhone', 'String?', 'Nomor kedua di menu. Kosong = tombol disembunyikan.', 'null'],
               ['visible', 'bool', 'false = sembunyikan (mis. di halaman login) tanpa melepas widget.', 'true'],
             ]} />
             <Note>SDK tidak membawa plugin kamera atau telepon, jadi ukuran app dan izin tetap di tangan Anda. Minta izin lokasi, kamera, dan mikrofon dengan penjelasan bahwa data dibagikan ke tim responder (UU PDP).</Note>
