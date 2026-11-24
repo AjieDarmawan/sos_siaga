@@ -36,7 +36,7 @@ void main() {
         tkpPrompt: false, // tanpa ajakan rekam TKP
         onCall: calls.add,
         onSent: (r) => sent = r,
-        onCapture: (context, kind) async => CapturedMedia(bytes: Uint8List.fromList([1, 2, 3]), contentType: 'image/jpeg'),
+        onCapture: (context, kind, source) async => CapturedMedia(bytes: Uint8List.fromList([1, 2, 3]), contentType: 'image/jpeg'),
         child: Scaffold(body: Center(child: ElevatedButton(onPressed: () => pageTaps++, child: const Text('Halaman')))),
       ),
     ));
@@ -121,7 +121,8 @@ void main() {
         onCall: (_) {},
         onComplaintSent: (r) => complaint = r,
         onOpenUrl: opened.add,
-        onCapture: (context, kind) async => CapturedMedia(bytes: Uint8List.fromList([1, 2, 3]), contentType: 'image/jpeg'),
+        videoPlayerBuilder: (url) => Text('PLAYER $url', key: const ValueKey('siagasos-test-player')),
+        onCapture: (context, kind, source) async => CapturedMedia(bytes: Uint8List.fromList([1, 2, 3]), contentType: 'image/jpeg'),
         child: const Scaffold(body: SizedBox()),
       ),
     ));
@@ -160,6 +161,10 @@ void main() {
     await tester.tap(find.text('Parkir liar').last);
     await pumpFrames(tester, 8);
     await tester.tap(find.text('+ Foto'));
+    await pumpFrames(tester, 2);
+    // Pilih sumber dulu (Galeri / Kamera), baru lampiran masuk.
+    expect(find.byKey(const ValueKey('siagasos-complaint-source-gallery')), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('siagasos-complaint-source-camera')));
     await pumpFrames(tester, 2);
     await tester.enterText(find.byKey(const ValueKey('siagasos-complaint-text')), 'Parkir liar menutup gang setiap malam');
     expect(send().onPressed, isNull); // judul belum diisi
@@ -226,8 +231,15 @@ void main() {
     expect(find.text('Lampiran (1)'), findsOneWidget);
     await tester.tap(find.byKey(const ValueKey('siagasos-detail-map')));
     expect(opened, ['https://www.google.com/maps?q=-6.2,106.8']);
+    // Video diputar di dalam app (pratinjau), bukan pindah ke browser/S3.
     await tester.tap(find.byKey(const ValueKey('siagasos-media-m-1')));
-    expect(opened.last, 'https://storage.test/v.mp4');
+    await tester.pump(const Duration(milliseconds: 50));
+    expect(find.text('PLAYER https://storage.test/v.mp4'), findsOneWidget);
+    expect(opened, hasLength(1));
+    await tester.tap(find.byKey(const ValueKey('siagasos-preview-close')));
+    await tester.pump(const Duration(milliseconds: 50));
+    expect(find.text('PLAYER https://storage.test/v.mp4'), findsNothing);
+    expect(opened, hasLength(1));
     final detailScroll = find.descendant(of: find.byKey(const ValueKey('siagasos-history-sheet')), matching: find.byType(Scrollable)).first;
     await tester.scrollUntilVisible(find.text('Sudah ditertibkan'), 120, scrollable: detailScroll);
     expect(find.text('Riwayat status'), findsOneWidget);
@@ -304,7 +316,7 @@ void main() {
         sosLabel: 'EWS Alert',
         siren: siren,
         onCall: (_) {},
-        onCapture: (context, kind) async {
+        onCapture: (context, kind, source) async {
           captured.add(kind);
           // Seperti layar kamera sungguhan: beberapa frame berlalu selama kamera terbuka.
           await Future<void>.delayed(const Duration(milliseconds: 200));

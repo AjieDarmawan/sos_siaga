@@ -17,10 +17,13 @@ class CapturedMedia {
   final double? durationS;
 }
 
-/// Dipanggil saat pengguna menekan Foto / Video / Suara setelah SOS terkirim.
-/// Kembalikan null bila pengguna membatalkan.
+/// Sumber lampiran yang dipilih pengguna di form pengaduan: galeri (foto/video yang sudah ada) atau kamera.
+enum MediaSource { gallery, camera }
+
+/// Dipanggil saat pengguna memilih Foto / Video (dan sumbernya) setelah SOS terkirim.
+/// Kembalikan null bila pengguna membatalkan. [source] selalu [MediaSource.camera] untuk rekam TKP.
 typedef MediaCapture = Future<CapturedMedia?> Function(
-    BuildContext context, MediaKind kind);
+    BuildContext context, MediaKind kind, MediaSource source);
 
 /// Sirene panik di HP pelapor. Suara diputar app host (SDK tanpa plugin audio).
 /// SDK memanggil [start] saat SOS ditekan; selama [active] true tombol bulat menjadi "SENYAP" ([stop]).
@@ -46,7 +49,7 @@ abstract class SosSiren {
 ///   builder: (context, child) => SOSFloatingButton(
 ///     client: sos,
 ///     onCall: (phone) => launchUrl(Uri(scheme: 'tel', path: phone)),
-///     onCapture: (context, kind) => pickMedia(kind), // opsional, mis. image_picker
+///     onCapture: (context, kind, source) => pickMedia(kind, source), // opsional, mis. image_picker
 ///     child: child!,
 ///   ),
 /// )
@@ -83,6 +86,7 @@ class SOSFloatingButton extends StatefulWidget {
     this.tkpSeconds = 5,
     this.emergencyContacts = true,
     this.onOpenUrl,
+    this.videoPlayerBuilder,
   });
 
   final SiagaSOS client;
@@ -148,9 +152,14 @@ class SOSFloatingButton extends StatefulWidget {
   /// Menu "Nomor darurat" (Laporan → Nomor darurat): maks. 3 nomor WhatsApp pribadi yang ikut dikabari saat SOS.
   final bool emergencyContacts;
 
-  /// Membuka tautan di luar app (peta lokasi, foto/video lampiran) dari detail riwayat, mis. url_launcher.
-  /// Null = tombol "Buka peta" disembunyikan dan lampiran hanya ditampilkan (foto) tanpa bisa dibuka.
+  /// Membuka tautan di luar app (peta lokasi) dari detail riwayat, mis. url_launcher.
+  /// Null = tombol "Buka peta" disembunyikan.
   final void Function(String url)? onOpenUrl;
+
+  /// Pemutar video untuk lampiran di detail riwayat (diputar di dalam app, tidak pindah ke browser).
+  /// Host menyediakan widget pemutar, mis. `video_player`. Null = video tidak bisa diputar.
+  /// Foto selalu bisa dibuka di dalam app (layar penuh, bisa di-zoom).
+  final Widget Function(String url)? videoPlayerBuilder;
 
   @override
   State<SOSFloatingButton> createState() => _SOSFloatingButtonState();
@@ -292,6 +301,9 @@ class _SOSFloatingButtonState extends State<SOSFloatingButton>
         categories:
             _cfg?.complaintCategories ?? complaintCategoryLabels.keys.toList(),
         onCapture: widget.onCapture,
+        // Saat app host membuka galeri/kamera (halaman di atas), lembar ini disembunyikan sementara
+        // (state tetap) supaya ketukan di balik lembar tidak menutup form dan lampiran tidak hilang.
+        onCapturing: (v) => mounted ? setState(() => _capturing = v) : null,
         onClose: _closeSheet,
         onSent: widget.onComplaintSent,
         onError: widget.onError,
@@ -313,7 +325,8 @@ class _SOSFloatingButtonState extends State<SOSFloatingButton>
   void _openHistory() => _openSheet(() => _HistorySheet(
       client: widget.client,
       onClose: _closeSheet,
-      onOpenUrl: widget.onOpenUrl));
+      onOpenUrl: widget.onOpenUrl,
+      videoPlayerBuilder: widget.videoPlayerBuilder));
 
   void _openContacts() => _openSheet(
       () => _ContactsSheet(client: widget.client, onClose: _closeSheet));
@@ -982,6 +995,7 @@ class _ComplaintSheet extends StatefulWidget {
     required this.label,
     required this.categories,
     required this.onCapture,
+    required this.onCapturing,
     required this.onClose,
     this.onSent,
     this.onError,
@@ -992,6 +1006,7 @@ class _ComplaintSheet extends StatefulWidget {
   final String label;
   final List<String> categories;
   final MediaCapture? onCapture;
+  final ValueChanged<bool> onCapturing;
   final VoidCallback onClose;
   final void Function(ActiveReport report)? onSent;
   final void Function(SiagaSOSError error)? onError;
@@ -1063,11 +1078,60 @@ class _ComplaintSheetState extends State<_ComplaintSheet> {
       _description.text.trim().length >= _minDescription &&
       _media.isNotEmpty;
 
-  Future<void> _addMedia(MediaKind kind) async {
+  /// Jenis lampiran yang sedang menunggu pilihan sumber (Galeri / Kamera); null = tidak ada.
+  MediaKind? _choosing;
+
+  void _startPick(MediaKind kind) {
     final limitReached = kind == MediaKind.video ? _videoCount >= _maxVideos : _imageCount >= _maxImages;
     if (limitReached || _sending) return;
-    final m = await widget.onCapture?.call(context, kind);
-    if (m != null && mounted) setState(() => _media.add(m));
+    setState(() => _choosing = _choosing == kind ? null : kind);
+  }
+
+  Future<void> _addMedia(MediaKind kind, MediaSource source) async {
+    setState(() => _choosing = null);
+    if (_sending) return;
+    CapturedMedia? m;
+    widget.onCapturing(true);
+    try {
+      m = await widget.onCapture?.call(context, kind, source);
+    } catch (_) {
+      m = null;
+    } finally {
+      widget.onCapturing(false);
+    }
+    if (m != null && mounted) setState(() => _media.add(m!));
+  }
+
+  Widget _sourceChooser(ThemeData theme, MediaKind kind) {
+    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+      Text(kind == MediaKind.video ? 'Pilih video dari mana?' : 'Pilih foto dari mana?',
+          style: theme.textTheme.labelLarge?.copyWith(color: _ink)),
+      const SizedBox(height: 8),
+      Row(children: [
+        Expanded(
+          child: OutlinedButton.icon(
+            key: const ValueKey('siagasos-complaint-source-gallery'),
+            onPressed: () => _addMedia(kind, MediaSource.gallery),
+            icon: const Icon(Icons.photo_library_rounded, size: 18),
+            label: const Text('Galeri'),
+          ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: OutlinedButton.icon(
+            key: const ValueKey('siagasos-complaint-source-camera'),
+            onPressed: () => _addMedia(kind, MediaSource.camera),
+            icon: const Icon(Icons.photo_camera_rounded, size: 18),
+            label: Text(kind == MediaKind.video ? 'Kamera (5 dtk)' : 'Kamera'),
+          ),
+        ),
+        IconButton(
+          onPressed: () => setState(() => _choosing = null),
+          icon: const Icon(Icons.close_rounded),
+          tooltip: 'Batal',
+        ),
+      ]),
+    ]);
   }
 
   Future<void> _pickOccurredAt() async {
@@ -1271,13 +1335,17 @@ class _ComplaintSheetState extends State<_ComplaintSheet> {
           const SizedBox(height: 10),
           Wrap(spacing: 10, runSpacing: 10, children: [
             for (var i = 0; i < _media.length; i++) _mediaTile(theme, i),
-            if (!mediaFull && widget.onCapture != null) ...[
+            if (!mediaFull && widget.onCapture != null && _choosing == null) ...[
               if (_imageCount < _maxImages)
-                _addTile(theme, Icons.add_a_photo_rounded, 'Foto', _sending ? null : () => _addMedia(MediaKind.image)),
+                _addTile(theme, Icons.add_a_photo_rounded, 'Foto', _sending ? null : () => _startPick(MediaKind.image)),
               if (_videoCount < _maxVideos)
-                _addTile(theme, Icons.videocam_rounded, 'Video', _sending ? null : () => _addMedia(MediaKind.video)),
+                _addTile(theme, Icons.videocam_rounded, 'Video', _sending ? null : () => _startPick(MediaKind.video)),
             ],
           ]),
+          if (_choosing != null) ...[
+            const SizedBox(height: 12),
+            _sourceChooser(theme, _choosing!),
+          ],
         ]),
       ),
       const SizedBox(height: 12),
@@ -1804,10 +1872,11 @@ class _SheetFrame extends StatelessWidget {
 /// "Riwayat laporan": SOS & pengaduan yang pernah dikirim dari perangkat ini, dengan status terbaru dari server.
 class _HistorySheet extends StatefulWidget {
   const _HistorySheet(
-      {required this.client, required this.onClose, this.onOpenUrl});
+      {required this.client, required this.onClose, this.onOpenUrl, this.videoPlayerBuilder});
   final SiagaSOS client;
   final VoidCallback onClose;
   final void Function(String url)? onOpenUrl;
+  final Widget Function(String url)? videoPlayerBuilder;
 
   @override
   State<_HistorySheet> createState() => _HistorySheetState();
@@ -1883,6 +1952,7 @@ class _HistorySheetState extends State<_HistorySheet> {
           },
           onClose: widget.onClose,
           onOpenUrl: widget.onOpenUrl,
+          videoPlayerBuilder: widget.videoPlayerBuilder,
         ),
       );
     }
@@ -2209,7 +2279,7 @@ class _TkpSheetState extends State<_TkpSheet> {
     widget.onCapturing(true);
     CapturedMedia? m;
     try {
-      m = await widget.onCapture(context, MediaKind.video);
+      m = await widget.onCapture(context, MediaKind.video, MediaSource.camera);
     } catch (_) {
       m = null;
     } finally {
@@ -2934,12 +3004,14 @@ class _ReportDetailView extends StatefulWidget {
     required this.onBack,
     required this.onClose,
     this.onOpenUrl,
+    this.videoPlayerBuilder,
   });
   final SiagaSOS client;
   final ReportRecord record;
   final VoidCallback onBack;
   final VoidCallback onClose;
   final void Function(String url)? onOpenUrl;
+  final Widget Function(String url)? videoPlayerBuilder;
 
   @override
   State<_ReportDetailView> createState() => _ReportDetailViewState();
@@ -3172,7 +3244,7 @@ class _ReportDetailViewState extends State<_ReportDetailView> {
                 const SizedBox(height: 8),
                 Wrap(spacing: 8, runSpacing: 8, children: [
                   for (final m in d.media)
-                    _MediaThumb(m, onOpen: widget.onOpenUrl)
+                    _MediaThumb(m, videoPlayerBuilder: widget.videoPlayerBuilder)
                 ]),
               ],
               if (d != null && d.timeline.isNotEmpty) ...[
@@ -3287,15 +3359,72 @@ class _TimelineRow extends StatelessWidget {
 }
 
 /// Kotak lampiran: foto tampil langsung, video/suara berupa ikon putar. Ketuk = buka lewat app host.
+/// Pratinjau lampiran di dalam app (layar penuh, di lapisan sheet, bukan browser/S3).
+void _showMediaPreview(BuildContext context, MediaKind kind, String url, Widget Function(String url)? videoBuilder) {
+  final overlay = Overlay.maybeOf(context);
+  if (overlay == null) return;
+  late final OverlayEntry entry;
+  entry = OverlayEntry(
+    builder: (_) => Positioned.fill(
+      child: _MediaPreview(kind: kind, url: url, videoBuilder: videoBuilder, onClose: () => entry.remove()),
+    ),
+  );
+  overlay.insert(entry);
+}
+
+class _MediaPreview extends StatelessWidget {
+  const _MediaPreview({required this.kind, required this.url, required this.onClose, this.videoBuilder});
+  final MediaKind kind;
+  final String url;
+  final VoidCallback onClose;
+  final Widget Function(String url)? videoBuilder;
+
+  @override
+  Widget build(BuildContext context) {
+    final content = kind == MediaKind.video && videoBuilder != null
+        ? videoBuilder!(url)
+        : InteractiveViewer(
+            minScale: 1,
+            maxScale: 4,
+            child: Image.network(
+              url,
+              fit: BoxFit.contain,
+              errorBuilder: (_, __, ___) => const Icon(Icons.broken_image_rounded, color: Colors.white54, size: 48),
+            ),
+          );
+    return Material(
+      color: Colors.black,
+      child: SafeArea(
+        child: Stack(children: [
+          Positioned.fill(child: Center(child: content)),
+          Positioned(
+            top: 4,
+            right: 4,
+            child: IconButton(
+              key: const ValueKey('siagasos-preview-close'),
+              color: Colors.white,
+              icon: const Icon(Icons.close_rounded),
+              tooltip: 'Tutup',
+              onPressed: onClose,
+            ),
+          ),
+        ]),
+      ),
+    );
+  }
+}
+
 class _MediaThumb extends StatelessWidget {
-  const _MediaThumb(this.m, {this.onOpen});
+  const _MediaThumb(this.m, {this.videoPlayerBuilder});
   final ReportMediaItem m;
-  final void Function(String url)? onOpen;
+  final Widget Function(String url)? videoPlayerBuilder;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final url = m.url;
+    final canPreview = url != null &&
+        (m.kind == MediaKind.image || (m.kind == MediaKind.video && videoPlayerBuilder != null));
     final fallback = Container(
       color: m.kind == MediaKind.image
           ? theme.colorScheme.surfaceContainerHighest
@@ -3321,7 +3450,7 @@ class _MediaThumb extends StatelessWidget {
       ]),
     );
     return Semantics(
-      button: url != null && onOpen != null,
+      button: canPreview,
       label: switch (m.kind) {
         MediaKind.image => 'Foto',
         MediaKind.video => 'Video',
@@ -3330,7 +3459,7 @@ class _MediaThumb extends StatelessWidget {
       child: InkWell(
         key: ValueKey('siagasos-media-${m.id}'),
         borderRadius: BorderRadius.circular(12),
-        onTap: url != null && onOpen != null ? () => onOpen!(url) : null,
+        onTap: canPreview ? () => _showMediaPreview(context, m.kind, url, videoPlayerBuilder) : null,
         child: ClipRRect(
           borderRadius: BorderRadius.circular(12),
           child: SizedBox(
