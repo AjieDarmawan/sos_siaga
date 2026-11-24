@@ -21,6 +21,8 @@ export interface SdkConfig {
 export interface App {
   id: string; name: string; allowed_origins: string[]; allowed_bundle_ids: string[]; webhook_url: string | null;
   auto_create_sources: boolean; sdk_config: SdkConfig; disabled: boolean; disabled_reason: string | null;
+  /** Hari penyimpanan laporan live setelah ditutup; null = tanpa batas. */
+  retention_days: number | null;
   created_at: string; keys: ApiKey[];
 }
 

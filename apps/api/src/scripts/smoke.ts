@@ -4,7 +4,8 @@
  *   pnpm smoke            # default http://localhost:4000
  */
 import { authenticator } from 'otplib';
-import { pool } from '../db.js';
+import { pool, withPlatform } from '../db.js';
+import { runMaintenance } from '../lib/maintenance.js';
 import { hashPassword } from '../lib/auth.js';
 
 const BASE = process.env.SMOKE_URL ?? 'http://localhost:4000';
@@ -123,6 +124,12 @@ async function main() {
     const shown = md.data.media?.[0];
     ok(md.data.media?.length === 1 && shown.kind === 'image' && (await fetch(shown.url)).status === 200, 'media: tampil di detail portal + URL baca berfungsi');
     ok((await fetch(shown.url.split('?')[0])).status === 403, 'media: bucket privat (tanpa tanda tangan 403)');
+    // media pending yang tidak pernah di-complete dibersihkan job maintenance (setelah URL upload + 1 jam)
+    await withPlatform((c) => c.query(`UPDATE report_media SET created_at = now() - interval '3 hours' WHERE id = $1`, [ghost.data.media.id]));
+    let mt = await runMaintenance();
+    for (let i = 0; mt.skipped && i < 5; i++) { await new Promise((r) => setTimeout(r, 500)); mt = await runMaintenance(); }
+    const left = await withPlatform((c) => c.query(`SELECT status FROM report_media WHERE report_id = $1`, [r1.data.id]));
+    ok(mt.mediaRemoved >= 1 && left.rows.length === 1 && left.rows[0].status === 'ready', 'media: pending basi dibersihkan, media ready tetap');
   } else {
     console.log('… media dilewati (S3_ENDPOINT kosong)');
   }
@@ -291,6 +298,10 @@ async function main() {
   ok(ver.status === 201 && String(ver.data.token).startsWith('rsp_') && ver.data.responder.name === 'Pak Satpam (Satpam)', 'satpam login → token sesi');
   const reuse = await call('POST', '/v1/sdk/responder/verify', { headers: sdkH(pkLive), body: { phone: guardPhone, code: otp.data.dev_code } });
   ok(reuse.status === 422, 'OTP sekali pakai');
+  const direct = await call('POST', '/v1/sdk/responder/login', { headers: sdkH(pkLive), body: { phone: '0800-5555-6666', device: { platform: 'android' } } });
+  ok(direct.status === 201 && String(direct.data.token).startsWith('rsp_'), 'satpam login langsung tanpa OTP');
+  const directNo = await call('POST', '/v1/sdk/responder/login', { headers: sdkH(pkLive), body: { phone: '080011110000' } });
+  ok(directNo.status === 404 && directNo.data.error.code === 'responder_not_registered', 'login langsung: nomor di luar Nomor Darurat ditolak');
   const rH = sdkH(pkLive, { 'X-SOS-Responder': ver.data.token });
   const noTok = await call('GET', '/v1/sdk/responder/reports', { headers: sdkH(pkLive) });
   ok(noTok.status === 401, 'endpoint satpam tanpa token ditolak');
@@ -320,6 +331,43 @@ async function main() {
   for (let i = 0; i < 2; i++) await call('POST', '/v1/sdk/reports', { headers: sdkH(pkLive, { 'Idempotency-Key': uuid() }), body: { reporter: { ref: 'user_999' } } });
   const spam = await call('POST', '/v1/sdk/reports', { headers: sdkH(pkLive, { 'Idempotency-Key': uuid() }), body: { reporter: { ref: 'user_999' } } });
   ok(spam.status === 429 && spam.data.error.code === 'reporter_rate_limited', 'rate limit 3 laporan / 10 menit per reporter_ref');
+
+  // ---------------------------------------------------------------- retensi & hapus data pengguna (UU PDP)
+  const skLive = live.data.secret.key as string;
+  const badRet = await call('PATCH', `/portal/apps/${appId}`, { token: A.token, body: { retention_days: 7 } });
+  ok(badRet.status === 422, 'retensi < 30 hari ditolak');
+  const setRet = await call('PATCH', `/portal/apps/${appId}`, { token: A.token, body: { retention_days: 30 } });
+  ok(setRet.status === 200 && setRet.data.retention_days === 30, 'retensi laporan per app disimpan');
+  const mk = async (key: string, ref: string, close: boolean) => {
+    const r = await call('POST', '/v1/sdk/reports', { headers: sdkH(key, { 'Idempotency-Key': uuid() }), body: { reporter: { ref } } });
+    if (close) await call('POST', `/v1/sdk/reports/${r.data.id}/cancel`, { headers: sdkH(key), body: {} });
+    return r.data.id as string;
+  };
+  const oldLive = await mk(pkLive, 'ret_user', true);
+  const recentLive = await mk(pkLive, 'ret_user', true);
+  const openLive = await mk(pkLive, 'ret_user', false);
+  const oldTest = await mk(pkTest, 'ret_user', true);
+  await withPlatform(async (c) => {
+    await c.query(`UPDATE reports SET resolved_at = now() - interval '31 days' WHERE id = ANY($1::uuid[])`, [[oldLive, oldTest]]);
+    await c.query(`UPDATE reports SET resolved_at = now() - interval '10 days' WHERE id = $1`, [recentLive]);
+    await c.query(`UPDATE reports SET created_at = now() - interval '90 days' WHERE id = $1`, [openLive]);
+  });
+  let rt = await runMaintenance();
+  for (let i = 0; rt.skipped && i < 5; i++) { await new Promise((r) => setTimeout(r, 500)); rt = await runMaintenance(); }
+  const kept = await withPlatform((c) => c.query(`SELECT id FROM reports WHERE id = ANY($1::uuid[])`, [[oldLive, recentLive, openLive, oldTest]]));
+  const keptIds = kept.rows.map((r: any) => r.id).sort();
+  ok(JSON.stringify(keptIds) === JSON.stringify([recentLive, openLive].sort()),
+    'retensi: laporan tertutup > 30 hari (live & test) dihapus, yang baru ditutup & yang masih aktif tetap');
+
+  const eraseTest = await call('DELETE', '/v1/reporters/user_999', { token: skTest });
+  ok(eraseTest.status === 200 && eraseTest.data.deleted.reports === 0, 'hapus data pengguna dengan kunci test tidak menyentuh laporan live');
+  await call('PUT', '/v1/sdk/contacts', { headers: sdkH(pkLive), body: { reporter: { ref: 'user_999' }, contacts: [{ name: 'Adik', phone: '0800 7777 8888' }] } });
+  const erase = await call('DELETE', '/v1/reporters/user_999', { token: skLive });
+  ok(erase.status === 200 && erase.data.deleted.reports === 3 && erase.data.deleted.emergency_contacts === 1, 'DELETE /v1/reporters/:ref menghapus semua laporan pengguna (3 live + Nomor Darurat)');
+  const left999 = await withPlatform((c) => c.query(
+    `SELECT (SELECT count(*) FROM reports WHERE reporter_ref = 'user_999' AND app_id = $1)::int AS r,
+            (SELECT count(*) FROM emergency_contacts WHERE reporter_ref = 'user_999' AND app_id = $1)::int AS c`, [appId]));
+  ok(left999.rows[0].r === 0 && left999.rows[0].c === 0, 'data pengguna terhapus: laporan + Nomor Darurat');
 
   // ---------------------------------------------------------------- isolasi tenant (RLS)
   const B = await registerCompany('Bravo');

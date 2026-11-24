@@ -9,6 +9,8 @@ import { changeReport, fullReport, loadReport } from '../lib/reports.js';
 import { listQuerySchema, listReports } from '../lib/reportQuery.js';
 import { deliver } from '../lib/webhooks.js';
 import { audit } from '../lib/audit.js';
+import { sha256 } from '../lib/crypto.js';
+import { deleteReports, removeObjects } from '../lib/maintenance.js';
 
 /** /v1 — API server-ke-server untuk backend klien, Authorization: Bearer sk_... */
 export const serverRouter = Router();
@@ -43,6 +45,30 @@ serverRouter.patch('/reports/:id', async (req, res) => {
     return changeReport(c, cur.id, body, { kind: 'server', name: 'server' }, k.appId);
   });
   res.json(fullReport(r));
+});
+
+/**
+ * Hapus data satu pengguna akhir (permintaan subjek data, UU PDP): semua laporan dengan reporter.ref ini pada mode kunci
+ * (beserta lokasi, timeline, media) + Nomor Darurat yang disinkronkan SDK. Permanen. Laporan yang masih aktif ikut
+ * terhapus, jadi backend klien sebaiknya memanggil ini setelah SOS pengguna selesai.
+ */
+serverRouter.delete('/reporters/:ref', async (req, res) => {
+  const k = req.key!;
+  const ref = String(req.params.ref);
+  if (!ref || ref.length > 128) throw new ApiError(422, 'invalid_reporter_ref', 'reporter_ref wajib, maksimal 128 karakter');
+  await enforce(`erase:${k.appId}`, 30, 3600);
+  const out = await withTenant(k.accountId, async (c) => {
+    const ids = await c.query<{ id: string }>(
+      `SELECT id FROM reports WHERE app_id = $1 AND reporter_ref = $2 AND mode = $3 FOR UPDATE`, [k.appId, ref, k.mode]);
+    const purged = await deleteReports(c, ids.rows.map((r) => r.id));
+    const contacts = await c.query(`DELETE FROM emergency_contacts WHERE app_id = $1 AND reporter_ref = $2`, [k.appId, ref]);
+    // Jejak audit tanpa reporter_ref polos (itu sendiri data pribadi).
+    await audit({ accountId: k.accountId, actorKind: 'server', action: 'reporter.erase', targetType: 'reporter', targetId: sha256(`${k.appId}:${ref}`).slice(0, 32),
+      detail: { key_id: k.keyId, mode: k.mode, reports: purged.reports, contacts: contacts.rowCount ?? 0, media: purged.storageKeys.length } }, c);
+    return { reports: purged.reports, contacts: contacts.rowCount ?? 0, keys: purged.storageKeys };
+  });
+  await removeObjects(out.keys);
+  res.json({ deleted: { reports: out.reports, media: out.keys.length, emergency_contacts: out.contacts } });
 });
 
 serverRouter.post('/webhooks/test', async (req, res) => {

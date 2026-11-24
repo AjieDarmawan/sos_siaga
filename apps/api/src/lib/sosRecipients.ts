@@ -43,15 +43,20 @@ function outcome(t: WaTarget, r: WaResult | 'limited' | 'test'): string {
 export async function dispatchSosWhatsApp(report: any, appName: string): Promise<void> {
   if (report.kind === 'pengaduan') return;
   try {
-    const { recipients, sourceLabel } = await withTenant(report.account_id, async (c) => {
+    const { recipients, sourceName, sourceLabel, sourceAlamat } = await withTenant(report.account_id, async (c) => {
       const rec = await c.query(
         `SELECT name, phone, source_id FROM sos_recipients
          WHERE app_id = $1 AND active AND (source_id IS NULL OR source_id = $2)
          ORDER BY source_id NULLS LAST, name`,
         [report.app_id, report.source_id ?? null],
       );
-      const src = report.source_id ? await c.query(`SELECT label, source_key FROM sources WHERE id = $1`, [report.source_id]) : { rows: [] };
-      return { recipients: rec.rows, sourceLabel: (src.rows[0]?.label || src.rows[0]?.source_key || null) as string | null };
+      const src = report.source_id ? await c.query(`SELECT label, source_key, alamat FROM sources WHERE id = $1`, [report.source_id]) : { rows: [] };
+      return {
+        recipients: rec.rows,
+        sourceName: (src.rows[0]?.label || null) as string | null,
+        sourceLabel: (src.rows[0]?.label || src.rows[0]?.source_key || null) as string | null,
+        sourceAlamat: (src.rows[0]?.alamat || null) as string | null,
+      };
     });
     const targets = mergeTargets(recipients, (report.emergency_contacts ?? []) as { name?: string; phone: string }[]);
     if (!targets.length) return;
@@ -60,9 +65,13 @@ export async function dispatchSosWhatsApp(report: any, appName: string): Promise
     if (report.mode !== 'live') {
       lines.push(`Mode test: WhatsApp tidak dikirim ke ${targets.length} penerima (${targets.map((t) => t.phone).join(', ')})`);
     } else {
-      const reporter = report.reporter_name || 'Pelapor';
+      // {{1}} nama kios (atau pelapor bila kios tanpa label), {{2}} lokasi = alamat kios bila diisi, lalu nama app · source.
+      // Nama pelapor tidak dikirim ke template: slot {{2}} ada di baris "Lokasi" dan tidak boleh berisi nama orang.
       const place = [appName, sourceLabel].filter(Boolean).join(' · ');
-      const params: [string, string, string] = [reporter, place || 'Lokasi tidak diketahui', mapsLink(report.lat, report.lng)];
+      const lokasi = sourceAlamat || place || 'Lokasi tidak diketahui';
+      const params: [string, string, string] = sourceName
+        ? [sourceName, lokasi, mapsLink(report.lat, report.lng)]
+        : [report.reporter_name || 'Pelapor', lokasi, mapsLink(report.lat, report.lng)];
       const results = await Promise.all(targets.map(async (t) => {
         if (isTestNumber(t.phone)) return outcome(t, 'test');
         const r = await hit(`wa:${t.phone}`, PER_NUMBER_LIMIT, 3600);

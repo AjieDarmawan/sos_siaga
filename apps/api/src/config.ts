@@ -23,6 +23,8 @@ export const config = {
   mailFrom: req('MAIL_FROM', 'SiagaSOS <no-reply@siagasos.local>'),
   portalOrigins: (process.env.PORTAL_ORIGINS ?? '').split(',').map((s) => s.trim()).filter(Boolean),
   webhookWorker: (process.env.WEBHOOK_WORKER ?? 'true') === 'true',
+  /** Pembersihan berkala (media pending yang tidak pernah selesai, OTP kedaluwarsa). Aman di banyak instance (advisory lock). */
+  maintenanceWorker: (process.env.MAINTENANCE_WORKER ?? 'true') === 'true',
 
   /** Object storage S3-compatible (MinIO) untuk media laporan. Kosong = fitur media nonaktif (503 media_disabled). */
   s3: {

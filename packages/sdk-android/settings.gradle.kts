@@ -6,4 +6,4 @@ dependencyResolutionManagement {
     repositories { google(); mavenCentral() }
 }
 rootProject.name = "siagasos-android"
-include(":siagasos")
+include(":siagasos", ":sample")

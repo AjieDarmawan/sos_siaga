@@ -5,10 +5,6 @@ import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import org.json.JSONObject
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
-import java.util.TimeZone
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.CopyOnWriteArraySet
@@ -35,12 +31,18 @@ class SiagaSOS private constructor(b: Builder) {
     val bundleId: String = b.bundleId
     val mode: SosMode
     private val sourceKey = b.sourceKey
-    private val user = b.user
+    private val sourceLabel = b.sourceLabel
+    val user: SosUser? = b.user
     private val liveLocation = b.liveLocation
     private val pollIntervalMs = b.pollIntervalMs
     private val locationTimeoutMs = b.locationTimeoutMs
     private val location = b.locationProvider
     private val queue: QueueStore = b.queueStore ?: MemoryQueueStore()
+    private val historyStore: QueueStore = b.historyStore ?: MemoryQueueStore()
+    private val contactsStore: QueueStore = b.contactsStore ?: MemoryQueueStore()
+    private val contactsSyncStore: QueueStore = b.contactsSyncStore ?: MemoryQueueStore()
+    private val historyLock = Any()
+    private val contactsLock = Any()
     private val callbacks: Executor = b.callbackExecutor ?: Executor { it.run() }
     private val http = HttpTransport(b.baseUrl.trimEnd('/'), mapOf("X-SOS-Key" to b.apiKey, "X-SOS-Bundle" to b.bundleId))
 
@@ -62,6 +64,8 @@ class SiagaSOS private constructor(b: Builder) {
             ?: throw SiagaSOSException(0, "invalid_api_key", "apiKey harus publishable key (pk_live_... / pk_test_...)")
         mode = if (m.groupValues[1] == "live") SosMode.LIVE else SosMode.TEST
         io.execute { flushBlocking() } // kirim sisa antrian dari sesi sebelumnya
+        // Nomor Darurat: kirim perubahan yang belum tersinkron, atau pulihkan dari server di perangkat baru.
+        io.execute { runCatching { syncEmergencyContactsBlocking() } }
     }
 
     val activeReports: List<ActiveReport> get() = reports.values.filter { !it.status.isTerminal }
@@ -88,19 +92,40 @@ class SiagaSOS private constructor(b: Builder) {
     fun trigger(category: String = "general", message: String? = null, metadata: Map<String, Any?>? = null, callback: SosCallback<ActiveReport>? = null) =
         async(callback) { triggerBlocking(category, message, metadata) }
 
-    fun triggerBlocking(category: String = "general", message: String? = null, metadata: Map<String, Any?>? = null): ActiveReport {
+    fun triggerBlocking(category: String = "general", message: String? = null, metadata: Map<String, Any?>? = null): ActiveReport =
+        submit(ReportKind.SOS, category, message, metadata)
+
+    /**
+     * Kirim laporan pengaduan (non-darurat). [message] wajib (min. 5 karakter). Antrian offline sama dengan [trigger],
+     * tetapi tanpa lokasi live dan tanpa WhatsApp darurat. Lokasi saat dikirim tetap disertakan bila tersedia.
+     */
+    fun complain(category: String, message: String, metadata: Map<String, Any?>? = null, callback: SosCallback<ActiveReport>? = null) =
+        async(callback) { complainBlocking(category, message, metadata) }
+
+    fun complainBlocking(category: String, message: String, metadata: Map<String, Any?>? = null): ActiveReport {
+        if (message.trim().length < 5) throw SiagaSOSException(422, "validation_failed", "Uraian pengaduan minimal 5 karakter")
+        return submit(ReportKind.PENGADUAN, category, message.trim(), metadata)
+    }
+
+    private fun submit(kind: ReportKind, category: String, message: String?, metadata: Map<String, Any?>?): ActiveReport {
         val loc = runCatching { location?.currentLocation(locationTimeoutMs) }.getOrNull()
+        // Kontak darurat hanya untuk SOS. Gagal baca → SOS tetap jalan tanpa kontak.
+        val contacts = if (kind == ReportKind.SOS) runCatching { emergencyContacts() }.getOrDefault(emptyList())
+            .filter { it.active }.take(MAX_ACTIVE_EMERGENCY_CONTACTS) else emptyList()
         val now = System.currentTimeMillis()
         val body = JSONObject().put("category", category)
             .put("device", JSONObject().put("platform", "android").put("sdk_version", "android-${BuildConfig.SDK_VERSION}").put("os", "Android ${Build.VERSION.RELEASE ?: ""}".trim()))
-            .put("client_created_at", iso(now))
+            .put("client_created_at", Iso.format(now))
+        if (kind == ReportKind.PENGADUAN) body.put("kind", kind.api)
         message?.let { body.put("message", it) }
         sourceKey?.let { body.put("source_key", it) }
+        if (sourceKey != null && !sourceLabel.isNullOrBlank()) body.put("source_label", sourceLabel.trim())
         loc?.let { body.put("location", it.toJson()) }
         user?.let { body.put("reporter", it.toJson()) }
         metadata?.let { body.put("metadata", JSONObject(metadata)) }
+        if (contacts.isNotEmpty()) body.put("emergency_contacts", org.json.JSONArray(contacts.map { it.toReportJson() }))
         val item = JSONObject().put("localId", uuid()).put("idem", uuid()).put("createdAt", now).put("body", body)
-        val queued = ActiveReport(item.getString("localId"), null, SosStatus.QUEUED, "Menunggu sinyal, laporan akan dikirim otomatis.", mode, category, now)
+        val queued = ActiveReport(item.getString("localId"), null, SosStatus.QUEUED, "Menunggu sinyal, laporan akan dikirim otomatis.", mode, category, now, kind)
         reports[queued.localId] = queued
         synchronized(queueLock) { queue.save(queue.load() + item) }
         return try {
@@ -123,9 +148,11 @@ class SiagaSOS private constructor(b: Builder) {
         val data = http.json("POST", "/v1/sdk/reports", item.getJSONObject("body"), mapOf("Idempotency-Key" to item.getString("idem")))
         val localId = item.getString("localId")
         removeFromQueue(localId)
-        val r = ActiveReport(localId, data.getString("id"), SosStatus.fromApi(data.getString("status")), data.optString("status_message").ifEmpty { null },
-            mode, item.getJSONObject("body").getString("category"), reports[localId]?.createdAtMs ?: item.optLong("createdAt"))
+        val body = item.getJSONObject("body")
+        val r = ActiveReport(localId, data.getString("id"), SosStatus.fromApi(data.getString("status")), data.optStringOrNull("status_message"),
+            mode, body.getString("category"), reports[localId]?.createdAtMs ?: item.optLong("createdAt"), kindOf(item))
         reports[localId] = r
+        remember(ReportRecord(r.id!!, r.kind, r.category, r.status, r.createdAtMs, body.optStringOrNull("message"), r.statusMessage))
         emit { it.onSent(r) }
         emit { it.onStatus(r) }
         track(r)
@@ -144,7 +171,7 @@ class SiagaSOS private constructor(b: Builder) {
             for (item in synchronized(queueLock) { queue.load() }) {
                 val localId = item.getString("localId")
                 reports.putIfAbsent(localId, ActiveReport(localId, null, SosStatus.QUEUED, null, mode,
-                    item.getJSONObject("body").optString("category", "general"), item.optLong("createdAt")))
+                    item.getJSONObject("body").optString("category", "general"), item.optLong("createdAt"), kindOf(item)))
                 try {
                     send(item)
                     retryDelayMs = 2_000
@@ -169,10 +196,13 @@ class SiagaSOS private constructor(b: Builder) {
     // ------------------------------------------------------------------ status + lokasi live
     private fun track(r: ActiveReport) {
         if (r.status.isTerminal || closed) return
+        // Pengaduan bisa terbuka berhari-hari: polling jarang, tanpa lokasi live.
+        val complaint = r.kind == ReportKind.PENGADUAN
+        val every = if (complaint) pollIntervalMs * 8 else pollIntervalMs
         pollers.computeIfAbsent(r.localId) {
-            timers.scheduleWithFixedDelay({ io.execute { poll(r.localId) } }, pollIntervalMs, pollIntervalMs, TimeUnit.MILLISECONDS)
+            timers.scheduleWithFixedDelay({ io.execute { poll(r.localId) } }, every, every, TimeUnit.MILLISECONDS)
         }
-        if (liveLocation && location != null && !locators.containsKey(r.localId)) io.execute {
+        if (!complaint && liveLocation && location != null && !locators.containsKey(r.localId)) io.execute {
             val interval = runCatching { getConfigBlocking().liveLocationIntervalS }.getOrDefault(15).toLong()
             if (!closed) locators.computeIfAbsent(r.localId) {
                 timers.scheduleWithFixedDelay({ io.execute { sendLocation(r.localId) } }, interval, interval, TimeUnit.SECONDS)
@@ -189,7 +219,7 @@ class SiagaSOS private constructor(b: Builder) {
         val id = reports[localId]?.id ?: return
         val loc = runCatching { location?.currentLocation(locationTimeoutMs) }.getOrNull() ?: return
         runCatching {
-            val res = http.json("POST", "/v1/sdk/reports/$id/locations", loc.toJson().put("recorded_at", iso(System.currentTimeMillis())))
+            val res = http.json("POST", "/v1/sdk/reports/$id/locations", loc.toJson().put("recorded_at", Iso.format(System.currentTimeMillis())))
             if (!res.optBoolean("accepted", true)) locators.remove(localId)?.cancel(false)
         }
     }
@@ -197,7 +227,7 @@ class SiagaSOS private constructor(b: Builder) {
     private fun update(localId: String, data: JSONObject): ActiveReport {
         val cur = reports.getValue(localId)
         val next = cur.copy(id = data.optString("id").ifEmpty { cur.id }, status = SosStatus.fromApi(data.getString("status")),
-            statusMessage = data.optString("status_message").ifEmpty { null })
+            statusMessage = data.optStringOrNull("status_message"))
         reports[localId] = next
         if (next.status != cur.status || next.statusMessage != cur.statusMessage) emit { it.onStatus(next) }
         if (next.status.isTerminal) stop(localId)
@@ -226,6 +256,117 @@ class SiagaSOS private constructor(b: Builder) {
         }
         val data = http.json("POST", "/v1/sdk/reports/${entry?.id ?: idOrLocalId}/cancel", JSONObject().apply { reason?.let { put("reason", it) } })
         return entry?.let { update(it.localId, data) }
+    }
+
+    /** Status laporan dari server (mentah). */
+    fun getReportBlocking(id: String): JSONObject = http.json("GET", "/v1/sdk/reports/$id")
+
+    /** Detail laporan untuk halaman riwayat: uraian, lokasi, riwayat status (termasuk catatan petugas), lampiran. */
+    fun reportDetail(id: String, callback: SosCallback<ReportDetail>) = async(callback) { reportDetailBlocking(id) }
+    fun reportDetailBlocking(id: String): ReportDetail = ReportDetail.from(http.json("GET", "/v1/sdk/reports/$id/detail"))
+
+    /**
+     * Catatan pelapor untuk petugas (mis. keterangan rekaman TKP), tampil di timeline dashboard.
+     * Bila laporan masih di antrian offline, menunggu sampai terkirim (maks. [waitTimeoutMs]).
+     */
+    fun addNote(idOrLocalId: String, note: String, waitTimeoutMs: Long = 120_000, callback: SosCallback<Unit>? = null) =
+        async(callback) { addNoteBlocking(idOrLocalId, note, waitTimeoutMs) }
+    fun addNoteBlocking(idOrLocalId: String, note: String, waitTimeoutMs: Long = 120_000) {
+        val id = waitForServerId(idOrLocalId, waitTimeoutMs)
+        http.json("POST", "/v1/sdk/reports/$id/notes", JSONObject().put("note", note.trim()))
+    }
+
+    // ------------------------------------------------------------------ riwayat
+    private fun remember(rec: ReportRecord) = runCatching {
+        synchronized(historyLock) {
+            val items = historyStore.load().filter { it.optString("id") != rec.id }
+            historyStore.save((listOf(rec.toJson()) + items).take(HISTORY_LIMIT))
+        }
+    } // riwayat tidak boleh mengganggu jalur SOS
+
+    /**
+     * Laporan (SOS & pengaduan) yang pernah terkirim dari perangkat ini oleh [user], terbaru dulu.
+     * [refresh] = ambil status terbaru dari server untuk yang belum selesai; gagal jaringan → status tersimpan.
+     */
+    fun history(refresh: Boolean = true, callback: SosCallback<List<ReportRecord>>) = async(callback) { historyBlocking(refresh) }
+    fun historyBlocking(refresh: Boolean = true): List<ReportRecord> {
+        val list = runCatching { synchronized(historyLock) { historyStore.load() }.map { ReportRecord.from(it) } }.getOrElse { return emptyList() }
+        if (!refresh || list.isEmpty()) return list
+        val fresh = list.map { r -> if (r.status.isTerminal) r else runCatching { r.withServer(getReportBlocking(r.id)) }.getOrDefault(r) }
+        runCatching {
+            synchronized(historyLock) {
+                // Gabung dengan isi terbaru (laporan baru bisa masuk selama refresh berjalan).
+                val byId = fresh.associateBy { it.id }
+                historyStore.save(historyStore.load().map { j -> byId[j.optString("id")]?.toJson() ?: j })
+            }
+        }
+        return fresh
+    }
+
+    // ------------------------------------------------------------------ Nomor Darurat
+    /** Nomor Darurat pribadi pengguna ini (per perangkat + [user]). Yang aktif ikut dikabari WhatsApp setiap SOS. */
+    fun emergencyContacts(): List<EmergencyContact> =
+        runCatching { synchronized(contactsLock) { contactsStore.load() }.map { EmergencyContact.from(it) }.filter { it.phone.isNotEmpty() } }
+            .getOrDefault(emptyList())
+
+    /**
+     * Simpan seluruh daftar (ganti total). Nomor dinormalisasi ke 62xx. [IllegalArgumentException] bila nomor tidak valid,
+     * nama kosong, nomor ganda, > [MAX_EMERGENCY_CONTACTS] kontak, atau > [MAX_ACTIVE_EMERGENCY_CONTACTS] aktif.
+     * Selalu tersimpan di perangkat dulu, lalu disinkronkan ke server. Hasil: true = sudah di server; false = belum
+     * (offline / tanpa [SosUser.ref]), dicoba lagi otomatis.
+     */
+    fun setEmergencyContacts(contacts: List<EmergencyContact>, callback: SosCallback<Boolean>? = null) =
+        async(callback) { setEmergencyContactsBlocking(contacts) }
+
+    fun setEmergencyContactsBlocking(contacts: List<EmergencyContact>): Boolean {
+        require(contacts.size <= MAX_EMERGENCY_CONTACTS) { "Maksimal $MAX_EMERGENCY_CONTACTS nomor darurat" }
+        require(contacts.count { it.active } <= MAX_ACTIVE_EMERGENCY_CONTACTS) { "Maksimal $MAX_ACTIVE_EMERGENCY_CONTACTS nomor darurat aktif" }
+        val out = mutableListOf<EmergencyContact>()
+        for (c in contacts) {
+            val n = toWhatsAppNumber(c.phone) ?: throw IllegalArgumentException("Nomor WhatsApp tidak valid: ${c.phone}")
+            require(c.name.isNotBlank()) { "Nama kontak wajib diisi" }
+            require(out.none { it.phone == n }) { "Nomor +$n sudah ada di daftar" }
+            out += EmergencyContact(c.name.trim(), n, c.role?.trim()?.ifEmpty { null }, c.active)
+        }
+        synchronized(contactsLock) {
+            contactsStore.save(out.map { it.toJson() })
+            contactsSyncStore.save(listOf(JSONObject().put("state", "dirty").put("v", uuid())))
+        }
+        return runCatching { syncEmergencyContactsBlocking() }.getOrDefault(false)
+    }
+
+    /**
+     * Samakan Nomor Darurat perangkat dengan server: ada perubahan lokal → PUT (ganti total); belum pernah sinkron dan
+     * lokal kosong → ambil dari server (perangkat baru). true bila sudah sama. Butuh [SosUser.ref].
+     */
+    fun syncEmergencyContactsBlocking(): Boolean {
+        val ref = user?.ref
+        if (ref.isNullOrEmpty() || closed) return false
+        val snapshot = synchronized(contactsLock) { contactsSyncStore.load() }.firstOrNull()
+        val state = snapshot?.optString("state")
+        if (state == "synced") return true
+        val local = emergencyContacts()
+        if (state == "dirty" || local.isNotEmpty()) {
+            http.json("PUT", "/v1/sdk/contacts", JSONObject()
+                .put("reporter", JSONObject().put("ref", ref).apply { user.name?.let { put("name", it) } })
+                .apply { sourceKey?.let { put("source_key", it) } }
+                .put("contacts", org.json.JSONArray(local.map { it.toJson() })))
+        } else {
+            val data = http.json("GET", "/v1/sdk/contacts?reporter_ref=" + java.net.URLEncoder.encode(ref, "UTF-8"))
+            val arr = data.optJSONArray("contacts")
+            val remote = if (arr == null) emptyList() else List(arr.length()) { EmergencyContact.from(arr.getJSONObject(it)) }
+            synchronized(contactsLock) {
+                // Pengguna bisa saja sempat mengisi daftar selama request berjalan: jangan timpa.
+                if (remote.isNotEmpty() && contactsStore.load().isEmpty()) contactsStore.save(remote.map { it.toJson() })
+            }
+        }
+        synchronized(contactsLock) {
+            // Ada simpanan baru selama request (versi berubah) → biarkan dirty supaya dikirim lagi.
+            if (contactsSyncStore.load().firstOrNull()?.toString() == snapshot?.toString()) {
+                contactsSyncStore.save(listOf(JSONObject().put("state", "synced")))
+            }
+        }
+        return true
     }
 
     // ------------------------------------------------------------------ lampiran
@@ -275,6 +416,10 @@ class SiagaSOS private constructor(b: Builder) {
 
     class Builder(internal val apiKey: String, internal val bundleId: String) {
         internal var sourceKey: String? = null
+        internal var sourceLabel: String? = null
+        internal var historyStore: QueueStore? = null
+        internal var contactsStore: QueueStore? = null
+        internal var contactsSyncStore: QueueStore? = null
         internal var user: SosUser? = null
         internal var baseUrl = "https://api.siagasos.id"
         internal var liveLocation = true
@@ -285,6 +430,12 @@ class SiagaSOS private constructor(b: Builder) {
         internal var callbackExecutor: Executor? = null
 
         fun sourceKey(v: String?) = apply { sourceKey = v }
+        /** Nama tampilan [sourceKey] (mis. nama kios); dipakai di pesan WA SOS. */
+        fun sourceLabel(v: String?) = apply { sourceLabel = v }
+        /** Riwayat laporan perangkat ([history]). */
+        fun historyStore(v: QueueStore) = apply { historyStore = v }
+        /** Nomor Darurat + status sinkronnya. */
+        fun contactsStore(contacts: QueueStore, sync: QueueStore) = apply { contactsStore = contacts; contactsSyncStore = sync }
         fun user(v: SosUser?) = apply { user = v }
         fun baseUrl(v: String) = apply { baseUrl = v }
         fun liveLocation(v: Boolean) = apply { liveLocation = v }
@@ -303,18 +454,21 @@ class SiagaSOS private constructor(b: Builder) {
         /** Default Android: antrian di SharedPreferences, lokasi via LocationManager, callback di main thread, bundle = package name. */
         @JvmStatic @JvmOverloads
         fun create(context: Context, apiKey: String, user: SosUser? = null, sourceKey: String? = null,
-                   baseUrl: String = "https://api.siagasos.id", bundleId: String = context.packageName): SiagaSOS {
+                   baseUrl: String = "https://api.siagasos.id", bundleId: String = context.packageName, sourceLabel: String? = null): SiagaSOS {
             val main = Handler(Looper.getMainLooper())
-            return Builder(apiKey, bundleId).user(user).sourceKey(sourceKey).baseUrl(baseUrl)
+            // Riwayat & Nomor Darurat per pengguna: kasir lain yang login di perangkat sama tidak melihat milik orang lain.
+            val per = "${apiKey.take(16)}.${user?.ref ?: "-"}"
+            return Builder(apiKey, bundleId).user(user).sourceKey(sourceKey).sourceLabel(sourceLabel).baseUrl(baseUrl)
                 .queueStore(SharedPrefsQueueStore(context, "queue.${apiKey.take(16)}"))
+                .historyStore(SharedPrefsQueueStore(context, "history.$per"))
+                .contactsStore(SharedPrefsQueueStore(context, "contacts.$per"), SharedPrefsQueueStore(context, "contacts_sync.$per"))
                 .locationProvider(AndroidLocationProvider(context))
                 .callbackExecutor { main.post(it) }
                 .build()
         }
 
+        private const val HISTORY_LIMIT = 50
         private fun uuid() = UUID.randomUUID().toString()
-
-        /** ISO-8601 UTC tanpa java.time (minSdk 21). */
-        private fun iso(ms: Long): String = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US).apply { timeZone = TimeZone.getTimeZone("UTC") }.format(Date(ms))
+        private fun kindOf(item: JSONObject) = ReportKind.fromApi(item.getJSONObject("body").optStringOrNull("kind"))
     }
 }

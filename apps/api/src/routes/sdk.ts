@@ -77,24 +77,33 @@ sdkRouter.post('/reports', async (req, res) => {
       if (!sourceId) {
         if (!k.autoCreateSources) throw new ApiError(422, 'unknown_source', `source_key "${body.source_key}" belum terdaftar`);
         const ins = await c.query(
-          `INSERT INTO sources (app_id, account_id, source_key, platform) VALUES ($1,$2,$3,$4)
+          `INSERT INTO sources (app_id, account_id, source_key, label, platform, alamat) VALUES ($1,$2,$3,$4,$5,$6)
            ON CONFLICT (app_id, source_key) DO UPDATE SET source_key = EXCLUDED.source_key RETURNING id`,
-          [k.appId, k.accountId, body.source_key, body.device?.platform ?? null],
+          [k.appId, k.accountId, body.source_key, body.source_label ?? null, body.device?.platform ?? null, body.source_alamat ?? null],
         );
         sourceId = ins.rows[0].id;
+      } else if (body.source_label || body.source_alamat) {
+        // Nama tampilan & alamat dari app (mis. nama kios, wilayah tenant) mengikuti perubahan di sisi klien.
+        await c.query(
+          `UPDATE sources SET label = coalesce($2, label), alamat = coalesce($3, alamat)
+           WHERE id = $1 AND (label IS DISTINCT FROM coalesce($2, label) OR alamat IS DISTINCT FROM coalesce($3, alamat))`,
+          [sourceId, body.source_label ?? null, body.source_alamat ?? null],
+        );
       }
     }
 
     const ins = await c.query(
       `INSERT INTO reports (app_id, account_id, source_id, mode, category, reporter_ref, reporter_name, reporter_phone,
-         message, lat, lng, accuracy_m, device, metadata, ip, idempotency_key, client_created_at, kind, emergency_contacts)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)
+         message, lat, lng, accuracy_m, device, metadata, ip, idempotency_key, client_created_at, kind, emergency_contacts,
+         complaint_details)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20)
        ON CONFLICT (app_id, idempotency_key) DO NOTHING RETURNING *`,
       [k.appId, k.accountId, sourceId, k.mode, body.category, body.reporter?.ref ?? null, body.reporter?.name ?? null,
         body.reporter?.phone ?? null, body.message ?? null, body.location?.lat ?? null, body.location?.lng ?? null,
         body.location?.accuracy_m ?? null, body.device ? JSON.stringify(body.device) : null,
         body.metadata ? JSON.stringify(body.metadata) : null, req.ip ?? null, idem, body.client_created_at ?? null, body.kind,
-        body.kind === 'sos' && body.emergency_contacts?.length ? JSON.stringify(body.emergency_contacts) : null],
+        body.kind === 'sos' && body.emergency_contacts?.length ? JSON.stringify(body.emergency_contacts) : null,
+        body.kind === 'pengaduan' && body.complaint ? JSON.stringify(body.complaint) : null],
     );
     if (!ins.rows[0]) {
       // balapan dua retry bersamaan

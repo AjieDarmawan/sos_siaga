@@ -55,6 +55,8 @@ Verifikasi: `pnpm smoke` (59 cek end-to-end terhadap API sungguhan + Postgres + 
 16. **MinIO membalas 403 (bukan 404) untuk objek yang belum ada** dan kadang belum melihat objek sesaat setelah PUT. `headObject` menganggap 403/404 sebagai "belum ada" dan mencoba ulang ±3 dtk.
 17. **Tema** disimpan per browser (localStorage `siagasos.theme`) dan dipasang skrip inline sebelum render. Warna aksen tidak menawarkan merah (dicadangkan untuk darurat).
 12. **Peta memakai tile OSM standar** yang diredam lewat CSS filter (tanpa API key). Basemap CARTO kini butuh API key. Untuk produksi bervolume tinggi, ganti ke penyedia tile berbayar (kebijakan tile OSM).
+18. **Pembersihan berkala di proses API** (`lib/maintenance.ts`, tiap 10 menit): media `pending` > URL upload (15 mnt) + 1 jam dihapus dari bucket lalu DB; OTP responder kedaluwarsa > 1 hari dibuang. `pg_try_advisory_xact_lock` memastikan satu instance per putaran.
+19. **Retensi = hapus permanen, bukan anonimisasi** (migrasi 006). `apps.retention_days` (NULL = tanpa batas, 30–3650) berlaku untuk laporan live berstatus akhir, dihitung dari `resolved_at`; laporan test 30 hari. SOS yang belum ditutup tidak pernah dihapus. `DELETE /v1/reporters/:ref` (secret key, per mode kunci) menghapus laporan + `emergency_contacts`; audit log menyimpan hash ref, bukan ref polos. Objek MinIO dihapus setelah commit (gagal → objek yatim, data DB tetap terhapus). `webhook_deliveries.report_id` jadi `ON DELETE SET NULL`.
 10. **Re-registrasi setelah ditolak** tidak menghapus akun lama. NIB/email lama diarsipkan agar riwayat review tetap ada untuk audit.
 
 ## Belum dikerjakan (urut prioritas)

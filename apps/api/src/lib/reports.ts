@@ -39,6 +39,7 @@ export function fullReport(r: any) {
     status: r.status,
     status_message: r.status_message,
     message: r.message,
+    complaint: r.complaint_details ?? null,
     location: r.lat == null ? null : { lat: r.lat, lng: r.lng, accuracy_m: r.accuracy_m },
     reporter: { ref: r.reporter_ref, name: r.reporter_name, phone: r.reporter_phone },
     device: r.device,
