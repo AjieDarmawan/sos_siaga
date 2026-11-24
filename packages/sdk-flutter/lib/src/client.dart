@@ -205,7 +205,11 @@ class SiagaSOS {
       Map<String, dynamic>? metadata}) async {
     SosLocation? loc;
     try {
-      loc = await locationProvider?.call().timeout(locationTimeout);
+      // Pengaduan tidak darurat dan form sudah punya kolom lokasi: jangan menahan kirim lama menunggu GPS.
+      final wait = kind == ReportKind.pengaduan && locationTimeout > _complaintLocationTimeout
+          ? _complaintLocationTimeout
+          : locationTimeout;
+      loc = await locationProvider?.call().timeout(wait);
     } catch (_) {
       loc = null; // tanpa lokasi tetap terkirim
     }
@@ -258,10 +262,17 @@ class SiagaSOS {
     try {
       return await _send(item);
     } on SiagaSOSError catch (e) {
-      if (!e.isRetryable) {
+      // Pengaduan yang kena batas kuota (429) tidak diantrikan: retry otomatis tetap ditolak sampai jendela habis
+      // (s.d. 1 jam) dan lampiran ikut menunggu lalu gagal. Tampilkan error langsung.
+      final complaintLimited = kind == ReportKind.pengaduan && e.status == 429;
+      if (!e.isRetryable || complaintLimited) {
         await _removeFromQueue(queued.localId);
         _reports.remove(queued.localId);
         _errorCtl.add(e);
+        if (complaintLimited) {
+          throw SiagaSOSError(e.status, e.code,
+              'Terlalu banyak pengaduan dalam 1 jam terakhir. Coba lagi nanti.');
+        }
         rethrow;
       }
       _queuedCtl.add(queued);
@@ -603,16 +614,24 @@ class SiagaSOS {
     final req = http.StreamedRequest('PUT', Uri.parse(upload['url'] as String))
       ..headers.addAll((upload['headers'] as Map).cast<String, String>())
       ..contentLength = bytes.length;
-    final sending = _http.send(req);
-    const chunk = 64 * 1024;
-    for (var i = 0; i < bytes.length; i += chunk) {
-      req.sink.add(bytes.sublist(i, min(i + chunk, bytes.length)));
-      onProgress?.call(min(i + chunk, bytes.length) / bytes.length);
-      await Future<void>.delayed(Duration.zero);
+    // Error jaringan/timeout saat PUT dibungkus jadi SiagaSOSError supaya UI bisa menampilkan pesannya.
+    http.StreamedResponse res;
+    try {
+      final sending = _http.send(req);
+      const chunk = 64 * 1024;
+      for (var i = 0; i < bytes.length; i += chunk) {
+        req.sink.add(Uint8List.sublistView(bytes, i, min(i + chunk, bytes.length)));
+        onProgress?.call(min(i + chunk, bytes.length) / bytes.length);
+        await Future<void>.delayed(Duration.zero);
+      }
+      await req.sink.close();
+      res = await sending.timeout(const Duration(minutes: 3));
+      await res.stream.drain<void>().timeout(const Duration(seconds: 30));
+    } on TimeoutException {
+      throw const SiagaSOSError(0, 'upload_timeout', 'Unggah terlalu lama, periksa koneksi');
+    } catch (_) {
+      throw const SiagaSOSError(0, 'upload_network_error', 'Koneksi terputus saat mengunggah');
     }
-    await req.sink.close();
-    final res = await sending.timeout(const Duration(minutes: 5));
-    await res.stream.drain<void>();
     if (res.statusCode >= 300)
       throw SiagaSOSError(
           res.statusCode, 'upload_failed', 'Upload gagal (${res.statusCode})');
@@ -647,6 +666,8 @@ class SiagaSOS {
     _sentCtl.close();
     _errorCtl.close();
   }
+
+  static const _complaintLocationTimeout = Duration(seconds: 3);
 
   static final _rnd = Random.secure();
   static String _uuid() {

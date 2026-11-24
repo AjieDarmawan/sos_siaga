@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' show min;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -1155,6 +1156,10 @@ class _ComplaintSheetState extends State<_ComplaintSheet> {
   static const _maxVideos = 2;
   static const _minDescription = 5;
   static const _maxDaysBack = 30;
+  // Sama dengan batas server (config.media.maxBytes): ditolak di awal, bukan setelah laporan terkirim.
+  static const _maxImageBytes = 10 * 1024 * 1024;
+  static const _maxVideoBytes = 60 * 1024 * 1024;
+  static const _uploadConcurrency = 3;
   static const _months = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
 
   late String _category = widget.categories.isNotEmpty ? widget.categories.first : 'lainnya';
@@ -1169,9 +1174,10 @@ class _ComplaintSheetState extends State<_ComplaintSheet> {
   final List<CapturedMedia> _media = [];
   bool _sending = false;
   ActiveReport? _report;
-  double? _upload; // progres unggahan berkas yang sedang berjalan; null = tidak ada
-  int _uploadIndex = 0; // berkas ke-n yang sedang diunggah (1-based)
+  double? _upload; // progres gabungan semua unggahan (0..1); null = tidak ada unggahan berjalan
+  int _uploadTotal = 0;
   int _mediaSent = 0;
+  List<CapturedMedia> _failed = const []; // lampiran yang gagal diunggah, bisa dicoba ulang
   String? _error;
   StreamSubscription<ActiveReport>? _sub;
 
@@ -1227,7 +1233,18 @@ class _ComplaintSheetState extends State<_ComplaintSheet> {
     } finally {
       widget.onCapturing(false);
     }
-    if (m != null && mounted) setState(() => _media.add(m!));
+    if (m == null || !mounted) return;
+    final max = _isVideo(m) ? _maxVideoBytes : _maxImageBytes;
+    if (m.bytes.length > max) {
+      setState(() => _error =
+          '${_isVideo(m!) ? 'Video' : 'Foto'} terlalu besar (${(m.bytes.length / 1024 / 1024).toStringAsFixed(1)} MB). '
+          'Maksimal ${max ~/ (1024 * 1024)} MB.');
+      return;
+    }
+    setState(() {
+      _error = null;
+      _media.add(m!);
+    });
   }
 
   Widget _sourceChooser(ThemeData theme, MediaKind kind) {
@@ -1308,25 +1325,80 @@ class _ComplaintSheetState extends State<_ComplaintSheet> {
       if (!mounted) return;
       setState(() => _report = r);
       if (r.id != null) widget.onSent?.call(r);
-      for (var i = 0; i < media.length; i++) {
-        final m = media[i];
-        setState(() {
-          _uploadIndex = i + 1;
-          _upload = 0;
-        });
-        try {
-          await widget.client.attach(r.localId, m.bytes,
-              contentType: m.contentType, durationS: m.durationS, onProgress: (p) => mounted ? setState(() => _upload = p) : null);
-          if (mounted) setState(() => _mediaSent++);
-        } on SiagaSOSError catch (e) {
-          if (mounted) setState(() => _error = 'Pengaduan terkirim, tetapi lampiran ${i + 1} gagal diunggah: ${e.message}');
-          break;
-        }
-      }
-      if (mounted) setState(() => _upload = null);
+      await _uploadAll(r, media);
     } on SiagaSOSError catch (e) {
       if (mounted) setState(() => _error = e.message);
       widget.onError?.call(e);
+    } catch (e) {
+      final err = SiagaSOSError(0, 'unexpected', 'Gagal mengirim pengaduan: $e');
+      if (mounted) setState(() => _error = err.message);
+      widget.onError?.call(err);
+    } finally {
+      if (mounted) setState(() => _sending = false);
+    }
+  }
+
+  /// Unggah lampiran paralel (maks. [_uploadConcurrency] sekaligus). Satu lampiran gagal tidak menghentikan
+  /// yang lain; yang gagal disimpan di [_failed] untuk tombol "Unggah ulang".
+  Future<void> _uploadAll(ActiveReport r, List<CapturedMedia> media) async {
+    if (media.isEmpty) return;
+    final total = media.fold<int>(0, (n, m) => n + m.bytes.length);
+    final progress = List<double>.filled(media.length, 0);
+    final failed = <CapturedMedia>[];
+    String? firstError;
+    setState(() {
+      _upload = 0;
+      _uploadTotal = media.length;
+      _failed = const [];
+      _error = null;
+    });
+    void report() {
+      if (!mounted) return;
+      var done = 0.0;
+      for (var i = 0; i < media.length; i++) {
+        done += progress[i] * media[i].bytes.length;
+      }
+      setState(() => _upload = total == 0 ? 1 : done / total);
+    }
+
+    var next = 0;
+    Future<void> worker() async {
+      while (next < media.length) {
+        final i = next++;
+        final m = media[i];
+        try {
+          await widget.client.attach(r.localId, m.bytes, contentType: m.contentType, durationS: m.durationS, onProgress: (p) {
+            progress[i] = p;
+            report();
+          });
+          if (mounted) setState(() => _mediaSent++);
+        } catch (e) {
+          failed.add(m);
+          firstError ??= e is SiagaSOSError ? e.message : '$e';
+          progress[i] = 1;
+          report();
+        }
+      }
+    }
+
+    await Future.wait(List.generate(min(_uploadConcurrency, media.length), (_) => worker()));
+    if (!mounted) return;
+    setState(() {
+      _upload = null;
+      _failed = failed;
+      if (failed.isNotEmpty) {
+        _error = 'Pengaduan terkirim, tetapi ${failed.length} dari ${media.length} lampiran gagal diunggah: $firstError';
+      }
+    });
+  }
+
+  Future<void> _retryFailed() async {
+    final r = _report;
+    if (r == null || _failed.isEmpty || _sending) return;
+    final media = List<CapturedMedia>.of(_failed);
+    setState(() => _sending = true);
+    try {
+      await _uploadAll(r, media);
     } finally {
       if (mounted) setState(() => _sending = false);
     }
@@ -1881,11 +1953,15 @@ class _ComplaintSheetState extends State<_ComplaintSheet> {
       ],
       if (_upload != null) ...[
         const SizedBox(height: 16),
-        Text('Mengunggah bukti $_uploadIndex/${_media.length}…', style: theme.textTheme.bodySmall),
+        Text(
+            r.id == null
+                ? 'Menunggu sinyal untuk mengunggah $_uploadTotal bukti…'
+                : 'Mengunggah $_uploadTotal bukti… ${((_upload ?? 0) * 100).round()}%',
+            style: theme.textTheme.bodySmall),
         const SizedBox(height: 8),
         ClipRRect(
           borderRadius: BorderRadius.circular(999),
-          child: LinearProgressIndicator(value: _upload, color: _amber, backgroundColor: _amberSoft, minHeight: 6),
+          child: LinearProgressIndicator(value: r.id == null ? null : _upload, color: _amber, backgroundColor: _amberSoft, minHeight: 6),
         ),
       ] else if (_mediaSent > 0) ...[
         const SizedBox(height: 12),
@@ -1898,6 +1974,21 @@ class _ComplaintSheetState extends State<_ComplaintSheet> {
       if (_error != null) ...[
         const SizedBox(height: 12),
         _notice(theme, _error!, error: true),
+      ],
+      if (_failed.isNotEmpty && _upload == null) ...[
+        const SizedBox(height: 12),
+        OutlinedButton.icon(
+          key: const ValueKey('siagasos-complaint-retry-media'),
+          onPressed: _sending ? null : _retryFailed,
+          icon: const Icon(Icons.refresh_rounded),
+          label: Text('Unggah ulang ${_failed.length} bukti'),
+          style: OutlinedButton.styleFrom(
+            minimumSize: const Size.fromHeight(46),
+            foregroundColor: _amber,
+            side: const BorderSide(color: _amber),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          ),
+        ),
       ],
       const SizedBox(height: 18),
       FilledButton(
