@@ -41,5 +41,6 @@ class MemoryQueueStore implements QueueStore {
   @override
   Future<List<Map<String, dynamic>>> load() async => List.of(_items);
   @override
-  Future<void> save(List<Map<String, dynamic>> items) async => _items = List.of(items);
+  Future<void> save(List<Map<String, dynamic>> items) async =>
+      _items = List.of(items);
 }

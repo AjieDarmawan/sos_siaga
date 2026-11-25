@@ -140,13 +140,18 @@ class RegionArea {
   final Region? village;
 
   bool get isEmpty =>
-      province == null && regency == null && district == null && village == null;
+      province == null &&
+      regency == null &&
+      district == null &&
+      village == null;
 
   /// Ringkasan untuk daftar, dari yang paling spesifik: "Desa, Kecamatan, Kab/Kota".
-  String get label => [village, district, regency, if (regency == null) province]
-      .whereType<Region>()
-      .map((r) => r.name)
-      .join(', ');
+  String get label => [
+        village,
+        district,
+        regency,
+        if (regency == null) province
+      ].whereType<Region>().map((r) => r.name).join(', ');
 
   Map<String, dynamic> toJson() => {
         'province': province?.toJson(),
@@ -191,7 +196,6 @@ const defaultEmergencyContactRoles = <String>[
   'Orang Tua',
   'Petugas Keamanan',
   'Security',
-  'Keluarga',
 ];
 
 /// Jabatan yang wajib memiliki wilayah tugas (provinsi s.d. desa).

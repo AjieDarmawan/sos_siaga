@@ -276,6 +276,8 @@ function SettingsTab({ app, onSaved }: { app: App; onSaved: (a: App) => void }) 
           <div className="card-head"><div><h2>Akses</h2><p>SDK hanya menerima permintaan dari origin web / bundle id yang terdaftar.</p></div></div>
           <div className="card-body">
             <TextField label="Nama app" value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} />
+            {/* Pilar langsung di bawah nama: menentukan ekosistem di Polmas Keamanan & jabatan Nomor Darurat di SDK. */}
+            <PillarSelect value={f.pillar} onChange={(p) => setF({ ...f, pillar: p })} />
             <Field label="Origin web yang diizinkan" htmlFor="origins" hint={'Tekan Enter untuk menambah. "*" hanya berlaku untuk kunci test.'}>
               <ChipList id="origins" value={f.allowed_origins} onChange={(v) => setF({ ...f, allowed_origins: v.map((s) => s.toLowerCase()) })} placeholder="https://app.perusahaan.co.id" validate={originRule} />
             </Field>
@@ -301,13 +303,6 @@ function SettingsTab({ app, onSaved }: { app: App; onSaved: (a: App) => void }) 
                   }}><Key size={14} />Tampilkan webhook secret</Button>}
             </div>
             <p className="small muted">Verifikasi header <code>X-SOS-Signature: t=&lt;unix&gt;,v1=&lt;hex&gt;</code> dengan HMAC-SHA256(secret, "&lt;t&gt;.&lt;raw body&gt;").</p>
-          </div>
-        </div>
-
-        <div className="card">
-          <div className="card-head"><div><h2>Pilar aplikasi</h2><p>Ekosistem laporan di Polmas Keamanan, pilihan jabatan Nomor Darurat di SDK, dan analitik per pilar.</p></div></div>
-          <div className="card-body">
-            <PillarSelect value={f.pillar} onChange={(p) => setF({ ...f, pillar: p })} />
           </div>
         </div>
 

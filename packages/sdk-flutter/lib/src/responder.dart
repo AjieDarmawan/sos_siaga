@@ -15,7 +15,8 @@ const responderPushChannelId = 'siagasos_sos';
 
 /// Hasil minta OTP. [devCode] hanya terisi di kunci test / server dev saat WhatsApp tidak terkirim.
 class ResponderOtp {
-  const ResponderOtp({required this.sent, required this.expiresIn, this.devCode});
+  const ResponderOtp(
+      {required this.sent, required this.expiresIn, this.devCode});
   final bool sent;
   final Duration expiresIn;
   final String? devCode;
@@ -23,14 +24,19 @@ class ResponderOtp {
 
 /// Kasir / outlet yang mencantumkan nomor satpam ini di Nomor Darurat.
 class GuardedReporter {
-  const GuardedReporter({this.reporterName, this.sourceLabel, required this.active});
+  const GuardedReporter(
+      {this.reporterName, this.sourceLabel, required this.active});
   final String? reporterName;
   final String? sourceLabel;
   final bool active;
 }
 
 class ResponderProfile {
-  const ResponderProfile({required this.phone, required this.name, this.appName, this.guarding = const []});
+  const ResponderProfile(
+      {required this.phone,
+      required this.name,
+      this.appName,
+      this.guarding = const []});
   final String phone;
   final String name;
   final String? appName;
@@ -43,7 +49,9 @@ class ResponderProfile {
         guarding: ((j['guarding'] as List?) ?? const [])
             .cast<Map<String, dynamic>>()
             .map((g) => GuardedReporter(
-                reporterName: g['reporter_name'] as String?, sourceLabel: g['source_label'] as String?, active: g['active'] as bool? ?? true))
+                reporterName: g['reporter_name'] as String?,
+                sourceLabel: g['source_label'] as String?,
+                active: g['active'] as bool? ?? true))
             .toList(),
       );
 }
@@ -79,11 +87,15 @@ class ResponderReport {
   final DateTime? resolvedAt;
 
   /// Link Google Maps lokasi terakhir pelapor, null bila tanpa lokasi.
-  Uri? get mapsUri => location == null ? null : Uri.parse('https://www.google.com/maps?q=${location!.lat},${location!.lng}');
+  Uri? get mapsUri => location == null
+      ? null
+      : Uri.parse(
+          'https://www.google.com/maps?q=${location!.lat},${location!.lng}');
 
   factory ResponderReport.fromJson(Map<String, dynamic> j) {
     final loc = j['location'] as Map<String, dynamic>?;
-    DateTime? t(String k) => j[k] == null ? null : DateTime.tryParse(j[k] as String)?.toLocal();
+    DateTime? t(String k) =>
+        j[k] == null ? null : DateTime.tryParse(j[k] as String)?.toLocal();
     return ResponderReport(
       id: j['id'] as String,
       status: sosStatusFromApi(j['status'] as String),
@@ -96,7 +108,10 @@ class ResponderReport {
       message: j['message'] as String?,
       location: loc == null
           ? null
-          : SosLocation(lat: (loc['lat'] as num).toDouble(), lng: (loc['lng'] as num).toDouble(), accuracyM: (loc['accuracy_m'] as num?)?.toDouble()),
+          : SosLocation(
+              lat: (loc['lat'] as num).toDouble(),
+              lng: (loc['lng'] as num).toDouble(),
+              accuracyM: (loc['accuracy_m'] as num?)?.toDouble()),
       acknowledgedAt: t('acknowledged_at'),
       resolvedAt: t('resolved_at'),
     );
@@ -136,26 +151,38 @@ class SiagaSOSResponder {
   String? token;
   bool get isLoggedIn => token != null;
 
-  Future<Map<String, dynamic>> _request(String method, String path, {Object? body, bool auth = true}) async {
+  Future<Map<String, dynamic>> _request(String method, String path,
+      {Object? body, bool auth = true}) async {
     final req = http.Request(method, Uri.parse('$baseUrl$path'))
-      ..headers.addAll({'X-SOS-Key': apiKey, 'X-SOS-Bundle': bundleId, 'Content-Type': 'application/json'});
+      ..headers.addAll({
+        'X-SOS-Key': apiKey,
+        'X-SOS-Bundle': bundleId,
+        'Content-Type': 'application/json'
+      });
     if (auth) {
-      if (token == null) throw const SiagaSOSError(401, 'responder_auth_required', 'Belum login');
+      if (token == null)
+        throw const SiagaSOSError(
+            401, 'responder_auth_required', 'Belum login');
       req.headers['X-SOS-Responder'] = token!;
     }
     if (body != null) req.body = jsonEncode(body);
     http.Response res;
     try {
-      res = await http.Response.fromStream(await _http.send(req).timeout(const Duration(seconds: 20)));
+      res = await http.Response.fromStream(
+          await _http.send(req).timeout(const Duration(seconds: 20)));
     } on TimeoutException {
       throw const SiagaSOSError(0, 'timeout', 'Server tidak merespons');
     } catch (e) {
       throw SiagaSOSError(0, 'network_error', 'Tidak ada koneksi: $e');
     }
-    final Map<String, dynamic> data = res.body.isEmpty ? {} : (jsonDecode(res.body) as Map<String, dynamic>);
+    final Map<String, dynamic> data =
+        res.body.isEmpty ? {} : (jsonDecode(res.body) as Map<String, dynamic>);
     if (res.statusCode >= 400) {
       final err = (data['error'] as Map<String, dynamic>?) ?? const {};
-      throw SiagaSOSError(res.statusCode, err['code'] as String? ?? 'http_error', err['message'] as String? ?? 'HTTP ${res.statusCode}');
+      throw SiagaSOSError(
+          res.statusCode,
+          err['code'] as String? ?? 'http_error',
+          err['message'] as String? ?? 'HTTP ${res.statusCode}');
     }
     return data;
   }
@@ -163,18 +190,24 @@ class SiagaSOSResponder {
   /// Login langsung dengan nomor WhatsApp (tanpa OTP). 404 `responder_not_registered` bila nomor tidak ada di
   /// Nomor Darurat mana pun. [fcmToken] = token FCM perangkat untuk push alarm.
   Future<ResponderProfile> login(String phone, {String? fcmToken}) async {
-    final d = await _request('POST', '/v1/sdk/responder/login', auth: false, body: {
+    final d =
+        await _request('POST', '/v1/sdk/responder/login', auth: false, body: {
       'phone': phone,
-      'device': {'platform': _platform(), if (fcmToken != null && fcmToken.isNotEmpty) 'fcm_token': fcmToken},
+      'device': {
+        'platform': _platform(),
+        if (fcmToken != null && fcmToken.isNotEmpty) 'fcm_token': fcmToken
+      },
     });
     token = d['token'] as String;
     final r = d['responder'] as Map<String, dynamic>;
-    return ResponderProfile(phone: r['phone'] as String, name: r['name'] as String);
+    return ResponderProfile(
+        phone: r['phone'] as String, name: r['name'] as String);
   }
 
   /// Kirim kode OTP ke WhatsApp [phone]. 404 `responder_not_registered` bila nomor tidak ada di Nomor Darurat mana pun.
   Future<ResponderOtp> requestOtp(String phone) async {
-    final d = await _request('POST', '/v1/sdk/responder/otp', body: {'phone': phone}, auth: false);
+    final d = await _request('POST', '/v1/sdk/responder/otp',
+        body: {'phone': phone}, auth: false);
     return ResponderOtp(
       sent: d['sent'] as bool? ?? false,
       expiresIn: Duration(seconds: (d['expires_in_s'] as num?)?.toInt() ?? 300),
@@ -183,32 +216,46 @@ class SiagaSOSResponder {
   }
 
   /// Tukar kode OTP dengan sesi. [fcmToken] = token FCM perangkat untuk push alarm (bisa diisi belakangan lewat [updateDevice]).
-  Future<ResponderProfile> verify(String phone, String code, {String? fcmToken}) async {
-    final d = await _request('POST', '/v1/sdk/responder/verify', auth: false, body: {
+  Future<ResponderProfile> verify(String phone, String code,
+      {String? fcmToken}) async {
+    final d =
+        await _request('POST', '/v1/sdk/responder/verify', auth: false, body: {
       'phone': phone,
       'code': code.trim(),
-      'device': {'platform': _platform(), if (fcmToken != null && fcmToken.isNotEmpty) 'fcm_token': fcmToken},
+      'device': {
+        'platform': _platform(),
+        if (fcmToken != null && fcmToken.isNotEmpty) 'fcm_token': fcmToken
+      },
     });
     token = d['token'] as String;
     final r = d['responder'] as Map<String, dynamic>;
-    return ResponderProfile(phone: r['phone'] as String, name: r['name'] as String);
+    return ResponderProfile(
+        phone: r['phone'] as String, name: r['name'] as String);
   }
 
-  Future<ResponderProfile> me() async => ResponderProfile.fromJson(await _request('GET', '/v1/sdk/responder/me'));
+  Future<ResponderProfile> me() async =>
+      ResponderProfile.fromJson(await _request('GET', '/v1/sdk/responder/me'));
 
   /// Perbarui token FCM (Firebase bisa merotasinya). null = berhenti menerima push di perangkat ini.
   Future<void> updateDevice(String? fcmToken) =>
-      _request('PUT', '/v1/sdk/responder/device', body: {'fcm_token': fcmToken, 'platform': _platform()});
+      _request('PUT', '/v1/sdk/responder/device',
+          body: {'fcm_token': fcmToken, 'platform': _platform()});
 
   /// SOS 7 hari terakhir yang mencantumkan nomor ini, terbaru dulu.
   Future<List<ResponderReport>> reports() async {
     final d = await _request('GET', '/v1/sdk/responder/reports');
-    return ((d['data'] as List?) ?? const []).cast<Map<String, dynamic>>().map(ResponderReport.fromJson).toList();
+    return ((d['data'] as List?) ?? const [])
+        .cast<Map<String, dynamic>>()
+        .map(ResponderReport.fromJson)
+        .toList();
   }
 
-  Future<ResponderReport> report(String id) async => ResponderReport.fromJson(await _request('GET', '/v1/sdk/responder/reports/$id'));
+  Future<ResponderReport> report(String id) async => ResponderReport.fromJson(
+      await _request('GET', '/v1/sdk/responder/reports/$id'));
 
-  Future<ResponderReport> setStatus(String id, ResponderAction action, {String? note}) async => ResponderReport.fromJson(
+  Future<ResponderReport> setStatus(String id, ResponderAction action,
+          {String? note}) async =>
+      ResponderReport.fromJson(
         await _request('POST', '/v1/sdk/responder/reports/$id/status', body: {
           'status': switch (action) {
             ResponderAction.acknowledged => 'acknowledged',
@@ -242,5 +289,8 @@ class SiagaSOSResponder {
 /// Sesi berakhir → app sebaiknya kembali ke layar login satpam.
 extension SiagaSOSErrorResponderX on SiagaSOSError {
   bool get isResponderSessionEnded =>
-      status == 401 && (code == 'responder_not_registered' || code == 'responder_session_invalid' || code == 'responder_auth_required');
+      status == 401 &&
+      (code == 'responder_not_registered' ||
+          code == 'responder_session_invalid' ||
+          code == 'responder_auth_required');
 }
