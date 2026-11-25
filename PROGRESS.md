@@ -94,6 +94,12 @@ Legenda: ✅ selesai & teruji · 🟡 sebagian · ⬜ belum
 - ⬜ Kelola admin platform dari UI (sekarang `pnpm create-admin`)
 - ⬜ Test E2E Playwright di repo (sementara hanya skrip ad-hoc di luar repo)
 
+### Polmas Keamanan (`apps/polmas-keamanan`, API `/v1/pk`) — app penerima Nomor Darurat, lihat [docs/POLMAS_KEAMANAN.md](docs/POLMAS_KEAMANAN.md)
+- ✅ API `/v1/pk` (login nomor+password / buat password dari Nomor Darurat, peran turunan kontak, dashboard, laporan & riwayat, peta, video, berita, detail + tanggapan, inbox panggilan, notifikasi, analisa, evaluasi, demo SOS), migrasi 011 + 012, worker kecamatan dari GPS. Smoke +20 cek
+- ✅ App Flutter: splash Merah Putih, login 2 langkah + login cepat, konfirmasi wilayah GPS, Beranda 5 tab, Laporan (daftar/peta), Riwayat, Analisa+Evaluasi (+PDF), Profil, layar panggilan SOS, detail + aksi. `flutter analyze` bersih, 6 test, APK debug ter-build
+- 🟡 Belum diuji di HP (butuh `pnpm seed:pk` + `adb reverse`), belum dicek visual
+- ⬜ Push FCM saat app tertutup, antrean offline (FR-13), cache peta/tile produksi, ekspor gambar (FR-21 baru PDF)
+
 ### Infra / ops
 - ✅ `docker-compose.yml` (postgres :5455 + role `siagasos_app`, redis :6380)
 - ⬜ CI (ditunda atas permintaan user 2026-11-23)
@@ -280,3 +286,22 @@ pnpm -r typecheck
 - **Belum diuji visual**: emulator `Pixel_7_API_35` gagal start ("No initial system image" untuk image ps16k). `adb install` tanpa `-s` masuk ke HP fisik yang tersambung USB (Redmi 24117RN76O) — app sample terpasang di sana; ke depan selalu pakai `adb -s <serial>`.
 
 - Uji di HP (adb reverse): menu, keterangan status, titik SOS aktif tampil benar; SOS test dari HP masuk API (platform android, Android 15). Atas permintaan user, default `Options.holdSeconds = 0` (sekali ketuk seperti tata-warga). Flutter masih default ikut portal (3 dtk) kecuali diberi `holdSeconds: 0`.
+
+### 2026-11-25 · Input Nomor: dropdown status + wilayah Bhabinkamtibmas (provinsi → desa, isi otomatis dari lokasi)
+- Permintaan user (gambar Polmas Lingkungan/Kantor/UMKM/Sekolah/Komunitas): status kontak dipilih dari dropdown (RT, RW, Satpam, Bhabinkamtibmas, Polsek, Koordinator/Pimpinan, Owner, Guru, Orang Tua, Petugas Keamanan, Security, Keluarga, + Lainnya isian bebas). Bhabinkamtibmas wajib wilayah tugas provinsi → kab/kota → kecamatan → desa, terisi otomatis dari lokasi, tetap bisa dipilih ulang.
+- **API**: migrasi `009_wilayah.sql` (tabel referensi `wilayah`, 91.599 baris dari seed tata-warga-be, tanpa RLS) + `010_contact_area.sql` (`emergency_contacts.area` jsonb). `GET /v1/sdk/regions[?parent=]`, `GET /v1/sdk/regions/reverse?lat&lng` (`src/lib/regions.ts`, `src/routes/regions.ts`; Nominatim, env `GEOCODER_URL` / `GEOCODER_USER_AGENT`, cache memori 24 jam). `PUT/GET /v1/sdk/contacts` menerima/mengembalikan `area`. Diuji live: Bandung/Coblong/Lebak Siliwangi, Jakarta Pusat/Gambir, Yogyakarta/Danurejan, Denpasar Barat, Bogor, Surabaya semua cocok sampai desa; Kab. Bandung (Pangauban ada 2) berhenti di kabupaten.
+- Smoke: helper `call` menunggu jendela menit berikutnya bila kena limit umum `rate_limited` ≤ 60 dtk (smoke kini > 60 panggilan SDK/menit dari satu IP). **114 cek lolos** (+7 wilayah), `pnpm -r typecheck` lolos.
+- **Flutter SDK**: `Region`, `RegionArea`, `EmergencyContact.area`, `defaultEmergencyContactRoles`, `defaultAreaContactRoles`; `SiagaSOS.regions()` (cache) + `regionFromLocation()` (pakai `locationProvider`). `SOSFloatingButton(contactRoles:, areaContactRoles:)`. Lembar Input Nomor: dropdown Status (wajib; `DropdownButton` dalam `InputDecorator` agar jalan di Flutter 3.32 app host), bagian "Wilayah tugas" + tombol **Lokasi saya**, pemilih wilayah inline dengan pencarian; ganti level atas mengosongkan level bawah.
+- Perbaikan: Navigator lokal lembar dibungkus `HeroControllerScope.none` (assert "HeroController can not be shared by multiple Navigators" yang membuat 2 tes lama gagal).
+- Tes Flutter **20 lolos / 1 gagal**: yang gagal tes pengaduan lama (`occurred_at` kini selalu dikirim sejak 05cc770, ekspektasi tes belum diperbarui), bukan dari fitur ini.
+- ⬜ Android native (`SOSFloatingButton.kt`) belum punya dropdown status & wilayah. ⬜ Deploy migrasi 009 + 010 ke `sos.tip2.co`.
+
+### 2026-11-25 · Polmas Keamanan: app penerima Nomor Darurat (Flutter + API `/v1/pk`)
+- Permintaan user: app Flutter baru dari PRD "Polmas Keamanan" (@Ruki), DB sama dengan siagasos. **Konsep ditegaskan user**: app ini untuk pemilik nomor di menu Nomor Darurat SDK (commerceOS: pemilik toko, satpam; tata-warga: RT/RW, satpam, Bhabinkamtibmas). Nomor itu login → melihat & menanggapi SOS kios/warga yang mencantumkan nomornya. Dicatat di [docs/POLMAS_KEAMANAN.md](docs/POLMAS_KEAMANAN.md) + memori.
+- API: migrasi `011_polmas_keamanan.sql` (`apps.polmas_source`, kolom wilayah & `verified_at` di `reports`, `pk_users`, `pk_user_roles`, `pk_sessions`, `pk_responses` RLS tenant, `pk_call_dismissals`, `pk_news`, `pk_audit`, fungsi `pk_norm_phone`) dan `012_polmas_penerima.sql` (peran `penerima`, `from_contact`, `created_via`). `src/lib/polmas.ts`, `src/routes/polmas.ts` (dipasang sebelum `/v1`), worker kecamatan (Nominatim, 5 dtk). Skrip `pnpm seed:pk` (5 app sumber demo, Nomor Darurat demo, ±150 laporan 35 hari di Bogor Tengah, video/foto ffmpeg ke MinIO, berita) dan `pnpm pk:user`.
+- Bug ditemukan smoke: daftar `scope=me` mengirim parameter `$3` yang tidak dirujuk → Postgres menolak. Diperbaiki.
+- Flutter `apps/polmas-keamanan` (`id.polmas.polmas_keamanan`): design token PRD, animasi §7.4 (hormati kurangi gerakan), mode gelap, a11y label Indonesia. Palet grafik divalidasi skrip dataviz (navy gagal lightness band sebagai seri → seri Laporan biru slot-1). `google_fonts` dipatok 8.x (9.x tidak cocok `TextTheme` Flutter 3.47).
+- Teruji: `pnpm smoke` **134 cek** (+20 PK), `pnpm -r typecheck`, `flutter analyze` bersih, `flutter test` 6/6, `flutter build apk --debug` ✅.
+- **Belum**: `pnpm seed:pk` belum dijalankan di DB dev (izin eksekusi ditolak otomatis; jalankan manual), uji di HP, push FCM, offline. Jebakan: heredoc berisi teks SQL `DELETE`/`DROP` di Bash ditolak pemeriksa keamanan; tulis file lewat Write/Edit.
+
+- UI disamakan dengan mockup user (2 gambar): logo perisai sirene+pin, splash bendera + kota, login header gelombang merah + ilustrasi rumah/bendera + toast "Berhasil keluar", Profil (avatar inisial, toggle Notifikasi/Mode gelap/Kurangi gerakan, Bantuan, Tentang, dialog Keluar), Beranda (sapaan, kartu berwarna, tab merah, kartu foto+jarak), Konfirmasi Wilayah, Detail (langkah Status Penanganan, 3 tombol aksi), Riwayat (segmen + filter), Analisa (persen vs periode lalu, grafik merah), SOS Masuk. API: `thumb_url` di daftar, `previous_totals` di analisa, `PATCH /v1/pk/me {name}`. Akun uji `pnpm pk:user` 0812-3456-7890 Rina Nuraini (warga, demo1234). `flutter analyze` bersih, test 6/6. Belum dicek di HP (build+install ±5 mnt dihentikan user).

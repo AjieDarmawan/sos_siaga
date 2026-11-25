@@ -25,6 +25,8 @@ export const config = {
   webhookWorker: (process.env.WEBHOOK_WORKER ?? 'true') === 'true',
   /** Pembersihan berkala (media pending yang tidak pernah selesai, OTP kedaluwarsa). Aman di banyak instance (advisory lock). */
   maintenanceWorker: (process.env.MAINTENANCE_WORKER ?? 'true') === 'true',
+  /** Worker Polmas Keamanan: isi kecamatan/kelurahan laporan dari GPS (reverse geocode, async). */
+  polmasWorker: (process.env.POLMAS_WORKER ?? 'true') === 'true',
 
   /** Object storage S3-compatible (MinIO) untuk media laporan. Kosong = fitur media nonaktif (503 media_disabled). */
   s3: {
@@ -44,6 +46,13 @@ export const config = {
     /** Lampiran masih boleh ditambah sampai N menit setelah laporan mencapai status akhir. */
     graceAfterCloseMin: 30,
   },
+
+  /**
+   * Reverse geocode untuk isi otomatis wilayah Nomor Darurat (GET /v1/sdk/regions/reverse). API kompatibel
+   * Nominatim; kosongkan GEOCODER_URL untuk mematikan. Koordinat dibulatkan ±100 m sebelum dikirim.
+   */
+  geocoderUrl: process.env.GEOCODER_URL ?? 'https://nominatim.openstreetmap.org/reverse',
+  geocoderUserAgent: process.env.GEOCODER_USER_AGENT || 'SiagaSOS-API/0.1 (+https://siagasos.id)',
 
   // Aturan bisnis (PRD). Bisa dipindah ke tabel plans saat billing masuk.
   testReportsPerDay: 50,

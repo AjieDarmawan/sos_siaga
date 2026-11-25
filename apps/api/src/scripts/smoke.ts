@@ -26,6 +26,11 @@ async function call(method: string, path: string, opts: { token?: string; body?:
   const text = await res.text();
   let data: any = text;
   try { data = JSON.parse(text); } catch { /* bukan JSON */ }
+  // Smoke memanggil /v1/sdk lebih dari 60×/menit dari satu IP: kena limit umum per menit → tunggu jendela berikutnya, ulang sekali.
+  if (res.status === 429 && data?.error?.code === 'rate_limited' && data.error.details?.window_s <= 60 && !opts.form) {
+    await new Promise((r) => setTimeout(r, 60_500 - (Date.now() % 60_000)));
+    return call(method, path, opts);
+  }
   return { status: res.status, data, headers: res.headers };
 }
 
@@ -289,6 +294,24 @@ async function main() {
   ok(putC.status === 200 && putC.data.count === 2, 'Nomor Darurat disinkronkan ke server');
   const getC = await call('GET', '/v1/sdk/contacts?reporter_ref=kasir_rsp', { headers: sdkH(pkLive) });
   ok(getC.data.contacts.length === 2 && getC.data.contacts[0].phone === guardPhone, 'Nomor Darurat dibaca ulang (62xx, aktif dulu)');
+  // ---------------------------------------------------------------- wilayah (isian Bhabinkamtibmas)
+  const prov = await call('GET', '/v1/sdk/regions', { headers: sdkH(pkLive) });
+  ok(prov.status === 200 && prov.data.regions.length >= 38 && prov.data.regions.some((r: { code: string; name: string }) => r.code === '32' && r.name === 'Jawa Barat'), 'daftar provinsi');
+  const kec = await call('GET', '/v1/sdk/regions?parent=32.73', { headers: sdkH(pkLive) });
+  ok(kec.status === 200 && kec.data.regions.some((r: { code: string }) => r.code === '32.73.02') && kec.data.regions.every((r: { code: string }) => /^32\.73\.\d{2}$/.test(r.code)), 'kecamatan Kota Bandung (anak langsung saja)');
+  const badParent = await call('GET', '/v1/sdk/regions?parent=x;1', { headers: sdkH(pkLive) });
+  ok(badParent.status === 422, 'kode induk tidak valid ditolak');
+  const badRev = await call('GET', '/v1/sdk/regions/reverse?lat=200&lng=0', { headers: sdkH(pkLive) });
+  ok(badRev.status === 422, 'reverse geocode: koordinat tidak valid ditolak');
+  const area = { province: { code: '32', name: 'Jawa Barat' }, regency: { code: '32.73', name: 'Kota Bandung' }, district: { code: '32.73.02', name: 'Coblong' }, village: null };
+  const putArea = await call('PUT', '/v1/sdk/contacts', { headers: sdkH(pkLive), body: { reporter: { ref: 'kasir_area' },
+    contacts: [{ name: 'Aiptu Budi', role: 'Bhabinkamtibmas', phone: '0800 1212 3434', active: true, area }] } });
+  const getArea = await call('GET', '/v1/sdk/contacts?reporter_ref=kasir_area', { headers: sdkH(pkLive) });
+  ok(putArea.status === 200 && getArea.data.contacts[0].area?.district?.code === '32.73.02', 'wilayah tugas kontak disimpan & dibaca ulang');
+  const badArea = await call('PUT', '/v1/sdk/contacts', { headers: sdkH(pkLive), body: { reporter: { ref: 'kasir_area' },
+    contacts: [{ name: 'X', phone: '0800 1212 3434', area: { province: { code: 'abc', name: 'X' } } }] } });
+  ok(badArea.status === 422, 'kode wilayah kontak tidak valid ditolak');
+  await call('PUT', '/v1/sdk/contacts', { headers: sdkH(pkLive), body: { reporter: { ref: 'kasir_area' }, contacts: [] } });
   const otp = await call('POST', '/v1/sdk/responder/otp', { headers: sdkH(pkLive), body: { phone: guardPhone } });
   ok(otp.status === 200 && /^\d{6}$/.test(otp.data.dev_code) && otp.data.sent === false, 'OTP satpam dibuat (nomor uji 0800: tidak dikirim WA, kode dev)');
   const badOtp = await call('POST', '/v1/sdk/responder/verify', { headers: sdkH(pkLive), body: { phone: guardPhone, code: otp.data.dev_code === '000000' ? '111111' : '000000' } });
@@ -327,6 +350,64 @@ async function main() {
   await call('PUT', '/v1/sdk/contacts', { headers: sdkH(pkLive), body: { reporter: { ref: 'kasir_rsp' }, contacts: [] } });
   const gone = await call('GET', '/v1/sdk/responder/me', { headers: rH });
   ok(gone.status === 401 && gone.data.error.code === 'responder_not_registered', 'nomor dihapus dari Nomor Darurat → sesi satpam berakhir');
+
+  // ---------------------------------------------------------------- Polmas Keamanan: app penerima Nomor Darurat
+  const pkPhone = `62800${String(Math.floor(Math.random() * 1e7)).padStart(7, '0')}`;
+  const pkNo = await call('POST', '/v1/pk/auth/check', { body: { phone: pkPhone } });
+  ok(pkNo.status === 404 && pkNo.data.error.code === 'phone_not_registered', 'PK: nomor di luar Nomor Darurat ditolak');
+  await call('PUT', '/v1/sdk/contacts', { headers: sdkH(pkLive), body: { reporter: { ref: 'kasir_pk', name: 'Kasir PK' },
+    contacts: [{ name: 'Pak Joko', role: 'Satpam', phone: pkPhone, active: true }] } });
+  const pkChk = await call('POST', '/v1/pk/auth/check', { body: { phone: '0' + pkPhone.slice(2) } });
+  ok(pkChk.status === 200 && pkChk.data.has_password === false && pkChk.data.contacts[0]?.role === 'Satpam',
+    'PK: nomor dari Nomor Darurat dikenali (format 08…), login pertama = buat password');
+  const pkShort = await call('POST', '/v1/pk/auth/setup', { body: { phone: pkPhone, password: 'pendek' } });
+  ok(pkShort.status === 422, 'PK: password < 8 ditolak');
+  const pkSetup = await call('POST', '/v1/pk/auth/setup', { body: { phone: pkPhone, password: 'satpam-rahasia-1', device: { platform: 'android' } } });
+  ok(pkSetup.status === 201 && /^pks_/.test(pkSetup.data.token) && pkSetup.data.me.role.role === 'penerima' && pkSetup.data.me.can_respond === true,
+    'PK: buat password → sesi, peran penerima (turunan Nomor Darurat)');
+  const pkAgain = await call('POST', '/v1/pk/auth/setup', { body: { phone: pkPhone, password: 'orang-lain-123' } });
+  ok(pkAgain.status === 409, 'PK: nomor yang sudah punya password tidak bisa diklaim ulang');
+  const pkBad = await call('POST', '/v1/pk/auth/login', { body: { phone: pkPhone, password: 'salah-password' } });
+  ok(pkBad.status === 401 && pkBad.data.error.code === 'invalid_password', 'PK: password salah ditolak');
+  const pkLogin = await call('POST', '/v1/pk/auth/login', { body: { phone: pkPhone, password: 'satpam-rahasia-1' } });
+  ok(pkLogin.status === 201, 'PK: login nomor + password');
+  const pkT = pkLogin.data.token as string;
+  const pkAnon = await call('GET', '/v1/pk/me');
+  ok(pkAnon.status === 401, 'PK: tanpa token ditolak');
+  const pkSos = await call('POST', '/v1/sdk/reports', { headers: sdkH(pkLive, { 'Idempotency-Key': uuid() }),
+    body: { ...payload, reporter: { ref: 'kasir_pk', name: 'Kasir PK', phone: '0800 7777 8888' }, emergency_contacts: [{ name: 'Pak Joko (Satpam)', phone: pkPhone }] } });
+  ok(pkSos.status === 201, 'PK: kios mengirim SOS yang memanggil nomor satpam');
+  const inbox = await call('GET', '/v1/pk/inbox', { token: pkT });
+  ok(inbox.status === 200 && inbox.data.calls.some((c: any) => c.id === pkSos.data.id), 'PK: SOS muncul sebagai panggilan masuk (app sumber tanpa polmas_source)');
+  const pkOther = await call('GET', `/v1/pk/reports/${liveRep.data.id}`, { token: pkT });
+  ok(pkOther.status === 404, 'PK: SOS yang tidak memanggil nomornya → 404');
+  const pkDet = await call('GET', `/v1/pk/reports/${pkSos.data.id}`, { token: pkT });
+  ok(pkDet.status === 200 && pkDet.data.actions.includes('terima') && pkDet.data.reporter.phone === '0800 7777 8888' && pkDet.data.is_contact === true,
+    'PK: detail lengkap (nomor pelapor terlihat oleh penerima) + aksi tersedia');
+  const pkAck = await call('POST', `/v1/pk/reports/${pkSos.data.id}/responses`, { token: pkT, body: { action: 'terima' } });
+  ok(pkAck.status === 201 && pkAck.data.status === 'diterima', 'PK: satpam menerima SOS');
+  const sdkSt = await call('GET', `/v1/sdk/reports/${pkSos.data.id}`, { headers: sdkH(pkLive) });
+  ok(sdkSt.data.status === 'acknowledged' && /Pak Joko/.test(sdkSt.data.status_message ?? ''), 'PK: status & pesan kembali ke SDK pelapor');
+  const pkCall = await call('POST', `/v1/pk/reports/${pkSos.data.id}/call`, { token: pkT, body: { action: 'accepted' } });
+  const inbox2 = await call('GET', '/v1/pk/inbox', { token: pkT });
+  ok(pkCall.status === 204 && !inbox2.data.calls.some((c: any) => c.id === pkSos.data.id), 'PK: panggilan yang dijawab tidak berdering lagi');
+  await call('POST', `/v1/pk/reports/${pkSos.data.id}/responses`, { token: pkT, body: { action: 'tangani', note: 'Menuju kios' } });
+  const pkDone = await call('POST', `/v1/pk/reports/${pkSos.data.id}/responses`, { token: pkT, body: { action: 'selesai' } });
+  const pkLate = await call('POST', `/v1/pk/reports/${pkSos.data.id}/responses`, { token: pkT, body: { action: 'catatan', note: 'x' } });
+  ok(pkDone.data.status === 'selesai' && pkLate.status === 409, 'PK: tangani → selesai, laporan tertutup tidak bisa ditanggapi lagi');
+  const pkTl = await call('GET', `/portal/reports/${pkSos.data.id}`, { token: A.token });
+  ok(pkTl.data.timeline.filter((e: any) => e.actor_kind === 'responder').length >= 3, 'PK: tanggapan tercatat di timeline dashboard tenant');
+  const pkHist = await call('GET', '/v1/pk/history?scope=me', { token: pkT });
+  ok(pkHist.data.items.some((r: any) => r.id === pkSos.data.id && r.last_response?.action === 'selesai'), 'PK: riwayat Saya memuat SOS + tanggapan terakhir');
+  const pkAn = await call('GET', '/v1/pk/analytics/summary?period=7d', { token: pkT });
+  const pkEv = await call('GET', '/v1/pk/analytics/evaluation?period=7d', { token: pkT });
+  ok(pkAn.status === 200 && pkAn.data.trend.length === 7 && pkAn.data.totals.sos >= 1 && pkEv.status === 200 && pkEv.data.current.selesai >= 1,
+    'PK: analisa (tren 7 hari) & evaluasi menghitung SOS penerima');
+  await call('PUT', '/v1/sdk/contacts', { headers: sdkH(pkLive), body: { reporter: { ref: 'kasir_pk' }, contacts: [] } });
+  await call('POST', '/v1/pk/auth/logout', { token: pkT });
+  await call('POST', '/v1/pk/auth/logout', { token: pkSetup.data.token });
+  const pkGone = await call('POST', '/v1/pk/auth/login', { body: { phone: pkPhone, password: 'satpam-rahasia-1' } });
+  ok(pkGone.status === 403 && pkGone.data.error.code === 'no_role', 'PK: nomor dihapus dari Nomor Darurat → tidak bisa login lagi');
 
   for (let i = 0; i < 2; i++) await call('POST', '/v1/sdk/reports', { headers: sdkH(pkLive, { 'Idempotency-Key': uuid() }), body: { reporter: { ref: 'user_999' } } });
   const spam = await call('POST', '/v1/sdk/reports', { headers: sdkH(pkLive, { 'Idempotency-Key': uuid() }), body: { reporter: { ref: 'user_999' } } });

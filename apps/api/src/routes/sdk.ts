@@ -11,6 +11,7 @@ import { dispatchSosWhatsApp } from '../lib/sosRecipients.js';
 import { config } from '../config.js';
 import { dispatchSosPush } from '../lib/responders.js';
 import { contactsRouter, responderRouter } from './responder.js';
+import { regionsRouter } from './regions.js';
 import { completeMediaUpload, createMediaSchema, createMediaUpload, listReadyMedia } from '../lib/media.js';
 
 /** /v1/sdk — dipanggil @siagasos/js dan SDK native dengan publishable key. */
@@ -28,6 +29,8 @@ sdkRouter.use(async (req, _res, next) => {
 // Nomor Darurat pelapor (sinkron dari perangkat) + login & kerja satpam (OTP WA, push FCM).
 sdkRouter.use('/contacts', contactsRouter);
 sdkRouter.use('/responder', responderRouter);
+// Referensi wilayah (provinsi → desa) + reverse geocode untuk isian wilayah tugas Nomor Darurat.
+sdkRouter.use('/regions', regionsRouter);
 
 sdkRouter.get('/config', (req, res) => {
   const k = req.key!;

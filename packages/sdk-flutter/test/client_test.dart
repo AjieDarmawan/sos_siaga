@@ -65,6 +65,22 @@ class FakeServer {
       return http.Response(jsonEncode({'ok': true, 'count': serverContacts.length}), 200);
     }
     if (p == '/v1/sdk/contacts') return http.Response(jsonEncode({'contacts': serverContacts}), 200);
+    if (p == '/v1/sdk/regions/reverse') {
+      return http.Response(jsonEncode({'province': {'code': '32', 'name': 'Jawa Barat'}, 'regency': {'code': '32.73', 'name': 'Kota Bandung'},
+        'district': {'code': '32.73.02', 'name': 'Coblong'}, 'village': {'code': '32.73.02.1006', 'name': 'Lebak Siliwangi'}}), 200);
+    }
+    if (p == '/v1/sdk/regions') {
+      final parent = req.url.queryParameters['parent'];
+      final regions = switch (parent) {
+        null => [{'code': '31', 'name': 'Daerah Khusus Ibukota Jakarta'}, {'code': '32', 'name': 'Jawa Barat'}],
+        '32' => [{'code': '32.04', 'name': 'Kabupaten Bandung'}, {'code': '32.73', 'name': 'Kota Bandung'}],
+        '32.73' => [{'code': '32.73.01', 'name': 'Sukasari'}, {'code': '32.73.02', 'name': 'Coblong'}],
+        '32.73.01' => [{'code': '32.73.01.1001', 'name': 'Sukarasa'}, {'code': '32.73.01.1002', 'name': 'Gegerkalong'}],
+        '32.73.02' => [{'code': '32.73.02.1006', 'name': 'Lebak Siliwangi'}],
+        _ => <Map<String, String>>[],
+      };
+      return http.Response(jsonEncode({'parent': parent, 'regions': regions}), 200);
+    }
     if (p == '/v1/sdk/reports/bad' ) return http.Response(jsonEncode({'error': {'code': 'invalid_api_key', 'message': 'x'}}), 401);
     return http.Response('{}', 404);
   });

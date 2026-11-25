@@ -111,6 +111,8 @@ class SOSFloatingButton extends StatefulWidget {
     this.tkpPrompt = true,
     this.tkpSeconds = 5,
     this.emergencyContacts = true,
+    this.contactRoles = defaultEmergencyContactRoles,
+    this.areaContactRoles = defaultAreaContactRoles,
     this.onOpenUrl,
     this.videoPlayerBuilder,
   });
@@ -196,6 +198,13 @@ class SOSFloatingButton extends StatefulWidget {
 
   /// Menu "Nomor darurat" (Laporan → Nomor darurat): maks. 3 nomor WhatsApp pribadi yang ikut dikabari saat SOS.
   final bool emergencyContacts;
+
+  /// Pilihan dropdown "Status" di Input Nomor (mis. RT, RW, Satpam, Bhabinkamtibmas). "Lainnya" selalu ditambahkan
+  /// di akhir untuk isian bebas.
+  final List<String> contactRoles;
+
+  /// Status yang wajib mengisi wilayah tugas (provinsi → desa), diisi otomatis dari lokasi bila bisa.
+  final Set<String> areaContactRoles;
 
   /// Membuka tautan di luar app (peta lokasi) dari detail riwayat, mis. url_launcher.
   /// Null = tombol "Buka peta" disembunyikan.
@@ -355,14 +364,18 @@ class _SOSFloatingButtonState extends State<SOSFloatingButton>
       // Lembar dipasang di atas Navigator app (MaterialApp.builder), jadi tidak ada Navigator di atasnya.
       // showDatePicker/showTimePicker butuh Navigator → beri Navigator lokal (transparan, tanpa animasi)
       // supaya dialog tanggal/jam bisa dibuka dari dalam lembar.
+      // HeroControllerScope.none: HeroController milik MaterialApp sudah dipakai Navigator app; dibagi ke
+      // Navigator kedua → assert "A HeroController can not be shared by multiple Navigators".
       _sheet = OverlayEntry(
-          builder: (_) => Navigator(
-                key: _sheetNavKey,
-                onGenerateRoute: (_) => PageRouteBuilder<void>(
-                  opaque: false,
-                  transitionDuration: Duration.zero,
-                  reverseTransitionDuration: Duration.zero,
-                  pageBuilder: (_, __, ___) => builder(),
+          builder: (_) => HeroControllerScope.none(
+                child: Navigator(
+                  key: _sheetNavKey,
+                  onGenerateRoute: (_) => PageRouteBuilder<void>(
+                    opaque: false,
+                    transitionDuration: Duration.zero,
+                    reverseTransitionDuration: Duration.zero,
+                    pageBuilder: (_, __, ___) => builder(),
+                  ),
                 ),
               ));
     });
@@ -404,6 +417,8 @@ class _SOSFloatingButtonState extends State<SOSFloatingButton>
   void _openContacts() => _openSheet(() => _ContactsSheet(
       client: widget.client,
       title: widget.contactsLabel,
+      roles: widget.contactRoles,
+      areaRoles: widget.areaContactRoles,
       onClose: _closeSheet));
 
   void _closeSheet() {
@@ -2969,25 +2984,62 @@ class _TkpSheetState extends State<_TkpSheet> {
   }
 }
 
-/// "Nomor darurat": maks. 3 nomor WhatsApp pribadi (keluarga, rekan) yang ikut dikabari setiap SOS dari perangkat ini.
+/// "Input Nomor": nomor WhatsApp (keluarga, RT/RW, satpam, Bhabinkamtibmas, …) yang ikut dikabari setiap SOS dari
+/// perangkat ini. Status dipilih dari dropdown; status berwilayah (Bhabinkamtibmas) mengisi provinsi → desa,
+/// otomatis dari lokasi bila bisa, tetap bisa dipilih ulang.
 class _ContactsSheet extends StatefulWidget {
   const _ContactsSheet(
-      {required this.client, required this.title, required this.onClose});
+      {required this.client,
+      required this.title,
+      required this.roles,
+      required this.areaRoles,
+      required this.onClose});
   final SiagaSOS client;
   final String title;
+  final List<String> roles;
+  final Set<String> areaRoles;
   final VoidCallback onClose;
 
   @override
   State<_ContactsSheet> createState() => _ContactsSheetState();
 }
 
+/// Level wilayah di isian: 0 provinsi, 1 kabupaten/kota, 2 kecamatan, 3 desa/kelurahan.
+const _areaLevelLabels = ['Provinsi', 'Kabupaten/Kota', 'Kecamatan', 'Desa/Kelurahan'];
+
 class _ContactsSheetState extends State<_ContactsSheet> {
   static const _green = Color(0xFF16A34A);
+  static const _other = 'Lainnya';
   List<EmergencyContact>? _items;
   final _name = TextEditingController();
   final _phone = TextEditingController();
+  final _customRole = TextEditingController();
+  String? _role;
   String? _error;
   bool _saving = false;
+
+  /// Wilayah terpilih per level (provinsi, kab/kota, kecamatan, desa).
+  final List<Region?> _area = List.filled(4, null);
+  bool _locating = false;
+  String? _areaNote;
+
+  /// Level yang sedang dipilih di daftar (null = form).
+  int? _picking;
+
+  List<String> get _roleOptions => [
+        for (final r in widget.roles)
+          if (r != _other) r,
+        _other
+      ];
+  bool get _needsArea => _role != null && widget.areaRoles.contains(_role);
+  String? get _roleValue {
+    if (_role == null) return null;
+    if (_role == _other) {
+      final t = _customRole.text.trim();
+      return t.isEmpty ? null : t;
+    }
+    return _role;
+  }
 
   @override
   void initState() {
@@ -2997,12 +3049,14 @@ class _ContactsSheetState extends State<_ContactsSheet> {
         .then((l) => mounted ? setState(() => _items = l) : null);
     _name.addListener(() => setState(() {}));
     _phone.addListener(() => setState(() {}));
+    _customRole.addListener(() => setState(() {}));
   }
 
   @override
   void dispose() {
     _name.dispose();
     _phone.dispose();
+    _customRole.dispose();
     super.dispose();
   }
 
@@ -3022,6 +3076,52 @@ class _ContactsSheetState extends State<_ContactsSheet> {
     }
   }
 
+  void _setRole(String? r) {
+    setState(() {
+      _role = r;
+      _error = null;
+    });
+    // Pertama kali memilih status berwilayah: coba isi otomatis dari lokasi.
+    if (_needsArea && _area.every((a) => a == null)) _locate();
+  }
+
+  Future<void> _locate() async {
+    setState(() {
+      _locating = true;
+      _areaNote = null;
+    });
+    final a = await widget.client.regionFromLocation();
+    if (!mounted) return;
+    setState(() {
+      _locating = false;
+      if (a == null || a.province == null) {
+        _areaNote = 'Lokasi belum bisa dibaca. Pilih wilayah secara manual.';
+        return;
+      }
+      _area
+        ..[0] = a.province
+        ..[1] = a.regency
+        ..[2] = a.district
+        ..[3] = a.village;
+      _areaNote = a.village == null
+          ? 'Sebagian wilayah terisi dari lokasi. Lengkapi sisanya.'
+          : 'Terisi dari lokasi kamu. Ketuk untuk mengubah.';
+    });
+  }
+
+  void _pick(int level, Region r) {
+    setState(() {
+      if (_area[level] != r) {
+        _area[level] = r;
+        for (var i = level + 1; i < 4; i++) {
+          _area[i] = null;
+        }
+      }
+      _picking = null;
+      _areaNote = null;
+    });
+  }
+
   Future<void> _add() async {
     final items = _items ?? const [];
     final phone = toWhatsAppNumber(_phone.text);
@@ -3034,18 +3134,319 @@ class _ContactsSheetState extends State<_ContactsSheet> {
       setState(() => _error = 'Nomor ini sudah ada di daftar.');
       return;
     }
+    if (_role == null) {
+      setState(() => _error = 'Pilih status kontak.');
+      return;
+    }
+    if (_role == _other && _roleValue == null) {
+      setState(() => _error = 'Tulis status kontak (mis. Ketua Paguyuban).');
+      return;
+    }
+    if (_needsArea && _area.any((a) => a == null)) {
+      setState(() => _error =
+          'Lengkapi wilayah tugas $_role (provinsi sampai desa/kelurahan).');
+      return;
+    }
     FocusScope.of(context).unfocus();
+    final role = _roleValue;
     await _save([
       ...items,
       EmergencyContact(
-          name:
-              _name.text.trim().isEmpty ? 'Kontak darurat' : _name.text.trim(),
-          phone: phone)
+          name: _name.text.trim().isEmpty
+              ? (role ?? 'Kontak darurat')
+              : _name.text.trim(),
+          phone: phone,
+          role: role,
+          area: _needsArea
+              ? RegionArea(
+                  province: _area[0],
+                  regency: _area[1],
+                  district: _area[2],
+                  village: _area[3])
+              : null)
     ]);
-    if (_error == null) {
+    if (_error == null && mounted) {
       _name.clear();
       _phone.clear();
+      _customRole.clear();
+      setState(() {
+        _role = null;
+        _area.fillRange(0, 4, null);
+        _areaNote = null;
+      });
     }
+  }
+
+  InputDecoration _deco(String label, {String? hint, Widget? suffix}) =>
+      InputDecoration(
+        labelText: label,
+        hintText: hint,
+        suffixIcon: suffix,
+        border:
+            OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
+      );
+
+  Widget _areaField(ThemeData theme, int level) {
+    final enabled = !_saving && (level == 0 || _area[level - 1] != null);
+    final value = _area[level];
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: InkWell(
+        key: ValueKey('siagasos-contact-area-$level'),
+        borderRadius: BorderRadius.circular(14),
+        onTap: enabled ? () => setState(() => _picking = level) : null,
+        child: InputDecorator(
+          isEmpty: value == null,
+          decoration: _deco(_areaLevelLabels[level],
+                  hint: 'Pilih ${_areaLevelLabels[level].toLowerCase()}',
+                  suffix: const Icon(Icons.keyboard_arrow_down_rounded))
+              .copyWith(enabled: enabled),
+          child: Text(value?.name ?? '',
+              overflow: TextOverflow.ellipsis,
+              style: theme.textTheme.bodyLarge),
+        ),
+      ),
+    );
+  }
+
+  Widget _areaSection(ThemeData theme) => Container(
+        margin: const EdgeInsets.only(top: 10),
+        padding: const EdgeInsets.fromLTRB(12, 10, 12, 4),
+        decoration: BoxDecoration(
+            color: const Color(0xFFEFF6FF),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: const Color(0xFFBFDBFE))),
+        child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(children: [
+                const Icon(Icons.map_rounded,
+                    size: 18, color: Color(0xFF1D4ED8)),
+                const SizedBox(width: 6),
+                Expanded(
+                    child: Text('Wilayah tugas $_role',
+                        style: theme.textTheme.labelLarge
+                            ?.copyWith(fontWeight: FontWeight.w700))),
+                TextButton.icon(
+                  key: const ValueKey('siagasos-contact-locate'),
+                  onPressed: _saving || _locating ? null : _locate,
+                  icon: _locating
+                      ? const SizedBox.square(
+                          dimension: 14,
+                          child: CircularProgressIndicator(strokeWidth: 2))
+                      : const Icon(Icons.my_location_rounded, size: 18),
+                  label: Text(_locating ? 'Membaca…' : 'Lokasi saya'),
+                ),
+              ]),
+              if (_areaNote != null)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: Text(_areaNote!,
+                      key: const ValueKey('siagasos-contact-area-note'),
+                      style: theme.textTheme.bodySmall),
+                ),
+              for (var i = 0; i < 4; i++) _areaField(theme, i),
+            ]),
+      );
+
+  Widget _form(ThemeData theme, bool full) {
+    final items = _items;
+    return Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _Grip(theme),
+          Row(children: [
+            Container(
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                    colors: [Color(0xFF4ADE80), Color(0xFF15803D)]),
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child:
+                  const Icon(Icons.contact_phone_rounded, color: Colors.white),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(widget.title,
+                        style: theme.textTheme.titleMedium
+                            ?.copyWith(fontWeight: FontWeight.w700)),
+                    Text('Dikabari WhatsApp setiap kamu menekan SOS',
+                        style: theme.textTheme.bodySmall),
+                  ]),
+            ),
+            IconButton(
+                onPressed: _saving ? null : widget.onClose,
+                icon: const Icon(Icons.close_rounded),
+                tooltip: 'Tutup'),
+          ]),
+          const SizedBox(height: 14),
+          if (items == null)
+            const SizedBox(height: 80)
+          else if (items.isEmpty)
+            Container(
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                  color: theme.colorScheme.surfaceContainerHighest,
+                  borderRadius: BorderRadius.circular(14)),
+              child: Text(
+                  'Belum ada nomor darurat. Tambahkan RT/RW, satpam, Bhabinkamtibmas, atau keluarga (maks. $maxActiveEmergencyContacts aktif) yang perlu tahu saat kamu menekan SOS.',
+                  style: theme.textTheme.bodySmall?.copyWith(height: 1.4)),
+            )
+          else
+            for (final c in items)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Container(
+                  padding: const EdgeInsets.fromLTRB(12, 8, 4, 8),
+                  decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(14),
+                      border:
+                          Border.all(color: theme.colorScheme.outlineVariant)),
+                  child: Row(children: [
+                    Container(
+                      width: 36,
+                      height: 36,
+                      decoration: BoxDecoration(
+                          color: _green.withValues(alpha: 0.12),
+                          shape: BoxShape.circle),
+                      child: const Icon(Icons.person_rounded,
+                          size: 20, color: _green),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                                c.role == null
+                                    ? c.name
+                                    : '${c.name} · ${c.role}',
+                                style: theme.textTheme.titleSmall
+                                    ?.copyWith(fontWeight: FontWeight.w700)),
+                            Text(
+                                c.active
+                                    ? '+${c.phone}'
+                                    : '+${c.phone} · nonaktif',
+                                style: theme.textTheme.bodySmall),
+                            if (c.area != null)
+                              Text(c.area!.label,
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: theme.textTheme.bodySmall?.copyWith(
+                                      color: theme.colorScheme.outline)),
+                          ]),
+                    ),
+                    IconButton(
+                      key: ValueKey('siagasos-contact-del-${c.phone}'),
+                      onPressed: _saving
+                          ? null
+                          : () => _save(
+                              items.where((o) => o.phone != c.phone).toList()),
+                      icon: Icon(Icons.delete_outline_rounded,
+                          color: theme.colorScheme.error),
+                      tooltip: 'Hapus',
+                    ),
+                  ]),
+                ),
+              ),
+          if (items != null && !full) ...[
+            const SizedBox(height: 10),
+            // InputDecorator + DropdownButton (bukan DropdownButtonFormField): `initialValue` belum ada di Flutter
+            // 3.32 yang dipakai app host, sedangkan `value` di FormField sudah usang di versi baru.
+            InputDecorator(
+              isEmpty: _role == null,
+              decoration: _deco('Status', hint: 'Pilih status kontak')
+                  .copyWith(
+                      contentPadding:
+                          const EdgeInsets.fromLTRB(12, 4, 8, 4)),
+              child: DropdownButtonHideUnderline(
+                child: DropdownButton<String>(
+                  key: const ValueKey('siagasos-contact-role'),
+                  value: _role,
+                  isExpanded: true,
+                  isDense: true,
+                  borderRadius: BorderRadius.circular(14),
+                  items: [
+                    for (final r in _roleOptions)
+                      DropdownMenuItem(value: r, child: Text(r)),
+                  ],
+                  onChanged: _saving ? null : _setRole,
+                ),
+              ),
+            ),
+            if (_role == _other) ...[
+              const SizedBox(height: 10),
+              TextField(
+                key: const ValueKey('siagasos-contact-role-custom'),
+                controller: _customRole,
+                enabled: !_saving,
+                maxLength: 40,
+                textCapitalization: TextCapitalization.words,
+                decoration:
+                    _deco('Status lainnya', hint: 'Mis. Ketua Paguyuban'),
+              ),
+            ],
+            if (_needsArea) _areaSection(theme),
+            const SizedBox(height: 10),
+            TextField(
+              key: const ValueKey('siagasos-contact-name'),
+              controller: _name,
+              enabled: !_saving,
+              textCapitalization: TextCapitalization.words,
+              decoration: _deco('Nama', hint: 'Mis. Pak Budi'),
+            ),
+            const SizedBox(height: 10),
+            TextField(
+              key: const ValueKey('siagasos-contact-phone'),
+              controller: _phone,
+              enabled: !_saving,
+              keyboardType: TextInputType.phone,
+              decoration: _deco('Nomor WhatsApp', hint: '0812 3456 7890'),
+            ),
+            const SizedBox(height: 12),
+            FilledButton.icon(
+              key: const ValueKey('siagasos-contact-add'),
+              onPressed: _saving || _phone.text.trim().isEmpty ? null : _add,
+              icon: _saving
+                  ? const SizedBox.square(
+                      dimension: 18,
+                      child: CircularProgressIndicator(
+                          strokeWidth: 2.2, color: Colors.white))
+                  : const Icon(Icons.add_rounded),
+              label: const Text('Tambah nomor'),
+              style: FilledButton.styleFrom(
+                backgroundColor: _green,
+                minimumSize: const Size.fromHeight(48),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14)),
+              ),
+            ),
+          ],
+          if (full)
+            Text(
+                'Maksimal $maxActiveEmergencyContacts nomor aktif. Hapus atau nonaktifkan salah satu untuk mengganti.',
+                textAlign: TextAlign.center,
+                style: theme.textTheme.bodySmall),
+          if (_error != null) ...[
+            const SizedBox(height: 8),
+            Text(_error!,
+                key: const ValueKey('siagasos-contact-error'),
+                style: theme.textTheme.bodySmall
+                    ?.copyWith(color: theme.colorScheme.error)),
+          ],
+          const SizedBox(height: 8),
+          Text(
+              'Petugas keamanan & penerima SOS yang diatur pengelola tetap dikabari. Pesan berisi nama, lokasi, dan link peta.',
+              textAlign: TextAlign.center,
+              style: theme.textTheme.labelSmall
+                  ?.copyWith(color: theme.colorScheme.outline)),
+        ]);
   }
 
   @override
@@ -3055,173 +3456,162 @@ class _ContactsSheetState extends State<_ContactsSheet> {
     final full = (items?.where((c) => c.active).length ?? 0) >=
             maxActiveEmergencyContacts ||
         (items?.length ?? 0) >= maxEmergencyContacts;
+    final level = _picking;
     return _SheetFrame(
       sheetKey: const ValueKey('siagasos-contacts-sheet'),
       onDismiss: _saving ? null : widget.onClose,
-      child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            _Grip(theme),
-            Row(children: [
-              Container(
-                width: 44,
-                height: 44,
-                decoration: BoxDecoration(
-                  gradient: const LinearGradient(
-                      colors: [Color(0xFF4ADE80), Color(0xFF15803D)]),
-                  borderRadius: BorderRadius.circular(14),
-                ),
-                child: const Icon(Icons.contact_phone_rounded,
-                    color: Colors.white),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(widget.title,
-                          style: theme.textTheme.titleMedium
-                              ?.copyWith(fontWeight: FontWeight.w700)),
-                      Text('Dikabari WhatsApp setiap kamu menekan SOS',
-                          style: theme.textTheme.bodySmall),
-                    ]),
-              ),
-              IconButton(
-                  onPressed: _saving ? null : widget.onClose,
-                  icon: const Icon(Icons.close_rounded),
-                  tooltip: 'Tutup'),
-            ]),
-            const SizedBox(height: 14),
-            if (items == null)
-              const SizedBox(height: 80)
-            else if (items.isEmpty)
-              Container(
-                padding: const EdgeInsets.all(14),
-                decoration: BoxDecoration(
-                    color: theme.colorScheme.surfaceContainerHighest,
-                    borderRadius: BorderRadius.circular(14)),
-                child: Text(
-                    'Belum ada nomor darurat. Tambahkan keluarga, rekan, atau satpam (maks. $maxActiveEmergencyContacts aktif) yang perlu tahu saat kamu menekan SOS.',
-                    style: theme.textTheme.bodySmall?.copyWith(height: 1.4)),
-              )
-            else
-              for (final c in items)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 8),
-                  child: Container(
-                    padding: const EdgeInsets.fromLTRB(12, 8, 4, 8),
-                    decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(14),
-                        border: Border.all(
-                            color: theme.colorScheme.outlineVariant)),
-                    child: Row(children: [
-                      Container(
-                        width: 36,
-                        height: 36,
-                        decoration: BoxDecoration(
-                            color: _green.withValues(alpha: 0.12),
-                            shape: BoxShape.circle),
-                        child: const Icon(Icons.person_rounded,
-                            size: 20, color: _green),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                  c.role == null
-                                      ? c.name
-                                      : '${c.name} · ${c.role}',
-                                  style: theme.textTheme.titleSmall
-                                      ?.copyWith(fontWeight: FontWeight.w700)),
-                              Text(
-                                  c.active
-                                      ? '+${c.phone}'
-                                      : '+${c.phone} · nonaktif',
-                                  style: theme.textTheme.bodySmall),
-                            ]),
-                      ),
-                      IconButton(
-                        key: ValueKey('siagasos-contact-del-${c.phone}'),
-                        onPressed: _saving
-                            ? null
-                            : () => _save(items
-                                .where((o) => o.phone != c.phone)
-                                .toList()),
-                        icon: Icon(Icons.delete_outline_rounded,
-                            color: theme.colorScheme.error),
-                        tooltip: 'Hapus',
-                      ),
-                    ]),
-                  ),
-                ),
-            if (items != null && !full) ...[
-              const SizedBox(height: 10),
-              TextField(
-                key: const ValueKey('siagasos-contact-name'),
-                controller: _name,
-                enabled: !_saving,
-                textCapitalization: TextCapitalization.words,
-                decoration: InputDecoration(
-                  labelText: 'Nama',
-                  hintText: 'Mis. Istri, Kakak, Pemilik toko',
-                  border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(14)),
-                ),
-              ),
-              const SizedBox(height: 10),
-              TextField(
-                key: const ValueKey('siagasos-contact-phone'),
-                controller: _phone,
-                enabled: !_saving,
-                keyboardType: TextInputType.phone,
-                decoration: InputDecoration(
-                  labelText: 'Nomor WhatsApp',
-                  hintText: '0812 3456 7890',
-                  border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(14)),
-                ),
-              ),
-              const SizedBox(height: 12),
-              FilledButton.icon(
-                key: const ValueKey('siagasos-contact-add'),
-                onPressed: _saving || _phone.text.trim().isEmpty ? null : _add,
-                icon: _saving
-                    ? const SizedBox.square(
-                        dimension: 18,
-                        child: CircularProgressIndicator(
-                            strokeWidth: 2.2, color: Colors.white))
-                    : const Icon(Icons.add_rounded),
-                label: const Text('Tambah nomor'),
-                style: FilledButton.styleFrom(
-                  backgroundColor: _green,
-                  minimumSize: const Size.fromHeight(48),
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14)),
-                ),
-              ),
-            ],
-            if (full)
-              Text(
-                  'Maksimal $maxActiveEmergencyContacts nomor aktif. Hapus atau nonaktifkan salah satu untuk mengganti.',
+      scroll: level == null,
+      child: level == null
+          ? _form(theme, full)
+          : _RegionPicker(
+              key: ValueKey('siagasos-region-picker-$level'),
+              client: widget.client,
+              title: _areaLevelLabels[level],
+              parent: level == 0 ? null : _area[level - 1]!.code,
+              selected: _area[level],
+              onPick: (r) => _pick(level, r),
+              onBack: () => setState(() => _picking = null),
+            ),
+    );
+  }
+}
+
+/// Daftar wilayah satu level (dengan pencarian) di dalam lembar Input Nomor.
+class _RegionPicker extends StatefulWidget {
+  const _RegionPicker(
+      {super.key,
+      required this.client,
+      required this.title,
+      required this.parent,
+      required this.selected,
+      required this.onPick,
+      required this.onBack});
+  final SiagaSOS client;
+  final String title;
+  final String? parent;
+  final Region? selected;
+  final ValueChanged<Region> onPick;
+  final VoidCallback onBack;
+
+  @override
+  State<_RegionPicker> createState() => _RegionPickerState();
+}
+
+class _RegionPickerState extends State<_RegionPicker> {
+  final _q = TextEditingController();
+  List<Region>? _all;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _q.addListener(() => setState(() {}));
+    _load();
+  }
+
+  @override
+  void dispose() {
+    _q.dispose();
+    super.dispose();
+  }
+
+  Future<void> _load() async {
+    setState(() => _error = null);
+    try {
+      final l = await widget.client.regions(widget.parent);
+      if (mounted) setState(() => _all = l);
+    } catch (_) {
+      if (mounted) {
+        setState(() =>
+            _error = 'Daftar wilayah belum bisa dimuat. Periksa koneksi.');
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final q = _q.text.trim().toLowerCase();
+    final list = _all
+        ?.where((r) => q.isEmpty || r.name.toLowerCase().contains(q))
+        .toList();
+    return Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _Grip(theme),
+          Row(children: [
+            IconButton(
+                key: const ValueKey('siagasos-region-back'),
+                onPressed: widget.onBack,
+                icon: const Icon(Icons.arrow_back_rounded),
+                tooltip: 'Kembali'),
+            Expanded(
+                child: Text('Pilih ${widget.title}',
+                    style: theme.textTheme.titleMedium
+                        ?.copyWith(fontWeight: FontWeight.w700))),
+          ]),
+          const SizedBox(height: 6),
+          TextField(
+            key: const ValueKey('siagasos-region-search'),
+            controller: _q,
+            decoration: InputDecoration(
+              prefixIcon: const Icon(Icons.search_rounded),
+              hintText: 'Cari ${widget.title.toLowerCase()}',
+              isDense: true,
+              border:
+                  OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
+            ),
+          ),
+          const SizedBox(height: 8),
+          if (_error != null)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 16),
+              child: Column(children: [
+                Text(_error!,
+                    textAlign: TextAlign.center,
+                    style: theme.textTheme.bodySmall
+                        ?.copyWith(color: theme.colorScheme.error)),
+                TextButton(onPressed: _load, child: const Text('Coba lagi')),
+              ]),
+            )
+          else if (list == null)
+            const Padding(
+              padding: EdgeInsets.all(24),
+              child: Center(child: CircularProgressIndicator()),
+            )
+          else if (list.isEmpty)
+            Padding(
+              padding: const EdgeInsets.all(24),
+              child: Text('Tidak ditemukan.',
                   textAlign: TextAlign.center,
                   style: theme.textTheme.bodySmall),
-            if (_error != null) ...[
-              const SizedBox(height: 8),
-              Text(_error!,
-                  style: theme.textTheme.bodySmall
-                      ?.copyWith(color: theme.colorScheme.error)),
-            ],
-            const SizedBox(height: 8),
-            Text(
-                'Petugas keamanan & penerima SOS yang diatur pengelola tetap dikabari. Pesan berisi nama, lokasi, dan link peta.',
-                textAlign: TextAlign.center,
-                style: theme.textTheme.labelSmall
-                    ?.copyWith(color: theme.colorScheme.outline)),
-          ]),
-    );
+            )
+          else
+            Flexible(
+              child: ListView.builder(
+                shrinkWrap: true,
+                itemCount: list.length,
+                itemBuilder: (_, i) {
+                  final r = list[i];
+                  final sel = r.code == widget.selected?.code;
+                  return ListTile(
+                    key: ValueKey('siagasos-region-${r.code}'),
+                    dense: true,
+                    title: Text(r.name,
+                        style: TextStyle(
+                            fontWeight:
+                                sel ? FontWeight.w700 : FontWeight.w500)),
+                    trailing: sel
+                        ? const Icon(Icons.check_rounded,
+                            color: Color(0xFF16A34A))
+                        : null,
+                    onTap: () => widget.onPick(r),
+                  );
+                },
+              ),
+            ),
+        ]);
   }
 }
 
