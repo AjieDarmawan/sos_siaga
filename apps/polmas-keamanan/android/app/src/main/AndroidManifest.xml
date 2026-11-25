@@ -9,14 +9,21 @@
     <!-- Notifikasi push SOS (Android 13+) -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <application
-        android:label="Polmas Keamanan"
+        android:label="Polmas Digital"
         android:usesCleartextTraffic="true"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
-        <!-- Push SOS dari server memakai kanal ini (dibuat MainActivity dengan suara res/raw/siren). -->
+        <!-- Push SOS dari server memakai kanal ini (dibuat MainActivity dengan suara res/raw/sos_siren, sama dengan commerceOS). -->
         <meta-data
             android:name="com.google.firebase.messaging.default_notification_channel_id"
-            android:value="polmas_sos" />
+            android:value="polmas_sos_v2" />
+        <!-- Ikon & warna notifikasi push: siluet perisai putih, aksen navy. -->
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_icon"
+            android:resource="@drawable/ic_stat_polmas" />
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_color"
+            android:resource="@color/polmas_navy" />
         <activity
             android:name=".MainActivity"
             android:exported="true"

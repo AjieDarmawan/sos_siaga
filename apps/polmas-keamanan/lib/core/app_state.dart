@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:device_info_plus/device_info_plus.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -22,6 +23,12 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
 
   Me? me;
   int unread = 0;
+
+  /// Laporan belum ditanggapi di cakupan saya (badge tab Laporan, titik merah lonceng Beranda).
+  int openReports = 0;
+
+  /// Permintaan dari Beranda untuk membuka tab Laporan dengan filter status tertentu (mis. "baru" dari lonceng).
+  String? pendingReportStatus;
   ThemeMode themeMode = ThemeMode.system;
 
   /// Bunyi sirene & getar saat SOS masuk. Layar panggilan tetap muncul walau dimatikan (SOS prioritas tertinggi).
@@ -110,21 +117,29 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
 
   Map<String, String> get _device => {'platform': defaultTargetPlatform == TargetPlatform.iOS ? 'ios' : 'android'};
 
-  Future<void> login(String phone, String password) async =>
-      _onSession(await api.post('/auth/login', {'phone': phone, 'password': password, 'device': _device}) as Map, phone, password);
+  Future<void> login(String phone, String password, {bool remember = true}) async =>
+      _onSession(await api.post('/auth/login', {'phone': phone, 'password': password, 'device': _device}) as Map, phone, password, remember);
 
   /// Login pertama nomor dari Nomor Darurat: membuat akun + password.
-  Future<void> setupAccount(String phone, String password) async =>
-      _onSession(await api.post('/auth/setup', {'phone': phone, 'password': password, 'device': _device}) as Map, phone, password);
+  Future<void> setupAccount(String phone, String password, {bool remember = true}) async =>
+      _onSession(await api.post('/auth/setup', {'phone': phone, 'password': password, 'device': _device}) as Map, phone, password, remember);
 
-  Future<void> _onSession(Map r, String phone, String password) async {
+  Future<void> _onSession(Map r, String phone, String password, bool remember) async {
     api.token = r['token'] as String;
     me = Me(r['me'] as Map);
-    // Login cepat (FR-02): nomor & password disimpan terenkripsi di perangkat (Keystore/Keychain).
-    await _secure.write(key: 'pk_phone', value: phone);
-    await _secure.write(key: 'pk_password', value: password);
-    savedPhone = phone;
-    hasSavedPassword = true;
+    // Login cepat (FR-02): nomor & password disimpan terenkripsi di perangkat (Keystore/Keychain) bila
+    // "Ingat di perangkat ini" dicentang. Tanpa itu sesi tetap jalan, tapi tidak bisa login ulang otomatis.
+    if (remember) {
+      await _secure.write(key: 'pk_phone', value: phone);
+      await _secure.write(key: 'pk_password', value: password);
+      savedPhone = phone;
+      hasSavedPassword = true;
+    } else {
+      await _secure.delete(key: 'pk_phone');
+      await _secure.delete(key: 'pk_password');
+      savedPhone = null;
+      hasSavedPassword = false;
+    }
     _startPolling();
     unawaited(_registerDevice());
     notifyListeners();
@@ -158,20 +173,6 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
     notifyListeners();
   }
 
-  Future<void> confirmArea(Area a, {double? lat, double? lng}) async {
-    me = Me(
-      await api.put('/me/area', {
-        'province': a.province!.toJson(),
-        'regency': a.regency!.toJson(),
-        'district': a.district!.toJson(),
-        'village': a.village?.toJson(),
-        'lat': lat,
-        'lng': lng,
-      }) as Map,
-    );
-    bump();
-  }
-
   Future<void> switchRole(String roleId) async {
     me = Me(await api.post('/me/role', {'role_id': roleId}) as Map);
     _ringing.clear();
@@ -188,8 +189,40 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
     _fcmToken = t;
     _tokenSub ??= Push.tokenChanges.listen(_registerDevice);
     try {
-      await api.post('/me/device', {'fcm_token': t, 'platform': defaultTargetPlatform == TargetPlatform.iOS ? 'ios' : 'android'});
+      await api.post('/me/device', {
+        'fcm_token': t,
+        'platform': defaultTargetPlatform == TargetPlatform.iOS ? 'ios' : 'android',
+        'device_name': ?await _deviceName(),
+      });
     } catch (_) {}
+  }
+
+  /// "Samsung SM-A546E" / "iPhone15,2": ditampilkan di Profil > Perangkat terdaftar.
+  Future<String?> _deviceName() async {
+    try {
+      final info = DeviceInfoPlugin();
+      if (defaultTargetPlatform == TargetPlatform.iOS) {
+        final i = await info.iosInfo;
+        return i.utsname.machine;
+      }
+      final a = await info.androidInfo;
+      final brand = a.manufacturer.isEmpty ? '' : '${a.manufacturer[0].toUpperCase()}${a.manufacturer.substring(1)} ';
+      return '$brand${a.model}'.trim();
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// 6 karakter terakhir token FCM HP ini: untuk menandai "perangkat ini" di daftar perangkat.
+  String? get deviceTokenTail => _fcmToken == null || _fcmToken!.length < 6 ? null : _fcmToken!.substring(_fcmToken!.length - 6);
+
+  /// HP ini terdaftar untuk menerima push SOS (badge di Profil).
+  bool get receivesSos => Push.ready && _fcmToken != null;
+
+  /// Ubah kata sandi (Profil). Sesi lain dicabut server; kata sandi tersimpan di perangkat ikut diganti.
+  Future<void> changePassword(String current, String next) async {
+    await api.post('/me/password', {'current_password': current, 'new_password': next});
+    if (hasSavedPassword) await _secure.write(key: 'pk_password', value: next);
   }
 
   Future<void> logout() async {
@@ -227,12 +260,6 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
     notifyListeners();
   }
 
-  Future<void> markAllRead() async {
-    await api.post('/notifications/read-all');
-    unread = 0;
-    notifyListeners();
-  }
-
   // ------------------------------------------------------------ polling SOS masuk
 
   void _startPolling() {
@@ -248,8 +275,10 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
       final wasOffline = !online;
       online = true;
       final u = (r['unread'] as num).toInt();
-      var changed = u != unread || wasOffline;
+      final open = (r['open_reports'] as num?)?.toInt() ?? 0;
+      var changed = u != unread || open != openReports || wasOffline;
       unread = u;
+      openReports = open;
       for (final c in (r['calls'] as List)) {
         final rep = Report(c as Map);
         if (_ringing.add(rep.id)) {

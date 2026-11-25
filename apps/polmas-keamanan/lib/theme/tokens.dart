@@ -2,16 +2,27 @@ import 'package:flutter/material.dart';
 
 /// Design token Polmas Keamanan (PRD §7.1). Merah dipakai terutama untuk SOS & status darurat.
 abstract final class PK {
-  static const red = Color(0xFFD71920);
-  static const redDark = Color(0xFFA80F15);
+  static const red = Color(0xFFD92D20);
+  static const redDark = Color(0xFFB42318);
   static const white = Color(0xFFFFFFFF);
-  static const navy = Color(0xFF0B2A6B);
-  static const gold = Color(0xFFE3A82B);
-  static const green = Color(0xFF16A34A);
-  static const bg = Color(0xFFF4F6FA);
+  static const navy = Color(0xFF0B2A6F);
+  static const navy2 = Color(0xFF071B4D);
+  static const navyMid = Color(0xFF0E3285);
+  static const navySoft = Color(0xFFE8EEFB);
+  static const gold = Color(0xFFD4A82A);
+  static const gold2 = Color(0xFFE8C15A);
+  static const amber = Color(0xFFF79009);
+  static const blueMid = Color(0xFF3D63C9);
+  static const blueSoft = Color(0xFF8FA6DD);
+  static const blueTrack = Color(0xFFC9D5EE);
+  static const headerMute = Color(0xFFB9C6E4);
+  static const green = Color(0xFF12B76A);
+  static const greenDark = Color(0xFF027A48);
+  static const bg = Color(0xFFF3F5F9);
   static const text = Color(0xFF0F172A);
-  static const text2 = Color(0xFF475569);
-  static const line = Color(0xFFE2E8F0);
+  static const text2 = Color(0xFF334155);
+  static const mute = Color(0xFF64748B);
+  static const line = Color(0xFFE5E9F2);
   static const grey = Color(0xFF64748B);
 
   // Mode gelap: navy sangat tua, merah dilembutkan.

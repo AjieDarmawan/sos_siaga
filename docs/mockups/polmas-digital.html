@@ -3,40 +3,39 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Mockup Polmas Digital: 3 Opsi Desain</title>
+<title>Mockup Polmas Digital</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
 <style>
+:root{--navy:#0B2A6F;--navy2:#071B4D;--gold:#D4A82A;--gold2:#E8C15A;--red:#D92D20;--bg:#F3F5F9;--ink:#0f172a;--ink2:#334155;--mute:#64748b;--line:#E5E9F2;color-scheme:light}
 *{box-sizing:border-box}
-body{margin:0;font-family:'Plus Jakarta Sans',system-ui,sans-serif;background:#dfe4ec;color:#0f172a;-webkit-font-smoothing:antialiased}
+body{margin:0;font-family:'Plus Jakarta Sans',system-ui,sans-serif;background:#dfe4ec;color:var(--ink);-webkit-font-smoothing:antialiased}
 a{color:inherit;text-decoration:none;cursor:pointer}
 h1,h2,h3,h4,h5,p{margin:0}
 .mono{font-family:'JetBrains Mono',ui-monospace,monospace}
 
 /* ---------- halaman ---------- */
-.page-h{background:#0b1730;color:#fff;padding:28px 24px 0}
-.page-h .in{max-width:1560px;margin:0 auto}
+.page-h{background:#0b1730;color:#fff;padding:28px max(16px,env(safe-area-inset-right,0px)) 26px max(16px,env(safe-area-inset-left,0px))}
+.page-h .in{max-width:1560px;margin:0 auto;display:flex;gap:28px;flex-wrap:wrap;justify-content:space-between}
 .page-h h1{font-size:22px;font-weight:800}
-.page-h p{color:#9fb0cf;margin:6px 0 20px;font-size:14px;max-width:820px;line-height:1.5}
-.tabs{display:flex;gap:6px;flex-wrap:wrap}
-.tabs button{all:unset;cursor:pointer;padding:12px 18px;border-radius:12px 12px 0 0;color:#9fb0cf;font-weight:700;font-size:14px}
-.tabs button:hover{color:#fff}
-.tabs button.on{background:#dfe4ec;color:#0b1730}
-.opt{display:none;padding:28px 16px 64px}
-.opt.on{display:block}
-.intro{max-width:1560px;margin:0 auto 28px;display:flex;gap:24px;align-items:flex-end;justify-content:space-between;flex-wrap:wrap}
-.intro h2{font-size:20px;font-weight:800}
-.intro p{margin-top:6px;color:#475569;font-size:14px;max-width:700px;line-height:1.5}
-.sw{display:flex;gap:8px}
-.sw i{width:30px;height:30px;border-radius:9px;display:block;box-shadow:inset 0 0 0 1px rgba(0,0,0,.12)}
-.screens{display:flex;flex-wrap:wrap;gap:40px 28px;justify-content:center}
+.page-h p{color:#9fb0cf;margin-top:6px;font-size:14px;max-width:640px;line-height:1.5}
+.chg{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:14px;padding:14px 18px;font-size:13px;color:#cbd6ec;max-width:560px}
+.chg b{color:#E8C15A;font-size:11.5px;letter-spacing:.12em;display:block;margin-bottom:6px}
+.chg ul{margin:0;padding-left:18px;line-height:1.6}
+.grp{max-width:1560px;margin:0 auto;padding:30px max(16px,env(safe-area-inset-right,0px)) 10px max(16px,env(safe-area-inset-left,0px))}
+.grp h2{font-size:18px;font-weight:800}
+.grp p{margin-top:4px;color:#475569;font-size:13.5px;max-width:760px;line-height:1.5}
+.screens{display:flex;flex-wrap:wrap;gap:40px 28px;justify-content:center;padding:18px 16px 30px}
 figure{margin:0}
 figcaption{text-align:center;margin-top:14px;font-weight:700;font-size:14px;color:#334155}
+figcaption small{display:block;font-weight:500;color:#64748b;font-size:12px;margin-top:2px}
 
 /* ---------- bingkai HP ---------- */
 .phone{width:360px;height:760px;background:#0a0a0c;border-radius:50px;padding:9px;box-shadow:0 30px 60px -22px rgba(15,23,42,.5),inset 0 0 0 2px #2b2b31}
-.scr{position:relative;width:100%;height:100%;border-radius:41px;overflow:hidden;display:flex;flex-direction:column;background:#fff}
+.phone.land{width:780px;height:360px;max-width:calc(100vw - 32px)}
+.scr{position:relative;width:100%;height:100%;border-radius:41px;overflow:hidden;display:flex;flex-direction:column;background:var(--bg)}
 .scr::after{content:"";position:absolute;top:10px;left:50%;transform:translateX(-50%);width:98px;height:27px;background:#000;border-radius:20px;z-index:60}
+.land .scr::after{top:50%;left:10px;transform:translateY(-50%);width:27px;height:98px}
 .sb{flex:none;height:46px;display:flex;align-items:center;justify-content:space-between;padding:4px 26px 0 32px;font-size:14px;font-weight:700;position:relative;z-index:50}
 .sb svg{width:60px;height:13px}
 .lt{color:#fff}
@@ -46,434 +45,388 @@ svg.i{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:2;stroke
 .emb{display:block}
 .flag{position:absolute;left:0;right:0;bottom:0;height:6px;background:linear-gradient(#E11D2E 50%,#fff 50%);z-index:5}
 @keyframes pl{0%{box-shadow:0 0 0 0 rgba(255,255,255,.85)}100%{box-shadow:0 0 0 9px rgba(255,255,255,0)}}
-@keyframes plr{0%{box-shadow:0 0 0 0 rgba(239,68,68,.8)}100%{box-shadow:0 0 0 10px rgba(239,68,68,0)}}
 @keyframes spin{to{transform:rotate(360deg)}}
 @keyframes load{0%{width:8%}100%{width:92%}}
-@keyframes blink{50%{opacity:0}}
+@media (prefers-reduced-motion:reduce){*{animation:none!important}}
 
-/* =================================================================
-   OPSI A: BHAYANGKARA (navy + emas, resmi)
-   ================================================================= */
-.a .scr{background:#F3F5F9}
+/* ---------- splash ---------- */
 .a-splash{background:radial-gradient(120% 80% at 50% 36%,#1C4BB0 0%,#0B2A6F 46%,#041030 100%)!important;color:#fff}
-.a-splash .pat{position:absolute;inset:0;background:repeating-linear-gradient(135deg,rgba(255,255,255,.035) 0 2px,transparent 2px 14px)}
+.pat{position:absolute;inset:0;background:repeating-linear-gradient(135deg,rgba(255,255,255,.035) 0 2px,transparent 2px 14px)}
 .a-splash .c{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;position:relative}
-.a-splash .halo{width:180px;height:180px;border-radius:50%;display:grid;place-items:center;background:radial-gradient(circle,rgba(212,168,42,.28),transparent 66%);position:relative}
-.a-splash .halo::before{content:"";position:absolute;inset:6px;border-radius:50%;border:1px dashed rgba(212,168,42,.5);animation:spin 30s linear infinite}
+.halo{width:180px;height:180px;border-radius:50%;display:grid;place-items:center;background:radial-gradient(circle,rgba(212,168,42,.28),transparent 66%);position:relative}
+.halo::before{content:"";position:absolute;inset:6px;border-radius:50%;border:1px dashed rgba(212,168,42,.5);animation:spin 30s linear infinite}
 .a-splash .emb{width:98px;height:110px;filter:drop-shadow(0 10px 22px rgba(0,0,0,.45))}
 .a-splash h1{margin-top:22px;font-size:31px;letter-spacing:.16em;font-weight:800;text-align:center}
-.a-splash h1 span{display:block;font-size:13px;letter-spacing:.62em;color:#E8C15A;margin-top:4px;font-weight:700;padding-left:.62em}
-.a-splash .motto{margin-top:20px;font-size:12.5px;color:#B9C6E4;letter-spacing:.05em}
+.a-splash h1 span{display:block;font-size:13px;letter-spacing:.62em;color:var(--gold2);margin-top:4px;font-weight:700;padding-left:.62em}
+.motto{margin-top:20px;font-size:12.5px;color:#B9C6E4;letter-spacing:.05em}
 .a-splash .f{padding:0 52px 46px;text-align:center;position:relative}
 .load{height:4px;border-radius:4px;background:rgba(255,255,255,.15);overflow:hidden}
 .load i{display:block;height:100%;width:62%;background:linear-gradient(90deg,#D4A82A,#F5D77A);border-radius:4px;animation:load 2.6s ease-in-out infinite alternate}
 .a-splash small{display:block;font-size:12px;color:#B9C6E4;margin-top:12px}
 .a-splash .by{opacity:.55;margin-top:24px;font-size:11px}
 
-.a-hd{background:linear-gradient(160deg,#0E3285,#071B4D);color:#fff;position:relative;overflow:hidden}
-.a-hd::before{content:"";position:absolute;inset:0;background:repeating-linear-gradient(135deg,rgba(255,255,255,.035) 0 2px,transparent 2px 14px)}
-.a-hd>*{position:relative}
-.a-login .a-hd{padding:0 24px 104px;border-radius:0 0 38px 38px;text-align:center}
-.a-login .a-hd .emb{width:58px;height:66px;margin:6px auto 10px}
-.a-login .a-hd h2{font-size:22px;font-weight:800;letter-spacing:.03em}
-.a-login .a-hd p{margin-top:4px;color:#B9C6E4;font-size:13px}
-.a-login .a-hd .gold{display:inline-block;margin-top:12px;font-size:10.5px;font-weight:800;letter-spacing:.14em;color:#E8C15A;border:1px solid rgba(232,193,90,.45);padding:4px 10px;border-radius:20px}
-.a-card{background:#fff;border-radius:22px;box-shadow:0 14px 30px -14px rgba(11,42,111,.3)}
-.a-login .body{overflow:visible}
-.a-login .a-card{margin:-66px 18px 0;padding:22px 20px;position:relative;z-index:3}
+/* ---------- header navy ---------- */
+.hd{background:linear-gradient(160deg,#0E3285,#071B4D);color:#fff;position:relative;overflow:hidden;flex:none}
+.hd::before{content:"";position:absolute;inset:0;background:repeating-linear-gradient(135deg,rgba(255,255,255,.035) 0 2px,transparent 2px 14px)}
+.hd>*{position:relative}
+
+/* ---------- login ---------- */
+.a-login .hd{padding:0 24px 86px;border-radius:0 0 38px 38px;text-align:center}
+.a-login .hd .emb{width:58px;height:66px;margin:6px auto 10px}
+.a-login .hd h2{font-size:22px;font-weight:800;letter-spacing:.03em}
+.a-login .hd p{margin-top:4px;color:#B9C6E4;font-size:13px}
+.gold{display:inline-block;margin-top:12px;font-size:10.5px;font-weight:800;letter-spacing:.14em;color:var(--gold2);border:1px solid rgba(232,193,90,.45);padding:4px 10px;border-radius:20px}
+.a-login .body{overflow:visible;display:flex;flex-direction:column}
+.card{background:#fff;border-radius:22px;box-shadow:0 14px 30px -14px rgba(11,42,111,.3)}
+.a-login .card{margin:-50px 18px 0;padding:22px 20px;position:relative;z-index:3}
 .a-login h3{font-size:18px;font-weight:800}
-.sub{color:#64748b;font-size:13px;margin:4px 0 18px;line-height:1.45}
-.lbl{font-size:12.5px;font-weight:700;color:#334155;margin:0 0 8px;display:block}
-.a .field{display:flex;align-items:center;border:1.5px solid #0B2A6F;box-shadow:0 0 0 4px rgba(11,42,111,.08);border-radius:14px;height:52px;padding:0 14px;gap:10px;font-size:16px;font-weight:700;margin-bottom:16px}
-.a .field .cc{color:#0B2A6F;font-weight:800;padding-right:10px;border-right:1.5px solid #E2E8F0}
-.a .field.pw{border-color:#D5DCE8;box-shadow:none;letter-spacing:.2em}
-.a .field.pw .i{color:#94A3B8}
-.a .field.pw .i:last-child{margin-left:auto}
-.rem{display:flex;align-items:center;gap:8px;font-size:12.5px;color:#334155;font-weight:600}
-.rem i{width:18px;height:18px;border-radius:5px;background:#0B2A6F;display:grid;place-items:center;color:#fff}
+.sub{color:var(--mute);font-size:13px;margin:4px 0 18px;line-height:1.45}
+.lbl{font-size:12.5px;font-weight:700;color:var(--ink2);margin:0 0 8px;display:block}
+.field{display:flex;align-items:center;border:1.5px solid var(--navy);box-shadow:0 0 0 4px rgba(11,42,111,.08);border-radius:14px;height:52px;padding:0 14px;gap:10px;font-size:16px;font-weight:700;margin-bottom:16px}
+.field .cc{color:var(--navy);font-weight:800;padding-right:10px;border-right:1.5px solid #E2E8F0}
+.field.pw{border-color:#D5DCE8;box-shadow:none;letter-spacing:.2em}
+.field.pw .i{color:#94A3B8}
+.field.pw .i:last-child{margin-left:auto}
+.row-sb{display:flex;justify-content:space-between;align-items:center;font-size:12.5px;color:var(--mute);margin:-4px 0 18px}
+.row-sb b{color:var(--navy)}
+.rem{display:flex;align-items:center;gap:8px;color:var(--ink2);font-weight:600}
+.rem i{width:18px;height:18px;border-radius:5px;background:var(--navy);display:grid;place-items:center;color:#fff}
 .rem i .i{width:12px;height:12px;stroke-width:3}
-.otp{display:flex;gap:8px}
-.otp span{flex:1;height:50px;border:1.5px solid #D5DCE8;border-radius:12px;display:grid;place-items:center;font-size:20px;font-weight:800}
-.otp span.f{border-color:#0B2A6F;background:#F1F5FF;color:#0B2A6F}
-.otp span.cur{border-color:#D4A82A;box-shadow:0 0 0 3px rgba(212,168,42,.22)}
-.otp span.cur::after{content:"";width:2px;height:22px;background:#D4A82A;animation:blink 1s infinite}
-.row-sb{display:flex;justify-content:space-between;align-items:center;font-size:12.5px;color:#64748b;margin:10px 0 18px}
-.row-sb b{color:#0B2A6F}
 .btn{display:flex;align-items:center;justify-content:center;gap:8px;height:52px;border-radius:14px;font-weight:800;font-size:15.5px}
-.a .btn.pri{background:linear-gradient(135deg,#123A94,#0B2A6F);color:#fff;box-shadow:0 12px 22px -12px rgba(11,42,111,.8)}
-.a .btn.pri .i{color:#E8C15A}
+.btn.pri{background:linear-gradient(135deg,#123A94,#0B2A6F);color:#fff;box-shadow:0 12px 22px -12px rgba(11,42,111,.8)}
+.btn.pri .i{color:var(--gold2)}
 .note{display:flex;gap:10px;background:#FFF8E6;border:1px solid #F4E2A8;border-radius:14px;padding:12px;font-size:12px;color:#6B5310;margin:16px 18px 0;line-height:1.45}
 .note .i{color:#B98A0E;width:18px;height:18px}
-.a-login .foot{margin-top:auto;text-align:center;font-size:12.5px;color:#64748b;padding:18px 0 28px}
-.a-login .foot b{color:#0B2A6F}
+.a-login .foot{margin-top:auto;text-align:center;font-size:12.5px;color:var(--mute);padding:18px 0 28px}
+.a-login .foot b{color:var(--navy)}
 
-.a-home .a-hd{padding:0 18px 74px;border-radius:0 0 30px 30px;flex:none}
+/* ---------- beranda ---------- */
+.home .hd{padding:0 18px 76px;border-radius:0 0 30px 30px}
 .who{display:flex;align-items:center;gap:12px;margin-top:4px}
-.a .av{width:46px;height:46px;border-radius:50%;display:grid;place-items:center;font-weight:800;background:#1E3F8F;box-shadow:0 0 0 2px #D4A82A;flex:none}
+.av{width:46px;height:46px;border-radius:50%;display:grid;place-items:center;font-weight:800;background:#1E3F8F;box-shadow:0 0 0 2px var(--gold);flex:none}
 .who .t{flex:1;min-width:0}
 .who small{display:block;font-size:12px;color:#B9C6E4}
 .who b{font-size:16px}
 .icbtn{width:42px;height:42px;border-radius:13px;background:rgba(255,255,255,.1);display:grid;place-items:center;position:relative;flex:none}
-.icbtn .dot{position:absolute;top:9px;right:10px;width:8px;height:8px;border-radius:50%;background:#F04438;box-shadow:0 0 0 2px #0B2A6F}
+.icbtn .dot{position:absolute;top:9px;right:10px;width:8px;height:8px;border-radius:50%;background:#F04438;box-shadow:0 0 0 2px var(--navy)}
 .duty{margin-top:16px;display:flex;align-items:center;gap:12px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.14);border-radius:16px;padding:11px 14px}
 .duty .rk{width:34px;height:34px;border-radius:10px;background:rgba(212,168,42,.16);display:grid;place-items:center}
-.duty .rk svg{width:22px;height:22px;stroke:#E8C15A;stroke-width:2.6;fill:none;stroke-linecap:round;stroke-linejoin:round}
+.duty .rk svg{width:22px;height:22px;stroke:var(--gold2);stroke-width:2.6;fill:none;stroke-linecap:round;stroke-linejoin:round}
 .duty .t{flex:1}
 .duty small{color:#B9C6E4;font-size:11.5px;display:block}
 .duty b{font-size:13.5px}
 .tg{width:48px;height:28px;border-radius:14px;background:#12B76A;position:relative;flex:none}
 .tg::after{content:"";position:absolute;top:3px;right:3px;width:22px;height:22px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.3)}
-.a .wrap{padding:0 16px 20px;position:relative}
-.a-home .wrap{margin-top:-58px}
+.wrap{padding:0 16px 20px;position:relative}
+.home .wrap{margin-top:-58px}
 .alert{background:linear-gradient(135deg,#EA3A2E,#AE1F14);color:#fff;border-radius:20px;padding:16px;box-shadow:0 16px 28px -14px rgba(217,45,32,.8);position:relative;overflow:hidden}
 .alert .tag{display:inline-flex;align-items:center;gap:7px;font-size:10.5px;font-weight:800;letter-spacing:.1em;background:rgba(255,255,255,.18);padding:5px 10px;border-radius:20px}
 .pulse{width:8px;height:8px;border-radius:50%;background:#fff;animation:pl 1.2s infinite}
 .alert .tm{position:absolute;top:18px;right:16px;font-size:11.5px;opacity:.85;font-weight:600}
-.alert h4{margin:12px 0 4px;font-size:17px;font-weight:800}
-.alert p{font-size:12.5px;opacity:.92;display:flex;gap:6px;align-items:center}
-.alert p .i{width:15px;height:15px}
-.alert .acts{display:flex;gap:8px;margin-top:14px}
+.alert h4{margin:11px 0 6px;font-size:16.5px;font-weight:800}
+.alert .eco{background:rgba(255,255,255,.18);color:#fff}
+.alert p{font-size:12.5px;opacity:.94;display:flex;gap:6px;align-items:center;margin-top:5px}
+.alert p .i{width:15px;height:15px;flex:none}
+.alert .acts{display:flex;gap:8px;margin-top:13px}
 .alert .acts a{flex:1;height:42px;border-radius:12px;display:flex;align-items:center;justify-content:center;gap:6px;font-weight:800;font-size:13.5px}
 .alert .acts .i{width:17px;height:17px}
 .alert .acts .w{background:#fff;color:#B42318}
 .alert .acts .o{border:1.5px solid rgba(255,255,255,.55)}
-.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:14px}
-.stat{background:#fff;border-radius:16px;padding:12px;box-shadow:0 6px 16px -10px rgba(15,23,42,.25)}
-.stat i{display:block;width:22px;height:4px;border-radius:2px;margin-bottom:8px}
-.stat b{font-size:24px;display:block;line-height:1.1;font-weight:800}
-.stat small{font-size:11.5px;color:#64748b;font-weight:600}
+.alert .bg{position:absolute;right:-16px;top:-12px;width:120px;height:120px;opacity:.12}
+.stats4{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:12px}
+.st{background:#fff;border-radius:14px;padding:10px 9px;box-shadow:0 6px 16px -10px rgba(15,23,42,.25)}
+.st i{display:block;width:18px;height:4px;border-radius:2px;margin-bottom:7px}
+.st b{font-size:20px;display:block;line-height:1.1;font-weight:800;font-variant-numeric:tabular-nums}
+.st small{font-size:10.5px;color:var(--mute);font-weight:600;line-height:1.25;display:block;margin-top:2px}
 .sec{display:flex;justify-content:space-between;align-items:center;margin:20px 2px 10px}
 .sec h5{font-size:15px;font-weight:800}
-.sec a{font-size:12.5px;color:#0B2A6F;font-weight:700}
-.menu{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;text-align:center}
-.menu div{font-size:11.5px;font-weight:700;color:#334155}
-.menu span{width:56px;height:56px;border-radius:17px;margin:0 auto 7px;display:grid;place-items:center;background:#fff;color:#0B2A6F;box-shadow:0 6px 16px -10px rgba(15,23,42,.3);position:relative}
-.menu span .i{width:24px;height:24px}
-.menu .red span{color:#D92D20}
-.menu span em{position:absolute;top:-5px;right:-5px;background:#D4A82A;color:#fff;font-style:normal;font-size:10px;font-weight:800;border-radius:10px;padding:2px 6px;box-shadow:0 0 0 2px #F3F5F9}
-.it{display:flex;gap:12px;align-items:center;background:#fff;border-radius:16px;padding:12px;margin-bottom:8px}
-.it .ic{width:42px;height:42px;border-radius:12px;display:grid;place-items:center;flex:none}
-.it .t{flex:1;min-width:0}
-.it b{font-size:13.5px;display:block;font-weight:700}
-.it small{font-size:11.5px;color:#64748b}
+.sec a{font-size:12.5px;color:var(--navy);font-weight:700}
+.vt{display:flex;background:#E3E9F3;border-radius:10px;padding:3px}
+.vt span{width:32px;height:26px;display:grid;place-items:center;border-radius:8px;color:var(--mute)}
+.vt span.on{background:#fff;color:var(--navy);box-shadow:0 1px 3px rgba(15,23,42,.12)}
+.vt .i{width:16px;height:16px}
+
+/* ---------- kartu laporan (kolom Tindak Lanjut) ---------- */
+.rc{background:#fff;border-radius:18px;padding:14px;margin-bottom:10px;box-shadow:0 6px 16px -12px rgba(15,23,42,.3);border:1px solid #E8EDF5}
+.rc .top{display:flex;align-items:center;gap:6px}
+.kind{font-size:10px;font-weight:800;letter-spacing:.08em;padding:3px 7px;border-radius:6px;background:#E8EEFB;color:var(--navy)}
+.kind.sos{background:var(--red);color:#fff}
+.rc .when{margin-left:auto;font-size:11.5px;color:var(--mute);font-weight:600;display:flex;align-items:center;gap:4px}
+.rc .when .i{width:13px;height:13px}
+.rc h4{font-size:15px;font-weight:800;margin:9px 0 7px;line-height:1.3}
+.eco{display:inline-flex;align-items:center;gap:6px;font-size:11.5px;font-weight:700;color:var(--navy);background:#E8EEFB;padding:4px 9px;border-radius:20px}
+.eco .i{width:13px;height:13px}
+.eco u{text-decoration:none;font-weight:600;opacity:.75}
+.kv{display:grid;gap:6px;margin-top:10px}
+.kv div{display:flex;gap:8px;align-items:flex-start;font-size:12.5px;color:var(--ink2);line-height:1.35}
+.kv .i{width:15px;height:15px;color:#94A3B8;margin-top:1px}
+.kv a{color:var(--navy);font-weight:700}
+.kv em{font-style:normal;color:var(--mute)}
+.media{display:flex;gap:6px;margin-top:10px}
+.th{width:58px;height:46px;border-radius:10px;position:relative;overflow:hidden;display:grid;place-items:center;color:#fff;flex:none}
+.th .i{width:16px;height:16px;position:relative}
+.th small{position:absolute;bottom:3px;right:4px;font-size:9px;font-weight:800;background:rgba(0,0,0,.55);padding:1px 4px;border-radius:4px}
+.ph1{background:linear-gradient(180deg,#a9bdd3 0 42%,#6c7c92 42% 70%,#4a5568 70%)}
+.ph2{background:linear-gradient(160deg,#c9b38a 0 30%,#8b6f4e 30% 64%,#5b4632 64%)}
+.ph3{background:linear-gradient(200deg,#7a8da8 0 35%,#3e4c63 35% 75%,#2b3546 75%)}
+.ph4{background:linear-gradient(170deg,#98b4a0 0 40%,#557a62 40% 72%,#3a5444 72%)}
+.th.vid::before{content:"";position:absolute;inset:0;background:rgba(0,0,0,.25)}
+.th.aud{background:#EEF2F8;color:var(--navy)}
+.tlb{margin-top:12px;padding-top:10px;border-top:1px dashed #E2E8F0;display:flex;gap:8px;font-size:12px;color:var(--ink2);align-items:flex-start;line-height:1.4}
+.tlb .i{width:16px;height:16px;color:var(--navy);margin-top:1px}
+.tlb b{color:var(--navy)}
+.tlb.none{color:#B42318}
+.tlb.none .i{color:#B42318}
 .pill{font-size:10.5px;font-weight:800;padding:4px 9px;border-radius:20px;white-space:nowrap}
 .pill.r{background:#FEE4E2;color:#B42318}.pill.y{background:#FEF0C7;color:#B54708}.pill.g{background:#D1FADF;color:#027A48}
-.a .bn{flex:none;height:80px;background:#fff;display:flex;align-items:flex-start;justify-content:space-around;padding-top:10px;border-top:1px solid #E5E9F2;position:relative}
-.bn a{display:flex;flex-direction:column;align-items:center;gap:4px;font-size:10.5px;font-weight:700;color:#94A3B8;width:62px}
-.a .bn a.on{color:#0B2A6F}
-.a .bn a.on .i{stroke-width:2.4}
-.bn .sos span{width:60px;height:60px;border-radius:50%;margin-top:-32px;display:grid;place-items:center;background:linear-gradient(135deg,#F04438,#B42318);color:#fff;box-shadow:0 0 0 6px #F3F5F9,0 12px 22px -6px rgba(217,45,32,.75)}
-.bn .sos .i{width:27px;height:27px}
+
+/* ---------- navigasi bawah: tanpa tombol SOS ---------- */
+.bn{flex:none;height:80px;background:#fff;display:flex;align-items:flex-start;justify-content:space-around;padding-top:10px;border-top:1px solid var(--line);position:relative}
+.bn a{display:flex;flex-direction:column;align-items:center;gap:4px;font-size:10.5px;font-weight:700;color:#94A3B8;width:72px;position:relative}
+.bn a.on{color:var(--navy)}
+.bn a.on .i{stroke-width:2.4}
+.bn a.on::before{content:"";position:absolute;top:-10px;width:28px;height:3px;border-radius:0 0 3px 3px;background:var(--gold)}
+.bn a em{position:absolute;top:-4px;left:42px;background:var(--red);color:#fff;font-style:normal;font-size:9.5px;font-weight:800;border-radius:9px;padding:1px 5px;box-shadow:0 0 0 2px #fff}
 .bn::after{content:"";position:absolute;bottom:8px;left:50%;transform:translateX(-50%);width:120px;height:5px;border-radius:3px;background:#0f172a;opacity:.85}
 
-.a-an .a-hd{padding:0 18px 20px;border-radius:0 0 30px 30px;flex:none}
-.a-an .a-hd h2{font-size:21px;font-weight:800;margin-top:4px}
-.a-an .a-hd p{font-size:12.5px;color:#B9C6E4;margin-top:3px;display:flex;align-items:center;gap:6px}
-.a-an .a-hd p .i{width:14px;height:14px;color:#E8C15A}
-.seg{display:flex;background:rgba(255,255,255,.1);border-radius:12px;padding:4px;margin-top:14px}
-.seg span{flex:1;text-align:center;font-size:12.5px;font-weight:700;padding:8px 0;border-radius:9px;color:#B9C6E4}
-.seg span.on{background:#fff;color:#0B2A6F}
-.a-an .wrap{padding-top:14px}
+/* ---------- daftar ---------- */
+.lst .hd{padding:0 16px 16px;border-radius:0 0 26px 26px}
+.ttl{display:flex;align-items:center;justify-content:space-between;margin-top:4px}
+.ttl h2{font-size:21px;font-weight:800}
+.ttl small{font-size:12px;color:#B9C6E4;display:block;margin-top:2px}
+.srch{margin-top:12px;display:flex;align-items:center;gap:10px;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.14);border-radius:14px;height:44px;padding:0 6px 0 12px;font-size:13px;color:#B9C6E4}
+.srch .i{width:17px;height:17px}
+.srch .f{margin-left:auto;width:32px;height:32px;border-radius:9px;background:var(--gold);color:var(--navy2);display:grid;place-items:center}
+.chips{display:flex;gap:6px;overflow:hidden;padding:12px 16px 2px;flex:none}
+.chips span{flex:none;font-size:12px;font-weight:700;padding:7px 11px;border-radius:20px;background:#fff;color:var(--ink2);border:1px solid var(--line);display:flex;gap:5px;align-items:center}
+.chips span b{font-size:10.5px;background:#EEF2F8;border-radius:10px;padding:1px 6px}
+.chips span.on{background:var(--navy);color:#fff;border-color:var(--navy)}
+.chips span.on b{background:rgba(255,255,255,.2)}
+.chips.eco2{padding-top:8px}
+.chips.eco2 span{background:transparent;border-style:dashed;font-weight:600}
+.chips.eco2 span.on{background:#E8EEFB;color:var(--navy);border:1px solid #C9D5EE}
+.lst .wrap{padding-top:10px}
+
+/* ---------- tabel (HP miring) ---------- */
+.tbl-wrap{flex:1;overflow:auto;scrollbar-width:thin;padding:10px 14px 14px 46px}
+table.rt{border-collapse:separate;border-spacing:0;font-size:12px;min-width:1180px;background:#fff;border-radius:14px;overflow:hidden;border:1px solid #2B3B5E}
+.rt th{background:#243656;color:#fff;font-weight:800;font-size:12.5px;text-align:left;padding:11px 12px;white-space:nowrap;border-right:1px solid #3A4B6E}
+.rt th .i{width:16px;height:16px;vertical-align:-3px;margin-right:6px}
+.rt td{padding:9px 12px;border-right:1px solid #DCE3EE;border-top:1px solid #DCE3EE;vertical-align:top;color:var(--ink2);line-height:1.35}
+.rt th:last-child,.rt td:last-child{border-right:none}
+.rt td b{color:var(--ink);display:block;font-size:12.5px}
+.rt td small{color:var(--mute);font-size:11px;display:block}
+.rt td a{color:var(--navy);font-weight:700;white-space:nowrap}
+.rt .th{width:40px;height:32px;border-radius:7px;display:inline-grid}
+.rt .th .i{width:13px;height:13px}
+.rt .th small{font-size:8px;color:#fff;bottom:2px;right:2px}
+.land .hint{position:absolute;right:20px;bottom:14px;background:rgba(11,42,111,.92);color:#fff;font-size:11px;font-weight:700;padding:6px 10px;border-radius:20px;display:flex;align-items:center;gap:5px;z-index:4}
+.land .hint .i{width:14px;height:14px}
+.land .tbar{display:flex;align-items:center;gap:10px;padding:12px 18px 0 46px;flex:none}
+.land .tbar h3{font-size:16px;font-weight:800}
+.land .tbar .chips{padding:0;margin-left:auto}
+
+/* ---------- detail ---------- */
+.det .hd{padding:0 16px 18px;border-radius:0 0 26px 26px}
+.nav2{display:flex;align-items:center;gap:10px;margin-top:2px}
+.nav2 b{flex:1;text-align:center;font-size:16px}
+.nav2 .icbtn{width:38px;height:38px;border-radius:12px}
+.det h3{font-size:18px;font-weight:800;margin-top:12px;line-height:1.3}
+.det .idl{display:flex;align-items:center;gap:6px;margin-top:8px;font-size:11.5px;color:#B9C6E4}
+.steps{display:flex;align-items:flex-start;margin-top:16px}
+.steps div{flex:1;text-align:center;font-size:10px;font-weight:700;color:#8EA2CC;position:relative}
+.steps div::before{content:"";position:absolute;top:11px;left:-50%;right:50%;height:2px;background:rgba(255,255,255,.18)}
+.steps div:first-child::before{display:none}
+.steps div.ok::before,.steps div.cur::before{background:var(--gold)}
+.steps span{width:24px;height:24px;border-radius:50%;margin:0 auto 6px;display:grid;place-items:center;background:#1A3576;border:2px solid rgba(255,255,255,.2);position:relative;z-index:1}
+.steps .ok span{background:var(--gold);border-color:var(--gold);color:var(--navy2)}
+.steps .ok span .i{width:13px;height:13px;stroke-width:3.2}
+.steps .cur span{background:#fff;border-color:var(--gold);box-shadow:0 0 0 4px rgba(212,168,42,.3)}
+.steps .cur span::after{content:"";width:8px;height:8px;border-radius:50%;background:var(--navy)}
+.steps .ok,.steps .cur{color:#fff}
+.det .wrap{padding-top:14px}
+.mapc{background:#fff;border-radius:18px;overflow:hidden;border:1px solid #E8EDF5}
+.mapc svg{display:block;width:100%;height:118px}
+.mapc .ad{padding:12px 14px;display:flex;gap:10px;align-items:center}
+.mapc .ad .t{flex:1;min-width:0}
+.mapc .ad b{font-size:13px;display:block}
+.mapc .ad small{font-size:11.5px;color:var(--mute)}
+.mapc .ad a{height:36px;padding:0 12px;border-radius:11px;background:var(--navy);color:#fff;font-size:12.5px;font-weight:800;display:flex;align-items:center;gap:6px}
+.mapc .ad a .i{width:15px;height:15px;color:var(--gold2)}
+.info{background:#fff;border-radius:18px;margin-top:10px;border:1px solid #E8EDF5;padding:4px 14px}
+.info>div{display:flex;gap:12px;align-items:flex-start;padding:10px 0;border-bottom:1px solid #F1F4F9}
+.info>div:last-child{border:none}
+.info .ic{width:32px;height:32px;border-radius:10px;background:#EEF2FB;color:var(--navy);display:grid;place-items:center;flex:none}
+.info .ic .i{width:16px;height:16px}
+.info .t{flex:1;min-width:0}
+.info small{display:block;font-size:11px;color:var(--mute);font-weight:600}
+.info b{font-size:13px;display:block;margin-top:1px}
+.info .act{width:34px;height:34px;border-radius:11px;background:#D1FADF;color:#027A48;display:grid;place-items:center;align-self:center}
+.info .act .i{width:16px;height:16px}
+.lamp{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.lamp .th{width:auto;height:78px;border-radius:12px}
+.lamp .th .i{width:20px;height:20px}
+.lamp .aud{grid-column:span 3;height:46px;display:flex;gap:10px;padding:0 12px}
+.wave{flex:1;height:22px;background:repeating-linear-gradient(90deg,var(--navy) 0 2px,transparent 2px 5px);opacity:.8;clip-path:polygon(0 40%,4% 20%,8% 55%,12% 10%,16% 45%,20% 0,24% 50%,28% 25%,32% 60%,36% 15%,40% 45%,44% 5%,48% 40%,52% 20%,56% 55%,60% 30%,64% 45%,68% 15%,72% 50%,76% 30%,80% 55%,84% 20%,88% 45%,92% 30%,96% 50%,100% 40%,100% 60%,96% 50%,92% 70%,88% 55%,84% 80%,80% 45%,76% 70%,72% 50%,68% 85%,64% 55%,60% 70%,56% 45%,52% 80%,48% 60%,44% 95%,40% 55%,36% 85%,32% 40%,28% 75%,24% 50%,20% 100%,16% 55%,12% 90%,8% 45%,4% 80%,0 60%)}
+.aud b{font-size:11.5px;color:var(--navy)}
+.tline{background:#fff;border-radius:18px;border:1px solid #E8EDF5;padding:14px}
+.tline .e{display:flex;gap:12px;position:relative;padding-bottom:14px}
+.tline .e:last-child{padding-bottom:0}
+.tline .e:not(:last-child)::before{content:"";position:absolute;left:5px;top:14px;bottom:0;width:2px;background:#E2E8F0}
+.tline .d{width:12px;height:12px;border-radius:50%;margin-top:3px;flex:none;background:var(--navy);box-shadow:0 0 0 3px #E8EEFB}
+.tline .e.g .d{background:var(--gold);box-shadow:0 0 0 3px #FBF1D3}
+.tline b{font-size:13px;display:block}
+.tline small{font-size:11.5px;color:var(--mute);display:block;margin-top:2px;line-height:1.4}
+.abar{flex:none;background:#fff;border-top:1px solid var(--line);padding:10px 14px 26px;display:flex;gap:8px;align-items:center}
+.abar .in{flex:1;height:44px;border-radius:13px;background:var(--bg);border:1px solid var(--line);display:flex;align-items:center;gap:8px;padding:0 12px;font-size:12.5px;color:#94A3B8}
+.abar .in .i{width:18px;height:18px;margin-left:auto;color:var(--navy)}
+.abar .btn{height:44px;padding:0 14px;font-size:13px;border-radius:13px}
+
+/* ---------- analitik ---------- */
+.an .hd{padding:0 16px 0;border-radius:0 0 26px 26px}
+.an .hd h2{font-size:21px;font-weight:800;margin-top:4px}
+.an .hd p{font-size:12.5px;color:#B9C6E4;margin-top:3px;display:flex;align-items:center;gap:6px}
+.an .hd p .i{width:14px;height:14px;color:var(--gold2)}
+.atabs{display:flex;gap:18px;margin-top:14px}
+.atabs span{flex:none;font-size:13px;font-weight:700;color:#8EA2CC;padding:6px 0 12px;position:relative}
+.atabs span.on{color:#fff}
+.atabs span.on::after{content:"";position:absolute;left:0;right:0;bottom:0;height:3px;border-radius:3px 3px 0 0;background:var(--gold)}
+.flt{display:flex;gap:8px;padding:12px 16px 0;flex:none}
+.flt span{flex:1;display:flex;align-items:center;gap:6px;background:#fff;border:1px solid var(--line);border-radius:12px;height:38px;padding:0 10px;font-size:12px;font-weight:700;color:var(--ink2);white-space:nowrap;overflow:hidden}
+.flt .i{width:15px;height:15px;color:var(--navy)}
+.flt .i:last-child{margin-left:auto;color:#94A3B8}
+.an .wrap{padding-top:12px}
 .kpis{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-.kpi{background:#fff;border-radius:16px;padding:14px;position:relative}
-.kpi small{font-size:11.5px;color:#64748b;font-weight:600;display:block}
-.kpi b{font-size:24px;display:block;margin:5px 0 3px;font-weight:800}
-.kpi b u{text-decoration:none;font-size:13px;color:#64748b;font-weight:700}
+.kpi{background:#fff;border-radius:16px;padding:13px;position:relative}
+.kpi small{font-size:11.5px;color:var(--mute);font-weight:600;display:block}
+.kpi b{font-size:23px;display:block;margin:4px 0 3px;font-weight:800;font-variant-numeric:tabular-nums}
+.kpi b u{text-decoration:none;font-size:13px;color:var(--mute);font-weight:700}
 .kpi em{font-style:normal;font-size:11px;font-weight:800}
-.kpi .k{position:absolute;top:12px;right:12px;width:28px;height:28px;border-radius:9px;display:grid;place-items:center}
+.kpi .k{position:absolute;top:11px;right:11px;width:28px;height:28px;border-radius:9px;display:grid;place-items:center}
 .kpi .k .i{width:16px;height:16px}
-.up{color:#027A48}.dn{color:#B42318}
-.cardp{background:#fff;border-radius:18px;padding:16px;margin-top:12px}
-.cardp .hrow{display:flex;justify-content:space-between;align-items:baseline}
-.cardp h5{font-size:14.5px;font-weight:800}
-.hint{font-size:11.5px;color:#64748b;font-weight:600}
-.bars{display:flex;align-items:flex-end;gap:10px;height:150px;margin-top:10px;padding-top:22px}
-.bars div{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%;gap:7px;font-size:10.5px;color:#64748b;font-weight:700}
-.bars i{width:100%;border-radius:8px 8px 4px 4px;background:#DCE4F5;height:var(--v);position:relative}
-.bars .hi i{background:linear-gradient(#1C4BB0,#0B2A6F)}
-.bars .hi i::before{content:attr(data-n);position:absolute;top:-19px;left:50%;transform:translateX(-50%);font-size:11px;font-weight:800;color:#0B2A6F;font-style:normal}
-.bars .hi{color:#0B2A6F}
-.donut{display:flex;gap:18px;align-items:center;margin-top:14px}
-.donut .d{position:relative;width:118px;height:118px;flex:none}
-.donut svg{width:118px;height:118px;transform:rotate(-90deg)}
+.up{color:#027A48}.dn{color:#B42318}.nt{color:var(--mute)}
+.cp{background:#fff;border-radius:18px;padding:15px;margin-top:10px}
+.cp .hrow{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+.cp h5{font-size:14.5px;font-weight:800}
+.hint{font-size:11.5px;color:var(--mute);font-weight:600}
+.leg{display:flex;gap:12px;font-size:11px;color:var(--mute);font-weight:600;margin-top:6px}
+.leg span{display:flex;align-items:center;gap:5px}
+.leg i{width:9px;height:9px;border-radius:3px}
+.sbar{display:flex;align-items:flex-end;gap:10px;height:150px;margin-top:8px}
+.sbar>div{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%;gap:4px;font-size:10.5px;color:var(--mute);font-weight:700}
+.sbar .n{font-size:10.5px;font-weight:800;color:var(--ink2)}
+.sbar .bx{width:100%;height:var(--v);display:flex;flex-direction:column;border-radius:7px 7px 4px 4px;overflow:hidden}
+.sbar .bx b{flex:var(--s);background:var(--red)}
+.sbar .bx u{flex:var(--p);background:#C9D5EE}
+.sbar .hi .bx u{background:var(--navy)}
+.sbar .hi,.sbar .hi .n{color:var(--navy)}
+.sbar .lab{margin-top:3px}
+.donut{display:flex;gap:14px;align-items:center;margin-top:12px}
+.donut .d{position:relative;width:116px;height:116px;flex:none}
+.donut svg{width:116px;height:116px;transform:rotate(-90deg)}
 .donut .ctr{position:absolute;inset:0;display:grid;place-content:center;text-align:center}
 .donut .ctr b{font-size:20px;font-weight:800}
-.donut .ctr small{font-size:10.5px;color:#64748b;font-weight:600}
-.lg{flex:1}
-.lg div{display:flex;align-items:center;gap:8px;font-size:12px;margin:6px 0;color:#334155;font-weight:600}
-.lg i{width:10px;height:10px;border-radius:3px;flex:none}
-.lg b{margin-left:auto}
-.rk div{display:grid;grid-template-columns:86px 1fr 28px;align-items:center;gap:10px;font-size:12.5px;margin-top:11px;font-weight:600;color:#334155}
-.rk div b{text-align:right}
-.tr{height:8px;background:#EEF2F8;border-radius:4px;overflow:hidden}
-.tr i{display:block;height:100%;border-radius:4px;background:linear-gradient(90deg,#D4A82A,#F0C955);width:var(--v)}
-
-/* =================================================================
-   OPSI B: KOMANDO MALAM (gelap taktis, peta & radar)
-   ================================================================= */
-.b .scr{background:#060B18;color:#E2E8F0}
-.lightbar{position:absolute;top:0;left:0;right:0;height:140px;pointer-events:none;z-index:1}
-.lightbar::before,.lightbar::after{content:"";position:absolute;top:-70px;width:230px;height:150px;border-radius:50%;filter:blur(42px);animation:flash 1.3s infinite}
-.lightbar::before{left:-70px;background:#EF4444}
-.lightbar::after{right:-70px;background:#2563EB;animation-delay:.65s}
-.lightbar.soft::before,.lightbar.soft::after{filter:blur(50px);opacity:.25;animation:none}
-@keyframes flash{0%,100%{opacity:.12}50%{opacity:.8}}
-.b-splash .c{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;position:relative;z-index:2}
-.radar{width:230px;height:230px;border-radius:50%;position:relative;display:grid;place-items:center;border:1px solid rgba(56,189,248,.28);background:radial-gradient(circle,rgba(56,189,248,.08),transparent 70%)}
-.radar::before,.radar::after{content:"";position:absolute;border-radius:50%;border:1px solid rgba(56,189,248,.2)}
-.radar::before{inset:36px}.radar::after{inset:72px}
-.radar .sweep{position:absolute;inset:0;border-radius:50%;background:conic-gradient(from 0deg,rgba(56,189,248,.42),transparent 24%);animation:spin 3.2s linear infinite}
-.radar .cross{position:absolute;inset:0;background:linear-gradient(rgba(56,189,248,.18),rgba(56,189,248,.18)) center/1px 100% no-repeat,linear-gradient(90deg,rgba(56,189,248,.18),rgba(56,189,248,.18)) center/100% 1px no-repeat}
-.radar .blip{position:absolute;width:8px;height:8px;border-radius:50%;background:#EF4444;animation:plr 1.4s infinite}
-.radar .emb{width:78px;height:88px;position:relative;filter:drop-shadow(0 0 18px rgba(56,189,248,.5))}
-.b-splash h1{margin-top:34px;font-size:23px;font-weight:800;letter-spacing:.34em;padding-left:.34em}
-.b-splash .tl{margin-top:10px;font-size:10.5px;letter-spacing:.22em;color:#38BDF8}
-.b-splash .f{padding:0 40px 44px;position:relative;z-index:2}
-.b-splash .f .mono{font-size:10.5px;color:#64748B;letter-spacing:.08em;display:flex;justify-content:space-between}
-.blocks{display:flex;gap:4px;margin:10px 0 14px}
-.blocks i{flex:1;height:6px;border-radius:2px;background:#16223A}
-.blocks i.on{background:#38BDF8;box-shadow:0 0 8px rgba(56,189,248,.7)}
-.b-splash .enc{display:flex;align-items:center;justify-content:center;gap:6px;font-size:11.5px;color:#64748B}
-.b-splash .enc .i{width:14px;height:14px}
-
-.b-login .body{display:flex;flex-direction:column;padding:0 22px 26px;z-index:2}
-.brand-row{display:flex;align-items:center;gap:10px;margin-top:6px}
-.brand-row .emb{width:30px;height:34px}
-.brand-row b{font-size:13px;letter-spacing:.16em;display:block}
-.brand-row small{font-size:9.5px;letter-spacing:.2em;color:#38BDF8}
-.b-login h2{margin-top:30px;font-size:27px;line-height:1.2;font-weight:800}
-.b-login .p{margin-top:8px;color:#8494B2;font-size:13px;line-height:1.5}
-.b-login .lb{margin-top:26px;font-size:10.5px;color:#38BDF8;letter-spacing:.18em}
-.bigno{display:flex;align-items:center;gap:10px;margin-top:8px;font-size:27px;font-weight:700;padding-bottom:10px;border-bottom:2px solid transparent;border-image:linear-gradient(90deg,#38BDF8,#2563EB 60%,transparent) 1}
-.bigno span{color:#64748B}
-.bigno i{width:2px;height:28px;background:#38BDF8;animation:blink 1s infinite}
-.b-chip{display:flex;gap:8px;align-items:flex-start;margin-top:14px;font-size:11.5px;color:#8494B2;line-height:1.45}
-.b-chip .i{width:16px;height:16px;color:#38BDF8;margin-top:1px}
-.b .btn.pri{background:linear-gradient(135deg,#2F6BFF,#1D4ED8);color:#fff;box-shadow:0 0 0 1px rgba(147,197,253,.25),0 14px 30px -10px rgba(37,99,235,.8);margin-top:20px}
-.pad{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:auto}
-.pad span{height:50px;border-radius:14px;background:#0D1628;border:1px solid #16223A;display:grid;place-items:center;font-size:21px;font-weight:600}
-.pad span.x{background:none;border:none}
-.pad .i{width:22px;height:22px;color:#8494B2}
-
-.b-home .map{position:absolute;inset:0;z-index:0}
-.b-home .map svg{width:100%;height:100%;display:block}
-.b-top{position:absolute;top:50px;left:14px;right:14px;display:flex;gap:8px;z-index:5}
-.chip{background:rgba(11,19,36,.86);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);border:1px solid #1C2A45;border-radius:14px;padding:8px 12px;font-size:12px;font-weight:700;display:flex;gap:8px;align-items:center}
-.chip .emb{width:20px;height:22px}
-.b-top .chip:first-child{flex:1}
-.gdot{width:8px;height:8px;border-radius:50%;background:#22C55E;box-shadow:0 0 8px #22C55E}
-.b-top .chip small{display:block;font-size:9.5px;color:#22C55E;letter-spacing:.12em}
-.b-top .sq{width:42px;justify-content:center;padding:0;position:relative}
-.b-top .sq .dot{position:absolute;top:9px;right:10px;width:7px;height:7px;border-radius:50%;background:#EF4444}
-.pinlbl{position:absolute;z-index:4;background:#EF4444;color:#fff;font-size:10.5px;font-weight:800;padding:4px 8px;border-radius:8px;letter-spacing:.04em;box-shadow:0 6px 16px -4px rgba(239,68,68,.7)}
-.pinlbl::after{content:"";position:absolute;left:50%;bottom:-4px;transform:translateX(-50%) rotate(45deg);width:8px;height:8px;background:#EF4444}
-.sheet{position:absolute;left:0;right:0;bottom:80px;z-index:6;background:#0B1324;border-top:1px solid #1C2A45;border-radius:26px 26px 0 0;padding:8px 14px 38px;box-shadow:0 -20px 40px -10px rgba(0,0,0,.6)}
-.handle{width:40px;height:4px;border-radius:2px;background:#2A3A5C;margin:0 auto 10px}
-.sh-h{display:flex;align-items:center;gap:8px;margin-bottom:10px}
-.sh-h b{font-size:15px}
-.cnt{background:#EF4444;color:#fff;font-size:11px;font-weight:800;border-radius:10px;padding:1px 7px}
-.sh-h a{margin-left:auto;font-size:12px;color:#38BDF8;font-weight:700}
-.call{border:1px solid rgba(239,68,68,.55);background:linear-gradient(135deg,rgba(239,68,68,.16),rgba(239,68,68,.04));border-radius:18px;padding:13px}
-.call .r1{display:flex;align-items:center;gap:8px;font-size:10.5px;font-weight:800;letter-spacing:.12em;color:#FCA5A5}
-.call .r1 .rd{width:8px;height:8px;border-radius:50%;background:#EF4444;animation:plr 1.2s infinite}
-.call .r1 .mono{margin-left:auto;color:#FCA5A5;letter-spacing:0;font-size:12px}
-.call h4{margin-top:8px;font-size:16px;font-weight:800}
-.call p{font-size:12px;color:#94A3B8;margin-top:3px;display:flex;gap:10px}
-.call p span{display:flex;align-items:center;gap:4px}
-.call p .i{width:13px;height:13px}
-.call .acts{display:flex;gap:8px;margin-top:12px}
-.call .acts .go{flex:1;height:44px;border-radius:12px;background:#EF4444;color:#fff;font-weight:800;font-size:13.5px;display:flex;align-items:center;justify-content:center;gap:7px;box-shadow:0 10px 20px -8px rgba(239,68,68,.8)}
-.call .acts .sqb{width:44px;height:44px;border-radius:12px;background:#16223A;display:grid;place-items:center;color:#E2E8F0}
-.call .acts .i{width:18px;height:18px}
-.mini{display:flex;align-items:center;gap:10px;padding:11px 4px;border-bottom:1px solid #16223A;font-size:13px}
-.mini .d{width:8px;height:8px;border-radius:50%;flex:none}
-.mini b{font-weight:700;flex:1}
-.mini small{color:#64748B;font-size:11.5px}
-.mini .i{width:16px;height:16px;color:#475569}
-.shift{display:grid;grid-template-columns:repeat(3,1fr);margin-top:10px;text-align:center}
-.shift div{font-size:9.5px;color:#64748B;letter-spacing:.12em}
-.shift div+div{border-left:1px solid #16223A}
-.shift b{display:block;font-size:14px;color:#E2E8F0;letter-spacing:0;margin-top:3px}
-.b .bn{position:absolute;left:0;right:0;bottom:0;height:80px;background:#0B1324;display:flex;align-items:flex-start;justify-content:space-around;padding-top:10px;border-top:1px solid #16223A;z-index:7}
-.b .bn a.on{color:#38BDF8}
-.b .bn .sos span{box-shadow:0 0 0 6px #0B1324,0 0 26px rgba(239,68,68,.65)}
-.b .bn::after{background:#E2E8F0}
-
-.b-an .body{padding:0 16px 96px;z-index:2}
-.b-an .hrow{display:flex;justify-content:space-between;align-items:center;margin-top:6px}
-.b-an h2{font-size:21px;font-weight:800}
-.b-an .dt{font-size:11px;color:#38BDF8;border:1px solid #1C2A45;background:#0B1324;padding:6px 10px;border-radius:10px}
-.bseg{display:flex;gap:6px;margin-top:14px}
-.bseg span{flex:1;text-align:center;padding:9px 0;border-radius:11px;font-size:12px;font-weight:700;background:#0B1324;border:1px solid #16223A;color:#8494B2}
-.bseg span.on{background:rgba(56,189,248,.12);border-color:rgba(56,189,248,.55);color:#38BDF8}
-.bcard{background:linear-gradient(160deg,#0E1A33,#0A1222);border:1px solid #16223A;border-radius:20px;padding:16px;margin-top:12px}
-.bcard .lb{font-size:10px;letter-spacing:.18em;color:#64748B}
-.bcard .big{display:flex;align-items:baseline;gap:10px;margin-top:4px}
-.bcard .big b{font-size:38px;font-weight:800}
-.bcard .big em{font-style:normal;font-size:12px;font-weight:800;color:#FCA5A5;background:rgba(239,68,68,.14);padding:3px 8px;border-radius:8px}
-.bcard svg.area{width:100%;height:92px;display:block;margin-top:6px}
-.bkpis{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:12px}
-.bkpis div{background:#0B1324;border:1px solid #16223A;border-radius:16px;padding:12px 10px}
-.bkpis small{display:block;font-size:9.5px;letter-spacing:.14em;color:#64748B}
-.bkpis b{display:block;font-size:19px;margin:6px 0 2px;font-weight:800}
-.bkpis em{font-style:normal;font-size:10.5px;font-weight:700}
-.heat{display:grid;grid-template-columns:28px repeat(12,1fr);gap:3px;margin-top:12px;font-size:9.5px;color:#64748B;align-items:center}
-.heat i{aspect-ratio:1;border-radius:4px;display:block}
-.heat .hl{text-align:center}
-.hleg{display:flex;align-items:center;justify-content:flex-end;gap:4px;margin-top:10px;font-size:10px;color:#64748B}
+.donut .ctr small{font-size:10.5px;color:var(--mute);font-weight:600}
+.lg{flex:1;min-width:0}
+.lg div{display:flex;align-items:center;gap:7px;font-size:11.5px;margin:4px 0;color:var(--ink2);font-weight:600}
+.lg i{width:9px;height:9px;border-radius:3px;flex:none}
+.lg b{margin-left:auto;font-variant-numeric:tabular-nums}
+.tr{height:8px;background:#EEF2F8;border-radius:4px;overflow:hidden;display:block}
+.tr i{display:block;height:100%;border-radius:4px;background:var(--navy);width:var(--v)}
+.ecor{display:grid;grid-template-columns:34px 1fr auto;gap:10px;align-items:center;margin-top:12px}
+.ecor .ic{width:34px;height:34px;border-radius:10px;display:grid;place-items:center}
+.ecor .ic .i{width:17px;height:17px}
+.ecor .m>div{margin-bottom:5px;font-size:12.5px}
+.ecor .m b{font-weight:800}
+.ecor .m small{color:var(--mute);font-size:11px;font-weight:600}
+.ecor .n{text-align:right;font-size:14px;font-weight:800;font-variant-numeric:tabular-nums;width:40px}
+.ecor .n small{display:block;font-size:10.5px;color:var(--mute);font-weight:600}
+.ins{display:flex;gap:10px;background:#FFF8E6;border:1px solid #F4E2A8;border-radius:16px;padding:12px;margin-top:10px;font-size:12.5px;color:#5C460B;line-height:1.45}
+.ins .i{color:#B98A0E;width:18px;height:18px;margin-top:1px}
+.ins b{color:#3F3006}
+.mx{width:100%;border-collapse:separate;border-spacing:3px;margin-top:10px;font-size:11px}
+.mx th{font-weight:700;color:var(--mute);font-size:10.5px;padding:2px}
+.mx td{text-align:center;font-weight:800;border-radius:7px;height:32px;font-variant-numeric:tabular-nums}
+.mx td:first-child{text-align:left;color:var(--ink2);font-weight:700;padding-left:2px}
+.rsp{margin-top:6px}
+.rsp .r{display:grid;grid-template-columns:80px 1fr 44px;gap:8px;align-items:center;font-size:12px;font-weight:600;color:var(--ink2);margin-top:9px}
+.rsp .r b{text-align:right;font-variant-numeric:tabular-nums}
+.rsp .tr{height:10px;position:relative;overflow:visible}
+.rsp .tr i{border-radius:4px}
+.rsp .tr::after{content:"";position:absolute;left:80%;top:-4px;bottom:-4px;width:2px;background:var(--red);border-radius:1px}
+.rsp .over i{background:var(--red)}
+.rsp .cap{display:flex;justify-content:flex-end;font-size:10.5px;color:var(--red);font-weight:700;margin-top:8px}
+.hours{display:flex;align-items:flex-end;gap:3px;height:120px;margin-top:26px;position:relative}
+.hours i{flex:1;height:var(--v);background:#C9D5EE;border-radius:3px 3px 1px 1px}
+.hours i.hi{background:var(--navy)}
+.hours i.pk{background:var(--red)}
+.hours .call{position:absolute;font-size:10.5px;font-weight:800;color:var(--red);white-space:nowrap;transform:translateX(-50%)}
+.hax{display:flex;justify-content:space-between;font-size:10px;color:#94A3B8;font-weight:600;margin-top:5px}
+.heat{display:grid;grid-template-columns:30px repeat(8,1fr);gap:3px;margin-top:10px;font-size:10px;color:var(--mute);align-items:center;font-weight:600}
+.heat i{height:22px;border-radius:5px;display:block}
+.heat .hl{text-align:center;font-size:9.5px}
+.hleg{display:flex;align-items:center;justify-content:flex-end;gap:4px;margin-top:8px;font-size:10px;color:var(--mute)}
 .hleg i{width:12px;height:12px;border-radius:3px}
-.unit{display:flex;align-items:center;gap:10px;margin-top:12px;font-size:12.5px}
-.unit .cs{width:58px;font-size:11px;color:#38BDF8}
-.unit .nm{flex:1;min-width:0}
-.unit .nm b{display:block;font-size:12.5px}
-.unit .nm .tr{background:#16223A;height:6px;margin-top:6px}
-.unit .nm .tr i{background:linear-gradient(90deg,#2563EB,#38BDF8)}
-.unit .v{font-size:12px;font-weight:700;width:36px;text-align:right}
-
-/* =================================================================
-   OPSI C: PATROLI TERANG (putih + garis livery biru-kuning)
-   ================================================================= */
-.c .scr{background:#F6F8FC}
-.band{position:absolute;left:-60px;right:-60px;height:96px;background:linear-gradient(180deg,#1E3A8A 0 44%,#FACC15 44% 62%,#fff 62% 68%,#1D4ED8 68% 100%);transform:rotate(-14deg);box-shadow:0 10px 30px -10px rgba(30,58,138,.5)}
-.c-splash{background:#fff!important}
-.c-splash .c1{position:relative;z-index:2;display:flex;flex-direction:column;align-items:center;margin-top:120px}
-.c-splash .emb{width:104px;height:116px;filter:drop-shadow(0 14px 24px rgba(29,78,216,.35))}
-.c-splash h1{margin-top:22px;font-size:31px;font-weight:800;color:#1E3A8A;letter-spacing:-.01em}
-.c-splash .s{margin-top:6px;font-size:13px;color:#64748B;font-weight:600}
-.dots{display:flex;gap:7px;margin-top:26px}
-.dots i{width:9px;height:9px;border-radius:50%;background:#1D4ED8;animation:bo 1s infinite ease-in-out}
-.dots i:nth-child(2){animation-delay:.15s;background:#FACC15}.dots i:nth-child(3){animation-delay:.3s}
-@keyframes bo{0%,100%{transform:translateY(0);opacity:.5}50%{transform:translateY(-7px);opacity:1}}
-.c-splash .band{bottom:170px}
-.c-splash .band.b2{bottom:110px;height:26px;opacity:.12;box-shadow:none}
-.c-splash .ft{position:absolute;bottom:34px;left:0;right:0;text-align:center;font-size:12px;color:#64748B;font-weight:600}
-.c-splash .ft b{display:block;color:#1E3A8A;font-size:13px;margin-bottom:4px}
-
-.c-login .hero{flex:none;height:250px;background:#1E3A8A;position:relative;overflow:hidden;color:#fff}
-.c-login .hero .band{top:150px;height:70px}
-.c-login .hero .bx{position:relative;z-index:2;display:flex;align-items:center;gap:12px;padding:10px 24px}
-.c-login .hero .emb{width:46px;height:52px}
-.c-login .hero b{font-size:18px;font-weight:800;display:block}
-.c-login .hero small{font-size:11.5px;color:#BFDBFE}
-.c-login .sheet2{flex:1;background:#fff;margin-top:-30px;border-radius:30px 30px 0 0;position:relative;z-index:3;padding:26px 22px 22px;display:flex;flex-direction:column}
-.c-login h2{font-size:24px;font-weight:800;color:#0F172A}
-.ctab{display:flex;background:#EEF2FB;border-radius:14px;padding:4px;margin-bottom:14px}
-.ctab span{flex:1;text-align:center;padding:9px 0;font-size:13px;font-weight:700;color:#64748B;border-radius:11px;display:flex;align-items:center;justify-content:center;gap:6px}
-.ctab span.on{background:#fff;color:#1D4ED8;box-shadow:0 2px 8px -2px rgba(15,23,42,.15)}
-.ctab .i{width:16px;height:16px}
-.cfield{display:flex;align-items:center;gap:10px;height:58px;border-radius:18px;background:#F6F8FC;border:1.5px solid #1D4ED8;padding:0 16px;font-size:16.5px;font-weight:700}
-.idf{width:24px;height:16px;border-radius:3px;background:linear-gradient(#E11D2E 50%,#fff 50%);box-shadow:0 0 0 1px #E2E8F0;flex:none}
-.cfield .cc{color:#1D4ED8}
-.cfield .ok{margin-left:auto;width:24px;height:24px;border-radius:50%;background:#22C55E;display:grid;place-items:center;color:#fff}
-.cfield .ok .i{width:14px;height:14px;stroke-width:3}
-.chk{display:flex;align-items:center;gap:10px;margin:14px 0 18px;font-size:13px;font-weight:600;color:#334155}
-.chk i{width:20px;height:20px;border-radius:6px;background:#1D4ED8;display:grid;place-items:center;color:#fff}
-.chk i .i{width:13px;height:13px;stroke-width:3}
-.c .btn.pri{background:#1D4ED8;color:#fff;border-radius:18px;height:56px;box-shadow:0 14px 24px -12px rgba(29,78,216,.85)}
-.cinfo{display:flex;gap:10px;background:#EFF4FF;border-radius:16px;padding:12px 14px;font-size:12px;color:#1E3A8A;line-height:1.45;margin-top:14px}
-.cinfo .i{color:#1D4ED8;width:18px;height:18px}
-.c-login .em{margin-top:auto;display:flex;align-items:center;justify-content:space-between;border-top:1px dashed #E2E8F0;padding-top:16px;font-size:12.5px;color:#64748B;font-weight:600}
-.c-login .em a{display:flex;align-items:center;gap:6px;background:#FEE2E2;color:#DC2626;padding:9px 14px;border-radius:20px;font-weight:800}
-.c-login .em .i{width:15px;height:15px}
-
-.c-home .body,.c-an .body{padding:0 18px 104px}
-.ctop{display:flex;align-items:center;gap:12px;margin-top:4px}
-.cav{width:46px;height:46px;border-radius:15px;background:linear-gradient(135deg,#1D4ED8,#1E3A8A);color:#fff;display:grid;place-items:center;font-weight:800;position:relative;flex:none}
-.cav::after{content:"";position:absolute;right:-3px;bottom:-3px;width:13px;height:13px;border-radius:50%;background:#22C55E;border:2.5px solid #F6F8FC}
-.ctop .t{flex:1}
-.ctop small{font-size:12px;color:#64748B;font-weight:600}
-.ctop b{display:block;font-size:16.5px;font-weight:800}
-.cic{width:44px;height:44px;border-radius:15px;background:#fff;display:grid;place-items:center;box-shadow:0 6px 16px -10px rgba(15,23,42,.3);position:relative;color:#0F172A}
-.cic .dot{position:absolute;top:10px;right:11px;width:8px;height:8px;border-radius:50%;background:#DC2626;box-shadow:0 0 0 2px #fff}
-.chero{margin-top:16px;background:#1E3A8A;border-radius:24px;padding:18px;color:#fff;position:relative;overflow:hidden}
-.chero .band{left:auto;right:-120px;top:-8px;width:220px;height:42px;transform:rotate(-24deg);opacity:.9}
-.chero>*:not(.band){position:relative;z-index:2}
-.chero small{font-size:11.5px;color:#BFDBFE;font-weight:600;display:flex;align-items:center;gap:5px}
-.chero small .i{width:14px;height:14px}
-.chero h3{font-size:22px;font-weight:800;margin-top:6px;display:flex;align-items:center;gap:8px}
-.chero h3 span{font-size:11px;background:#FACC15;color:#422006;padding:3px 9px;border-radius:20px;font-weight:800}
-.chero p{font-size:12.5px;color:#DBEAFE;margin-top:4px}
-.prog{margin-top:14px}
-.prog .l{display:flex;justify-content:space-between;font-size:11.5px;font-weight:700;color:#DBEAFE;margin-bottom:6px}
-.prog .tr{background:rgba(255,255,255,.18);height:8px}
-.prog .tr i{background:#FACC15}
-.csos{margin-top:14px;background:#fff;border-radius:22px;padding:14px;box-shadow:0 10px 24px -14px rgba(220,38,38,.5);border:1.5px solid #FECACA}
-.csos .r{display:flex;align-items:center;gap:12px}
-.csos .ia{width:46px;height:46px;border-radius:15px;background:#FEE2E2;color:#DC2626;display:grid;place-items:center;flex:none;animation:plr 1.4s infinite}
-.csos .t{flex:1}
-.csos .t small{font-size:10.5px;font-weight:800;color:#DC2626;letter-spacing:.1em}
-.csos .t b{display:block;font-size:15px;font-weight:800}
-.csos .t span{font-size:12px;color:#64748B}
-.csos .tm{text-align:right;font-size:10.5px;color:#64748B;font-weight:600}
-.csos .tm b{display:block;font-size:17px;color:#DC2626;font-family:'JetBrains Mono',monospace}
-.swipe{margin-top:12px;height:52px;border-radius:26px;background:#FEF2F2;position:relative;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:800;color:#DC2626;overflow:hidden}
-.swipe::before{content:"";position:absolute;inset:0;background:linear-gradient(100deg,transparent 30%,rgba(255,255,255,.9) 50%,transparent 70%);background-size:200% 100%;animation:sh 2s infinite linear}
-@keyframes sh{from{background-position:150% 0}to{background-position:-50% 0}}
-.swipe .k{position:absolute;left:4px;top:4px;width:44px;height:44px;border-radius:50%;background:#DC2626;color:#fff;display:grid;place-items:center;box-shadow:0 6px 12px -4px rgba(220,38,38,.7)}
-.swipe span{position:relative}
-.tiles{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px}
-.tile{background:#fff;border-radius:20px;padding:14px;box-shadow:0 6px 16px -12px rgba(15,23,42,.3)}
-.tile .ti{width:40px;height:40px;border-radius:13px;display:grid;place-items:center}
-.tile b{display:block;font-size:20px;font-weight:800;margin-top:10px}
-.tile small{font-size:12px;color:#64748B;font-weight:600}
-.csec{display:flex;justify-content:space-between;align-items:center;margin:20px 2px 12px}
-.csec h5{font-size:15.5px;font-weight:800}
-.csec a{font-size:12.5px;font-weight:700;color:#1D4ED8}
-.tl{position:relative;padding-left:4px}
-.tl .e{display:flex;gap:12px;padding-bottom:14px;position:relative}
-.tl .e:not(:last-child)::before{content:"";position:absolute;left:51px;top:16px;bottom:0;width:2px;background:#E2E8F0}
-.tl .h{width:38px;font-size:11.5px;font-weight:700;color:#64748B;padding-top:2px;font-family:'JetBrains Mono',monospace}
-.tl .dt{width:12px;height:12px;border-radius:50%;margin-top:4px;flex:none;border:3px solid #fff;box-shadow:0 0 0 1.5px currentColor;background:currentColor}
-.tl .x b{font-size:13.5px;display:block;font-weight:700}
-.tl .x small{font-size:11.5px;color:#64748B}
-.cnav{position:absolute;left:14px;right:14px;bottom:22px;height:66px;background:#fff;border-radius:24px;box-shadow:0 18px 36px -14px rgba(15,23,42,.35);display:flex;align-items:center;justify-content:space-around;padding:0 8px;z-index:9}
-.cnav a{height:46px;min-width:46px;border-radius:16px;display:flex;align-items:center;justify-content:center;gap:7px;color:#94A3B8;font-size:13px;font-weight:800}
-.cnav a.on{background:#1D4ED8;color:#fff;padding:0 16px}
-.cnav a.s{background:#DC2626;color:#fff;border-radius:50%;width:50px;height:50px;box-shadow:0 8px 16px -6px rgba(220,38,38,.75)}
-.c-home .scr::before,.c-an .scr::before{content:""}
-
-.c-an .top2{display:flex;justify-content:space-between;align-items:center;margin-top:6px}
-.c-an h2{font-size:24px;font-weight:800}
-.msel{background:#fff;border-radius:14px;padding:9px 12px;font-size:12.5px;font-weight:700;display:flex;align-items:center;gap:6px;box-shadow:0 6px 16px -12px rgba(15,23,42,.35)}
-.msel .i{width:15px;height:15px;color:#1D4ED8}
-.cblue{margin-top:16px;background:linear-gradient(135deg,#1D4ED8,#1E3A8A);border-radius:24px;padding:18px;color:#fff;display:flex;align-items:center;gap:14px;position:relative;overflow:hidden}
-.cblue .band{left:auto;right:-60px;width:220px;height:26px;top:-14px;bottom:auto;opacity:.35;transform:rotate(-14deg)}
-.cblue .t{flex:1;position:relative}
-.cblue small{font-size:12px;color:#BFDBFE;font-weight:600}
-.cblue b{display:block;font-size:26px;font-weight:800;margin:4px 0}
-.cblue b u{text-decoration:none;font-size:14px;color:#BFDBFE;font-weight:700}
-.cblue em{font-style:normal;font-size:11px;font-weight:800;background:rgba(250,204,21,.2);color:#FDE68A;padding:3px 8px;border-radius:8px}
-.ring{width:88px;height:88px;position:relative;flex:none}
-.ring svg{width:88px;height:88px;transform:rotate(-90deg)}
-.ring b{position:absolute;inset:0;display:grid;place-items:center;font-size:19px;font-weight:800;margin:0}
-.ccard{background:#fff;border-radius:22px;padding:16px;margin-top:12px;box-shadow:0 6px 16px -12px rgba(15,23,42,.25)}
-.ccard .hrow{display:flex;justify-content:space-between;align-items:flex-start}
-.ccard h5{font-size:14.5px;font-weight:800}
-.ccard .v{font-size:22px;font-weight:800;margin-top:2px}
-.ccard .v u{text-decoration:none;font-size:13px;color:#64748B}
-.gch{font-size:11px;font-weight:800;background:#DCFCE7;color:#15803D;padding:4px 9px;border-radius:20px}
-.ccard svg.line{width:100%;height:130px;display:block;margin-top:8px}
+.kel .r{display:grid;grid-template-columns:82px 1fr 28px 42px;gap:8px;align-items:center;font-size:12.5px;font-weight:600;color:var(--ink2);margin-top:10px}
+.kel .r b{text-align:right;font-variant-numeric:tabular-nums}
+.kel .r em{font-style:normal;font-size:10.5px;font-weight:800;text-align:right}
+.kel .tr i{background:linear-gradient(90deg,var(--gold),#F0C955)}
+.fun .r{margin-top:10px}
+.fun .r>div{display:flex;justify-content:space-between;font-size:12.5px;font-weight:700;color:var(--ink2);margin-bottom:5px}
+.fun .r small{color:var(--mute);font-weight:600}
+.fun .tr{height:12px}
+.fun .drop{font-size:10.5px;color:#B42318;font-weight:700;margin-top:3px}
+svg.line{width:100%;height:120px;display:block;margin-top:8px}
 .xl{display:flex;justify-content:space-between;font-size:10.5px;color:#94A3B8;font-weight:600;padding:0 4px}
-.hb{margin-top:12px}
-.hb .r{display:flex;align-items:center;gap:10px;margin-top:10px;font-size:12.5px;font-weight:600;color:#334155}
-.hb .r .ic{width:30px;height:30px;border-radius:10px;display:grid;place-items:center;flex:none}
-.hb .r .ic .i{width:16px;height:16px}
-.hb .r .m{flex:1}
-.hb .r .m div{display:flex;justify-content:space-between;margin-bottom:5px}
-.hb .r .tr{height:7px}
-.lead{display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid #F1F5F9}
-.lead:last-child{border:none;padding-bottom:0}
-.md{width:30px;height:30px;border-radius:50%;display:grid;place-items:center;font-size:12.5px;font-weight:800;color:#fff;flex:none}
-.lead .t{flex:1}
-.lead b{font-size:13.5px;display:block}
-.lead small{font-size:11.5px;color:#64748B}
-.lead .n{font-size:15px;font-weight:800;color:#1D4ED8;text-align:right}
-.lead .n small{display:block;font-size:10.5px;font-weight:600}
+.wait{display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid #F1F4F9;font-size:12.5px}
+.wait:last-child{border:none;padding-bottom:0}
+.wait .t{flex:1;min-width:0}
+.wait b{display:block;font-size:13px}
+.wait small{color:var(--mute);font-size:11px}
+.wait .age{font-family:'JetBrains Mono',monospace;font-weight:700;color:#B42318;font-size:12.5px}
+.wait .av{width:32px;height:32px;font-size:11px;color:#fff}
+
+/* ---------- profil ---------- */
+.prof .hd{padding:0 16px 64px;border-radius:0 0 30px 30px;text-align:center}
+.prof .ptop{display:flex;justify-content:space-between;align-items:center;margin-top:2px}
+.prof .ptop b{font-size:16px}
+.prof .ptop span:first-child{width:38px}
+.pav{width:84px;height:84px;border-radius:50%;margin:10px auto 0;display:grid;place-items:center;font-size:28px;font-weight:800;background:linear-gradient(135deg,#1E3F8F,#123A94);box-shadow:0 0 0 3px var(--gold),0 0 0 7px rgba(212,168,42,.18);position:relative}
+.pav em{position:absolute;right:-2px;bottom:2px;width:26px;height:26px;border-radius:50%;background:var(--gold);color:var(--navy2);display:grid;place-items:center;box-shadow:0 0 0 3px #0E3285}
+.pav em .i{width:14px;height:14px}
+.prof h2{font-size:20px;font-weight:800;margin-top:14px}
+.prof .rl{font-size:12.5px;color:#B9C6E4;margin-top:3px}
+.badges{display:flex;justify-content:center;gap:6px;margin-top:10px;flex-wrap:wrap}
+.badges span{font-size:11px;font-weight:700;padding:4px 10px;border-radius:20px;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.16);display:flex;align-items:center;gap:5px}
+.badges .on{background:rgba(18,183,106,.18);border-color:rgba(18,183,106,.4);color:#A6F4C5}
+.badges .on::before{content:"";width:7px;height:7px;border-radius:50%;background:#12B76A}
+.prof .wrap{margin-top:-46px}
+.mstat{background:#fff;border-radius:20px;display:grid;grid-template-columns:repeat(3,1fr);padding:14px 6px;box-shadow:0 14px 30px -16px rgba(11,42,111,.35)}
+.mstat div{text-align:center}
+.mstat div+div{border-left:1px solid #EEF2F8}
+.mstat b{display:block;font-size:20px;font-weight:800;font-variant-numeric:tabular-nums}
+.mstat small{font-size:11px;color:var(--mute);font-weight:600}
+.plist{background:#fff;border-radius:18px;border:1px solid #E8EDF5;padding:2px 14px}
+.plist>div{display:flex;align-items:center;gap:12px;padding:11px 0;border-bottom:1px solid #F1F4F9}
+.plist>div:last-child{border:none}
+.plist .ic{width:34px;height:34px;border-radius:11px;background:#EEF2FB;color:var(--navy);display:grid;place-items:center;flex:none}
+.plist .ic .i{width:17px;height:17px}
+.plist .t{flex:1;min-width:0}
+.plist small{display:block;font-size:11px;color:var(--mute);font-weight:600}
+.plist b{font-size:13px;display:block}
+.plist .go{width:16px;height:16px;color:#A0AEC4}
+.plist .tg{width:42px;height:24px}
+.plist .tg::after{width:18px;height:18px}
+.plist .tg.off{background:#CBD5E1}
+.plist .tg.off::after{right:auto;left:3px}
+.plist .val{font-size:12px;color:var(--mute);font-weight:600}
+.eco-row{display:flex;gap:6px;flex-wrap:wrap;margin-top:4px}
+.logout{margin-top:14px;height:48px;border-radius:14px;border:1.5px solid #FBC8C3;color:#B42318;background:#FFF5F4;display:flex;align-items:center;justify-content:center;gap:8px;font-weight:800;font-size:14px}
+.ver{text-align:center;font-size:11px;color:#94A3B8;margin-top:12px}
 </style>
 </head>
 <body>
 
-<!-- ============ sprite ikon & lambang ============ -->
 <svg width="0" height="0" style="position:absolute" aria-hidden="true">
   <defs>
     <symbol id="emblem" viewBox="0 0 64 72">
@@ -494,551 +447,615 @@ svg.i{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:2;stroke
     <symbol id="i-chart" viewBox="0 0 24 24"><path d="M3 21h18"/><path d="M6 17v-5M11 17V7M16 17v-8M21 17V4"/></symbol>
     <symbol id="i-bell" viewBox="0 0 24 24"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.9 1.9 0 0 0 3.4 0"/></symbol>
     <symbol id="i-user" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 3.6-6 8-6s8 2 8 6"/></symbol>
-    <symbol id="i-map" viewBox="0 0 24 24"><path d="M9 4L3 6v14l6-2 6 2 6-2V4l-6 2z"/><path d="M9 4v14M15 6v14"/></symbol>
     <symbol id="i-phone" viewBox="0 0 24 24"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.4 1.8.7 2.7a2 2 0 0 1-.5 2.1L8 9.8a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.7.7a2 2 0 0 1 1.7 2z"/></symbol>
     <symbol id="i-file" viewBox="0 0 24 24"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6M8 13h8M8 17h5"/></symbol>
-    <symbol id="i-radio" viewBox="0 0 24 24"><rect x="3" y="8" width="18" height="13" rx="2"/><path d="M7 8l10-5"/><circle cx="8" cy="14.5" r="2.5"/><path d="M14 13h4M14 16h4"/></symbol>
     <symbol id="i-pin" viewBox="0 0 24 24"><path d="M12 22s7-6.5 7-12a7 7 0 0 0-14 0c0 5.5 7 12 7 12z"/><circle cx="12" cy="10" r="2.5"/></symbol>
     <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></symbol>
     <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 2l8 3v6c0 5-3.5 9-8 11-4.5-2-8-6-8-11V5z"/><path d="M9 12l2 2 4-4"/></symbol>
     <symbol id="i-lock" viewBox="0 0 24 24"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></symbol>
-    <symbol id="i-chev" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></symbol>
+    <symbol id="i-eye" viewBox="0 0 24 24"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></symbol>
     <symbol id="i-down" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></symbol>
+    <symbol id="i-left" viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"/></symbol>
     <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></symbol>
     <symbol id="i-users" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"/><path d="M2 20c0-3.5 3-5.5 7-5.5s7 2 7 5.5"/><path d="M16 4.3a3.5 3.5 0 0 1 0 7M18 14.6c2.4.6 4 2.5 4 5.4"/></symbol>
     <symbol id="i-siren" viewBox="0 0 24 24"><path d="M7 18v-6a5 5 0 0 1 10 0v6"/><path d="M5 21h14v-3H5z"/><path d="M12 2v2M4.2 5.2l1.4 1.4M19.8 5.2l-1.4 1.4M2 12h2M20 12h2"/></symbol>
-    <symbol id="i-alert" viewBox="0 0 24 24"><path d="M10.3 3.9L1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/></symbol>
-    <symbol id="i-msg" viewBox="0 0 24 24"><path d="M21 12a8 8 0 0 1-11.6 7.1L3 21l1.9-6.4A8 8 0 1 1 21 12z"/></symbol>
-    <symbol id="i-nav" viewBox="0 0 24 24"><path d="M3 11l19-9-9 19-2-8z"/></symbol>
-    <symbol id="i-car" viewBox="0 0 24 24"><path d="M5 17h14v-5l-2-5H7l-2 5z"/><path d="M5 12h14"/><circle cx="8" cy="17" r="2"/><circle cx="16" cy="17" r="2"/><path d="M10 4h4"/></symbol>
-    <symbol id="i-check" viewBox="0 0 24 24"><path d="M5 12l5 5 9-10"/></symbol>
-    <symbol id="i-back" viewBox="0 0 24 24"><path d="M21 5H9l-6 7 6 7h12z"/><path d="M17 9l-6 6M11 9l6 6"/></symbol>
     <symbol id="i-hand" viewBox="0 0 24 24"><path d="M18 11V6a2 2 0 0 0-4 0v5M14 10V4a2 2 0 0 0-4 0v6M10 10.5V6a2 2 0 0 0-4 0v8l-1.5-1.5a2 2 0 0 0-3 2.6L6 20a5 5 0 0 0 4 2h3a6 6 0 0 0 6-6v-4a2 2 0 0 0-4 0"/></symbol>
-    <symbol id="i-eye" viewBox="0 0 24 24"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></symbol>
     <symbol id="i-cal" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></symbol>
     <symbol id="i-chev2" viewBox="0 0 24 24"><path d="M4 9l8 5 8-5"/><path d="M4 14l8 5 8-5"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24"><path d="M5 12l5 5 9-10"/></symbol>
+    <symbol id="i-news" viewBox="0 0 24 24"><path d="M4 4h12v15a2 2 0 0 0 2 2H6a2 2 0 0 1-2-2z"/><path d="M16 8h4v11a2 2 0 0 1-4 0M7.5 8h5M7.5 12h5M7.5 16h3"/></symbol>
+    <symbol id="i-layers" viewBox="0 0 24 24"><path d="M12 3l9 5-9 5-9-5z"/><path d="M3 12.5l9 5 9-5"/><path d="M3 16.5l9 5 9-5"/></symbol>
+    <symbol id="i-video" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="3"/><path d="M10 9.2v5.6l4.6-2.8z"/></symbol>
+    <symbol id="i-play" viewBox="0 0 24 24"><path d="M8 5v14l11-7z" fill="currentColor"/></symbol>
+    <symbol id="i-checkc" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M8 12l3 3 5-6"/></symbol>
+    <symbol id="i-clip" viewBox="0 0 24 24"><rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 4V3h6v1M9 13l2 2 4-4"/></symbol>
+    <symbol id="i-img" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="2"/><path d="M21 16l-5-5-9 9"/></symbol>
+    <symbol id="i-mic" viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></symbol>
+    <symbol id="i-filter" viewBox="0 0 24 24"><path d="M3 5h18l-7 8v6l-4-2v-4z"/></symbol>
+    <symbol id="i-list" viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="7" rx="2"/><rect x="4" y="13" width="16" height="7" rx="2"/></symbol>
+    <symbol id="i-table" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18M3 15h18M9 4v16"/></symbol>
+    <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.5-4.5"/></symbol>
+    <symbol id="i-bulb" viewBox="0 0 24 24"><path d="M9 18h6M10 22h4"/><path d="M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/></symbol>
+    <symbol id="i-more" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/></symbol>
+    <symbol id="i-paper" viewBox="0 0 24 24"><path d="M21 11.5l-8.6 8.6a5.5 5.5 0 0 1-7.8-7.8l8.6-8.6a3.7 3.7 0 0 1 5.2 5.2L9.8 17.5a1.8 1.8 0 0 1-2.6-2.6L15 7"/></symbol>
+    <symbol id="i-store" viewBox="0 0 24 24"><path d="M3 9l2-5h14l2 5"/><path d="M3 9a3 3 0 0 0 6 0 3 3 0 0 0 6 0 3 3 0 0 0 6 0"/><path d="M5 12v8h14v-8M10 20v-5h4v5"/></symbol>
+    <symbol id="i-homes" viewBox="0 0 24 24"><path d="M3 11l6-5 6 5v9H3z"/><path d="M15 9l3-2.5L21 9v11h-6M7 20v-4h4v4"/></symbol>
+    <symbol id="i-school" viewBox="0 0 24 24"><path d="M2 9l10-5 10 5-10 5z"/><path d="M6 11v5c0 1.5 3 3 6 3s6-1.5 6-3v-5M22 9v6"/></symbol>
+    <symbol id="i-chev" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></symbol>
+    <symbol id="i-edit" viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M14 6l4 4"/></symbol>
+    <symbol id="i-cam" viewBox="0 0 24 24"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></symbol>
+    <symbol id="i-key" viewBox="0 0 24 24"><circle cx="8" cy="15" r="4"/><path d="M11 12l9-9M17 6l3 3M15 8l2 2"/></symbol>
+    <symbol id="i-device" viewBox="0 0 24 24"><rect x="6" y="2" width="12" height="20" rx="2.5"/><path d="M11 18h2"/></symbol>
+    <symbol id="i-help" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9.5 9a2.5 2.5 0 0 1 4.9.7c0 1.7-2.4 2.3-2.4 3.8M12 17h.01"/></symbol>
+    <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5h.01"/></symbol>
+    <symbol id="i-out" viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/></symbol>
+    <symbol id="i-moon" viewBox="0 0 24 24"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></symbol>
+    <symbol id="i-office" viewBox="0 0 24 24"><rect x="5" y="3" width="14" height="18" rx="1"/><path d="M9 7h2M13 7h2M9 11h2M13 11h2M9 15h2M13 15h2M10 21v-3h4v3"/></symbol>
   </defs>
 </svg>
 
 <header class="page-h">
   <div class="in">
-    <h1>Polmas Digital: Mockup Aplikasi Petugas</h1>
-    <p>Tiga opsi gaya, masing-masing 4 layar (Splash, Login, Beranda, Analitik), ukuran layar HP 360×760. Login pakai nomor HP yang terdaftar sebagai Nomor Darurat lalu kata sandi (login pertama = buat kata sandi), sesuai PRD Polmas Keamanan. Lambang perisai-bintang di sini ilustrasi generik, bukan logo resmi Polri; ganti dengan aset resmi bila sudah ada izin.</p>
-    <nav class="tabs">
-      <button class="on" data-t="a">Opsi A · Bhayangkara (Navy &amp; Emas)</button>
-      <button data-t="b">Opsi B · Komando Malam (Gelap Taktis)</button>
-      <button data-t="c">Opsi C · Patroli Terang (Livery Biru-Kuning)</button>
-    </nav>
+    <div>
+      <h1>Polmas Digital · Opsi A (Bhayangkara), versi 2</h1>
+      <p>Aplikasi untuk petugas penerima: menerima SOS dan pengaduan, lalu menindaklanjuti. Isi layar bisa di-scroll di dalam bingkai HP. Lambang perisai-bintang ilustrasi generik, bukan logo resmi Polri. Semua angka dan nama adalah contoh.</p>
+    </div>
+    <div class="chg">
+      <b>PERUBAHAN DARI VERSI 1</b>
+      <ul>
+        <li>Tombol SOS di navigasi dihapus: petugas menerima SOS, tidak mengirim.</li>
+        <li>Kartu laporan memuat kolom Tindak Lanjut: Berita, No HP, Ekosistem, Dari Siapa, Foto/Video, Lokasi, Waktu, Status, Tindak Lanjut.</li>
+        <li>Mode tabel (HP dimiringkan) dan layar Detail + Tindak Lanjut.</li>
+        <li>Analitik 4 tab: Ringkasan, Ekosistem, Waktu &amp; Wilayah, Kinerja.</li>
+        <li>Disamakan dengan aplikasi: tanpa status tugas/shift, angka dan label mengikuti data API.</li>
+      </ul>
+    </div>
   </div>
 </header>
 
-<!-- ======================================================= OPSI A -->
-<section class="opt a on" id="a">
-  <div class="intro">
-    <div>
-      <h2>Opsi A · Bhayangkara</h2>
-      <p>Gaya resmi dan berwibawa: navy seragam dengan aksen emas seperti tanda pangkat, pola garis halus, strip merah-putih. Beranda kartu bertumpuk dengan status tugas, pangkat, SOS masuk, dan menu cepat. Paling dekat dengan tema aplikasi sekarang.</p>
+<!-- =========================== MASUK =========================== -->
+<div class="grp"><h2>1 · Masuk</h2><p>Splash dan login nomor HP + kata sandi (login pertama: buat kata sandi).</p></div>
+<div class="screens">
+  <figure><div class="phone"><div class="scr a-splash">
+    <div class="pat"></div>
+    <div class="sb lt"><span>9:41</span><svg><use href="#sbar"/></svg></div>
+    <div class="c">
+      <div class="halo"><svg class="emb" viewBox="0 0 64 72"><use href="#emblem"/></svg></div>
+      <h1>POLMAS<span>DIGITAL</span></h1>
+      <p class="motto">Melindungi · Mengayomi · Melayani</p>
     </div>
-    <div class="sw"><i style="background:#0B2A6F"></i><i style="background:#071B4D"></i><i style="background:#D4A82A"></i><i style="background:#D92D20"></i><i style="background:#F3F5F9"></i></div>
-  </div>
-  <div class="screens">
+    <div class="f"><div class="load"><i></i></div><small>Menyiapkan sistem keamanan…</small><small class="by">v2.0 · Didukung SiagaSOS</small></div>
+    <div class="flag"></div>
+  </div></div><figcaption>Splash Screen</figcaption></figure>
 
-    <!-- A1 splash -->
-    <figure><div class="phone"><div class="scr a-splash">
-      <div class="pat"></div>
+  <figure><div class="phone"><div class="scr a-login">
+    <div class="hd">
       <div class="sb lt"><span>9:41</span><svg><use href="#sbar"/></svg></div>
-      <div class="c">
-        <div class="halo"><svg class="emb" viewBox="0 0 64 72"><use href="#emblem"/></svg></div>
-        <h1>POLMAS<span>DIGITAL</span></h1>
-        <p class="motto">Melindungi · Mengayomi · Melayani</p>
-      </div>
-      <div class="f">
-        <div class="load"><i></i></div>
-        <small>Menyiapkan sistem keamanan…</small>
-        <small class="by">v2.0 · Didukung SiagaSOS</small>
-      </div>
-      <div class="flag"></div>
-    </div></div><figcaption>A1 · Splash Screen</figcaption></figure>
-
-    <!-- A2 login -->
-    <figure><div class="phone"><div class="scr a-login">
-      <div class="a-hd">
-        <div class="sb lt"><span>9:41</span><svg><use href="#sbar"/></svg></div>
-        <svg class="emb" viewBox="0 0 64 72"><use href="#emblem"/></svg>
-        <h2>Polmas Digital</h2>
-        <p>Aplikasi Petugas Polisi Masyarakat</p>
-        <span class="gold">AKSES KHUSUS PETUGAS</span>
-      </div>
-      <div class="body" style="display:flex;flex-direction:column">
-        <div class="a-card">
-          <h3>Masuk Petugas</h3>
-          <p class="sub">Gunakan nomor HP yang terdaftar sebagai Nomor Darurat.</p>
-          <span class="lbl">Nomor HP</span>
-          <div class="field"><span class="cc">+62</span>812 3456 7890</div>
-          <span class="lbl">Kata sandi</span>
-          <div class="field pw"><svg class="i"><use href="#i-lock"/></svg>••••••••<svg class="i"><use href="#i-eye"/></svg></div>
-          <div class="row-sb" style="margin-top:-4px"><span class="rem"><i><svg class="i"><use href="#i-check"/></svg></i>Ingat di perangkat ini</span><b>Lupa sandi?</b></div>
-          <a class="btn pri"><svg class="i"><use href="#i-lock"/></svg>Masuk</a>
-        </div>
-        <div class="note"><svg class="i"><use href="#i-shield"/></svg><span>Login pertama? Anda akan diminta membuat kata sandi. Nomor didaftarkan admin di daftar Nomor Darurat.</span></div>
-        <div class="foot">Butuh bantuan? <b>Hubungi Admin Polsek</b></div>
-      </div>
-      <div class="flag" style="height:4px"></div>
-    </div></div><figcaption>A2 · Login (Nomor HP + kata sandi)</figcaption></figure>
-
-    <!-- A3 home -->
-    <figure><div class="phone"><div class="scr a-home">
-      <div class="body">
-        <div class="a-hd">
-          <div class="sb lt"><span>9:41</span><svg><use href="#sbar"/></svg></div>
-          <div class="who">
-            <div class="av">AS</div>
-            <div class="t"><small>Selamat bertugas,</small><b>Bripka Andi Saputra</b><small>NRP 87051234 · Polsek Menteng</small></div>
-            <div class="icbtn"><svg class="i"><use href="#i-bell"/></svg><span class="dot"></span></div>
-          </div>
-          <div class="duty">
-            <div class="rk"><svg viewBox="0 0 24 24"><use href="#i-chev2"/></svg></div>
-            <div class="t"><small>Status tugas · Shift pagi</small><b>BERTUGAS · 07.00–15.00</b></div>
-            <div class="tg"></div>
-          </div>
-        </div>
-        <div class="wrap">
-          <div class="alert">
-            <svg class="i bgic" style="position:absolute;right:-16px;top:-12px;width:120px;height:120px;opacity:.12"><use href="#i-siren"/></svg>
-            <span class="tag"><span class="pulse"></span>SOS DARURAT MASUK</span>
-            <span class="tm">2 mnt lalu</span>
-            <h4>Ibu Siti Rahmawati</h4>
-            <p><svg class="i"><use href="#i-pin"/></svg>Jl. Cikini Raya No. 45 · 1,2 km</p>
-            <div class="acts"><a class="w"><svg class="i"><use href="#i-hand"/></svg>Tanggapi</a><a class="o"><svg class="i"><use href="#i-map"/></svg>Lihat Peta</a></div>
-          </div>
-          <div class="stats">
-            <div class="stat"><i style="background:#D92D20"></i><b>3</b><small>SOS aktif</small></div>
-            <div class="stat"><i style="background:#F79009"></i><b>7</b><small>Ditangani</small></div>
-            <div class="stat"><i style="background:#12B76A"></i><b>24</b><small>Selesai</small></div>
-          </div>
-          <div class="sec"><h5>Menu Cepat</h5></div>
-          <div class="menu">
-            <div><span><svg class="i"><use href="#i-file"/></svg><em>12</em></span>Laporan</div>
-            <div><span><svg class="i"><use href="#i-map"/></svg></span>Peta Patroli</div>
-            <div class="red"><span><svg class="i"><use href="#i-phone"/></svg></span>Panggil 110</div>
-            <div><span><svg class="i"><use href="#i-radio"/></svg></span>Unit Terdekat</div>
-          </div>
-          <div class="sec"><h5>Laporan Terbaru</h5><a>Lihat semua</a></div>
-          <div class="it"><div class="ic" style="background:#FEE4E2;color:#D92D20"><svg class="i"><use href="#i-alert"/></svg></div><div class="t"><b>Pencurian motor</b><small>Gondangdia · 08.42</small></div><span class="pill r">Baru</span></div>
-          <div class="it"><div class="ic" style="background:#FEF0C7;color:#B54708"><svg class="i"><use href="#i-car"/></svg></div><div class="t"><b>Kecelakaan ringan</b><small>Jl. Diponegoro · 08.10</small></div><span class="pill y">Proses</span></div>
-          <div class="it"><div class="ic" style="background:#D1FADF;color:#027A48"><svg class="i"><use href="#i-users"/></svg></div><div class="t"><b>Keributan warga</b><small>Kebon Sirih · 07.35</small></div><span class="pill g">Selesai</span></div>
-        </div>
-      </div>
-      <nav class="bn">
-        <a class="on"><svg class="i"><use href="#i-home"/></svg>Beranda</a>
-        <a><svg class="i"><use href="#i-file"/></svg>Laporan</a>
-        <a class="sos"><span><svg class="i"><use href="#i-siren"/></svg></span></a>
-        <a><svg class="i"><use href="#i-chart"/></svg>Analitik</a>
-        <a><svg class="i"><use href="#i-user"/></svg>Profil</a>
-      </nav>
-    </div></div><figcaption>A3 · Beranda</figcaption></figure>
-
-    <!-- A4 analytics -->
-    <figure><div class="phone"><div class="scr a-an">
-      <div class="a-hd">
-        <div class="sb lt"><span>9:41</span><svg><use href="#sbar"/></svg></div>
-        <h2>Analitik Wilayah</h2>
-        <p><svg class="i"><use href="#i-shield"/></svg>Polsek Menteng · 24–30 Nov 2026</p>
-        <div class="seg"><span>Hari</span><span class="on">Minggu</span><span>Bulan</span><span>Tahun</span></div>
-      </div>
-      <div class="body">
-        <div class="wrap">
-          <div class="kpis">
-            <div class="kpi"><span class="k" style="background:#E8EEFB;color:#0B2A6F"><svg class="i"><use href="#i-file"/></svg></span><small>Total laporan</small><b>312</b><em class="up">▲ 12% dari pekan lalu</em></div>
-            <div class="kpi"><span class="k" style="background:#FEF3D6;color:#B98A0E"><svg class="i"><use href="#i-clock"/></svg></span><small>Waktu respons</small><b>6,4 <u>mnt</u></b><em class="up">▼ 1,1 mnt lebih cepat</em></div>
-            <div class="kpi"><span class="k" style="background:#D1FADF;color:#027A48"><svg class="i"><use href="#i-check"/></svg></span><small>Tingkat selesai</small><b>94%</b><em class="up">▲ 3 poin</em></div>
-            <div class="kpi"><span class="k" style="background:#FEE4E2;color:#D92D20"><svg class="i"><use href="#i-siren"/></svg></span><small>SOS darurat</small><b>48</b><em class="dn">▲ 6 dari pekan lalu</em></div>
-          </div>
-          <div class="cardp">
-            <div class="hrow"><h5>Laporan per Hari</h5><span class="hint">Puncak: Sabtu</span></div>
-            <div class="bars">
-              <div><i style="--v:48%"></i>Sen</div>
-              <div><i style="--v:62%"></i>Sel</div>
-              <div><i style="--v:51%"></i>Rab</div>
-              <div><i style="--v:70%"></i>Kam</div>
-              <div><i style="--v:58%"></i>Jum</div>
-              <div class="hi"><i style="--v:82%" data-n="72"></i>Sab</div>
-              <div><i style="--v:64%"></i>Min</div>
-            </div>
-          </div>
-          <div class="cardp">
-            <div class="hrow"><h5>Kategori Kejadian</h5><span class="hint">312 laporan</span></div>
-            <div class="donut">
-              <div class="d">
-                <svg viewBox="0 0 120 120">
-                  <circle cx="60" cy="60" r="46" fill="none" stroke="#EEF2F8" stroke-width="16"/>
-                  <circle cx="60" cy="60" r="46" fill="none" stroke="#0B2A6F" stroke-width="16" pathLength="100" stroke-dasharray="33 67" stroke-dashoffset="0"/>
-                  <circle cx="60" cy="60" r="46" fill="none" stroke="#D4A82A" stroke-width="16" pathLength="100" stroke-dasharray="21 79" stroke-dashoffset="-34"/>
-                  <circle cx="60" cy="60" r="46" fill="none" stroke="#D92D20" stroke-width="16" pathLength="100" stroke-dasharray="17 83" stroke-dashoffset="-56"/>
-                  <circle cx="60" cy="60" r="46" fill="none" stroke="#4F7BD9" stroke-width="16" pathLength="100" stroke-dasharray="13 87" stroke-dashoffset="-74"/>
-                  <circle cx="60" cy="60" r="46" fill="none" stroke="#98A6C0" stroke-width="16" pathLength="100" stroke-dasharray="11 89" stroke-dashoffset="-88"/>
-                </svg>
-                <div class="ctr"><b>312</b><small>laporan</small></div>
-              </div>
-              <div class="lg">
-                <div><i style="background:#0B2A6F"></i>Pencurian<b>34%</b></div>
-                <div><i style="background:#D4A82A"></i>Kecelakaan<b>22%</b></div>
-                <div><i style="background:#D92D20"></i>Keributan<b>18%</b></div>
-                <div><i style="background:#4F7BD9"></i>KDRT<b>14%</b></div>
-                <div><i style="background:#98A6C0"></i>Lainnya<b>12%</b></div>
-              </div>
-            </div>
-          </div>
-          <div class="cardp rk">
-            <div class="hrow"><h5>Wilayah Rawan</h5><span class="hint">laporan</span></div>
-            <div><span>Cikini</span><span class="tr"><i style="--v:100%"></i></span><b>58</b></div>
-            <div><span>Gondangdia</span><span class="tr"><i style="--v:76%"></i></span><b>44</b></div>
-            <div><span>Pegangsaan</span><span class="tr"><i style="--v:64%"></i></span><b>37</b></div>
-            <div><span>Kebon Sirih</span><span class="tr"><i style="--v:50%"></i></span><b>29</b></div>
-          </div>
-        </div>
-      </div>
-      <nav class="bn">
-        <a><svg class="i"><use href="#i-home"/></svg>Beranda</a>
-        <a><svg class="i"><use href="#i-file"/></svg>Laporan</a>
-        <a class="sos"><span><svg class="i"><use href="#i-siren"/></svg></span></a>
-        <a class="on"><svg class="i"><use href="#i-chart"/></svg>Analitik</a>
-        <a><svg class="i"><use href="#i-user"/></svg>Profil</a>
-      </nav>
-    </div></div><figcaption>A4 · Analitik</figcaption></figure>
-  </div>
-</section>
-
-<!-- ======================================================= OPSI B -->
-<section class="opt b" id="b" style="--em-fill:#0D1B3D;--em-line:#38BDF8;--em-star:#F8FAFC">
-  <div class="intro">
-    <div>
-      <h2>Opsi B · Komando Malam</h2>
-      <p>Gaya pusat komando: latar gelap (hemat baterai saat patroli malam), lampu rotator merah-biru di atas layar, radar di splash. Beranda berbasis peta: posisi unit, pin SOS berdenyut, rute patroli, dan panel panggilan aktif dari bawah.</p>
+      <svg class="emb" viewBox="0 0 64 72"><use href="#emblem"/></svg>
+      <h2>Polmas Digital</h2>
+      <p>Aplikasi Petugas Polisi Masyarakat</p>
+      <span class="gold">AKSES KHUSUS PETUGAS</span>
     </div>
-    <div class="sw"><i style="background:#060B18"></i><i style="background:#0B1324"></i><i style="background:#38BDF8"></i><i style="background:#2563EB"></i><i style="background:#EF4444"></i></div>
-  </div>
-  <div class="screens">
+    <div class="body">
+      <div class="card">
+        <h3>Masuk Petugas</h3>
+        <p class="sub">Gunakan nomor HP yang terdaftar sebagai Nomor Darurat.</p>
+        <span class="lbl">Nomor HP</span>
+        <div class="field"><span class="cc">+62</span>812 3456 7890</div>
+        <span class="lbl">Kata sandi</span>
+        <div class="field pw"><svg class="i"><use href="#i-lock"/></svg>••••••••<svg class="i"><use href="#i-eye"/></svg></div>
+        <div class="row-sb"><span class="rem"><i><svg class="i"><use href="#i-check"/></svg></i>Ingat di perangkat ini</span><b>Lupa sandi?</b></div>
+        <a class="btn pri"><svg class="i"><use href="#i-lock"/></svg>Masuk</a>
+      </div>
+      <div class="note"><svg class="i"><use href="#i-shield"/></svg><span>Login pertama? Anda akan diminta membuat kata sandi. Nomor didaftarkan admin di daftar Nomor Darurat.</span></div>
+      <div class="foot">Butuh bantuan? <b>Hubungi Admin Polsek</b></div>
+    </div>
+    <div class="flag" style="height:4px"></div>
+  </div></div><figcaption>Login</figcaption></figure>
+</div>
 
-    <!-- B1 splash -->
-    <figure><div class="phone"><div class="scr b-splash">
-      <div class="lightbar"></div>
-      <div class="sb lt" style="z-index:50"><span>9:41</span><svg><use href="#sbar"/></svg></div>
-      <div class="c">
-        <div class="radar">
-          <div class="cross"></div><div class="sweep"></div>
-          <span class="blip" style="top:48px;left:150px"></span>
-          <span class="blip" style="top:160px;left:52px;background:#38BDF8;animation:none;box-shadow:0 0 8px #38BDF8"></span>
-          <svg class="emb" viewBox="0 0 64 72"><use href="#emblem"/></svg>
+<!-- =========================== TUGAS =========================== -->
+<div class="grp"><h2>2 · Beranda &amp; Tindak Lanjut</h2><p>Navigasi bawah: Beranda, Laporan, Analitik, Profil (tanpa tombol SOS). SOS yang masuk tampil sebagai kartu merah untuk ditanggapi. Setiap laporan menampilkan semua kolom Tindak Lanjut, sebagai kartu (HP tegak) atau tabel (HP miring).</p></div>
+<div class="screens">
+
+  <!-- BERANDA -->
+  <figure><div class="phone"><div class="scr home">
+    <div class="body">
+      <div class="hd">
+        <div class="sb lt"><span>9:41</span><svg><use href="#sbar"/></svg></div>
+        <div class="who">
+          <div class="av">AS</div>
+          <div class="t"><small>Selamat bertugas,</small><b>Bripka Andi Saputra</b><small>Bhabinkamtibmas · Kec. Menteng</small></div>
+          <div class="icbtn"><svg class="i"><use href="#i-bell"/></svg><span class="dot"></span></div>
         </div>
-        <h1>POLMAS DIGITAL</h1>
-        <div class="tl mono">PUSAT KOMANDO PATROLI MASYARAKAT</div>
       </div>
-      <div class="f">
-        <div class="mono"><span>› MENGHUBUNGKAN KE KOMANDO</span><span>64%</span></div>
-        <div class="blocks"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i></i><i></i><i></i><i></i></div>
-        <div class="enc"><svg class="i"><use href="#i-lock"/></svg>Koneksi terenkripsi</div>
-      </div>
-    </div></div><figcaption>B1 · Splash Screen</figcaption></figure>
+      <div class="wrap">
+        <div class="alert">
+          <svg class="i bg"><use href="#i-siren"/></svg>
+          <span class="tag"><span class="pulse"></span>SOS MASUK</span>
+          <span class="tm">2 mnt lalu</span>
+          <h4>Percobaan pencurian di toko</h4>
+          <span class="eco"><svg class="i"><use href="#i-layers"/></svg>UMKM <u>· commerceOS</u></span>
+          <p><svg class="i"><use href="#i-user"/></svg>Ibu Siti Rahmawati · Toko Roti Sinar Jaya</p>
+          <p><svg class="i"><use href="#i-pin"/></svg>Jl. Cikini Raya 45, Kel. Cikini · 1,2 km</p>
+          <div class="acts"><a class="w"><svg class="i"><use href="#i-hand"/></svg>Tanggapi</a><a class="o"><svg class="i"><use href="#i-phone"/></svg>Telepon</a></div>
+        </div>
+        <div class="stats4">
+          <div class="st"><i style="background:#D92D20"></i><b>3</b><small>SOS hari ini</small></div>
+          <div class="st"><i style="background:#4F7BD9"></i><b>5</b><small>Laporan baru</small></div>
+          <div class="st"><i style="background:#F79009"></i><b>7</b><small>Dalam penanganan</small></div>
+          <div class="st"><i style="background:#12B76A"></i><b>24</b><small>Selesai 7 hari</small></div>
+        </div>
+        <div class="sec"><h5>Tindak Lanjut Terbaru</h5><div class="vt"><span class="on"><svg class="i"><use href="#i-list"/></svg></span><span><svg class="i"><use href="#i-table"/></svg></span></div></div>
 
-    <!-- B2 login -->
-    <figure><div class="phone"><div class="scr b-login">
-      <div class="lightbar soft"></div>
+        <div class="rc">
+          <div class="top"><span class="kind">PENGADUAN</span><span class="pill y">Diproses</span><span class="when"><svg class="i"><use href="#i-clock"/></svg>08.10</span></div>
+          <h4>Parkir liar menutup akses gang</h4>
+          <span class="eco"><svg class="i"><use href="#i-layers"/></svg>Lingkungan <u>· tata-warga</u></span>
+          <div class="kv">
+            <div><svg class="i"><use href="#i-user"/></svg>Pak Budi Santoso · Ketua RT 05</div>
+            <div><svg class="i"><use href="#i-phone"/></svg><a>0813-2211-4455</a></div>
+            <div><svg class="i"><use href="#i-pin"/></svg><span>Jl. Kebon Sirih Dalam, Kel. Kebon Sirih <em>· 2,0 km</em></span></div>
+          </div>
+          <div class="media"><span class="th ph2"><svg class="i"><use href="#i-img"/></svg></span><span class="th ph3 vid"><svg class="i"><use href="#i-play"/></svg><small>0:24</small></span></div>
+          <div class="tlb"><svg class="i"><use href="#i-clip"/></svg><span><b>Bripka Andi, 08.25:</b> Koordinasi dengan Dishub, unit menuju lokasi.</span></div>
+        </div>
+
+        <div class="rc">
+          <div class="top"><span class="kind">PENGADUAN</span><span class="pill g">Selesai</span><span class="when"><svg class="i"><use href="#i-clock"/></svg>07.35</span></div>
+          <h4>Keributan pelajar di depan sekolah</h4>
+          <span class="eco"><svg class="i"><use href="#i-layers"/></svg>Pendidikan <u>· SIS Sekolah</u></span>
+          <div class="kv">
+            <div><svg class="i"><use href="#i-user"/></svg>Bu Ratna Dewi · Guru SMPN 1</div>
+            <div><svg class="i"><use href="#i-phone"/></svg><a>0812-9090-1122</a></div>
+            <div><svg class="i"><use href="#i-pin"/></svg><span>Jl. Cikini Raya 87, Kel. Cikini <em>· 0,9 km</em></span></div>
+          </div>
+          <div class="media"><span class="th ph1 vid"><svg class="i"><use href="#i-play"/></svg><small>0:41</small></span></div>
+          <div class="tlb"><svg class="i"><use href="#i-clip"/></svg><span><b>Brigpol Dimas, 07.58:</b> Kerumunan dibubarkan, pelajar diserahkan ke pihak sekolah.</span></div>
+        </div>
+      </div>
+    </div>
+    <nav class="bn">
+      <a class="on"><svg class="i"><use href="#i-home"/></svg>Beranda</a>
+      <a><svg class="i"><use href="#i-clip"/></svg>Laporan<em>12</em></a>
+      <a><svg class="i"><use href="#i-chart"/></svg>Analitik</a>
+      <a><svg class="i"><use href="#i-user"/></svg>Profil</a>
+    </nav>
+  </div></div><figcaption>Beranda<small>SOS masuk, angka ringkas, tindak lanjut terbaru</small></figcaption></figure>
+
+  <!-- DAFTAR (KARTU) -->
+  <figure><div class="phone"><div class="scr lst">
+    <div class="hd">
       <div class="sb lt"><span>9:41</span><svg><use href="#sbar"/></svg></div>
-      <div class="body">
-        <div class="brand-row"><svg class="emb" viewBox="0 0 64 72"><use href="#emblem"/></svg><div><b>POLMAS DIGITAL</b><small class="mono">AKSES PETUGAS</small></div></div>
-        <h2>Masukkan nomor<br>terdaftar Anda</h2>
-        <p class="p">Langkah 1 dari 2. Berikutnya masukkan kata sandi (login pertama: buat kata sandi).</p>
-        <div class="lb mono">NOMOR HP</div>
-        <div class="bigno mono"><span>+62</span>812 3456 78<i></i></div>
-        <div class="b-chip"><svg class="i"><use href="#i-shield"/></svg><span>Hanya nomor petugas yang sudah didaftarkan admin yang bisa masuk.</span></div>
-        <a class="btn pri">Lanjut<svg class="i"><use href="#i-arrow"/></svg></a>
-        <div class="pad">
-          <span>1</span><span>2</span><span>3</span><span>4</span><span>5</span><span>6</span><span>7</span><span>8</span><span>9</span>
-          <span class="x"></span><span>0</span><span class="x"><svg class="i"><use href="#i-back"/></svg></span>
+      <div class="ttl"><div><h2>Tindak Lanjut</h2><small>Kec. Menteng · 7 hari terakhir</small></div><div class="vt" style="background:rgba(255,255,255,.12)"><span class="on"><svg class="i"><use href="#i-list"/></svg></span><span style="color:#B9C6E4"><svg class="i"><use href="#i-table"/></svg></span></div></div>
+      <div class="srch"><svg class="i"><use href="#i-search"/></svg>Cari berita, nama, nomor HP…<span class="f"><svg class="i" style="width:15px;height:15px"><use href="#i-filter"/></svg></span></div>
+    </div>
+    <div class="chips"><span class="on">Semua<b>34</b></span><span>Darurat<b>3</b></span><span>Diproses<b>7</b></span><span>Selesai<b>24</b></span></div>
+    <div class="chips eco2"><span class="on">Semua ekosistem</span><span>UMKM</span><span>Lingkungan</span><span>Pendidikan</span></div>
+    <div class="body">
+      <div class="wrap">
+        <div class="rc">
+          <div class="top"><span class="kind sos">SOS</span><span class="pill r">Darurat</span><span class="when"><svg class="i"><use href="#i-clock"/></svg>08.42 · 25 Nov</span></div>
+          <h4>Percobaan pencurian di toko</h4>
+          <span class="eco"><svg class="i"><use href="#i-layers"/></svg>UMKM <u>· commerceOS</u></span>
+          <div class="kv">
+            <div><svg class="i"><use href="#i-user"/></svg>Ibu Siti Rahmawati · Toko Roti Sinar Jaya</div>
+            <div><svg class="i"><use href="#i-phone"/></svg><a>0812-3456-7890</a></div>
+            <div><svg class="i"><use href="#i-pin"/></svg><span>Jl. Cikini Raya 45, Kel. Cikini <em>· 1,2 km</em></span></div>
+          </div>
+          <div class="media"><span class="th ph1"><svg class="i"><use href="#i-img"/></svg></span><span class="th ph4"><svg class="i"><use href="#i-img"/></svg></span><span class="th ph3 vid"><svg class="i"><use href="#i-play"/></svg><small>0:18</small></span><span class="th aud"><svg class="i"><use href="#i-mic"/></svg></span></div>
+          <div class="tlb none"><svg class="i"><use href="#i-clock"/></svg><span><b style="color:#B42318">Belum ditanggapi</b> · menunggu 2 mnt</span></div>
+        </div>
+        <div class="rc">
+          <div class="top"><span class="kind">PENGADUAN</span><span class="pill y">Diproses</span><span class="when"><svg class="i"><use href="#i-clock"/></svg>08.10 · 25 Nov</span></div>
+          <h4>Parkir liar menutup akses gang</h4>
+          <span class="eco"><svg class="i"><use href="#i-layers"/></svg>Lingkungan <u>· tata-warga</u></span>
+          <div class="kv">
+            <div><svg class="i"><use href="#i-user"/></svg>Pak Budi Santoso · Ketua RT 05</div>
+            <div><svg class="i"><use href="#i-phone"/></svg><a>0813-2211-4455</a></div>
+            <div><svg class="i"><use href="#i-pin"/></svg><span>Jl. Kebon Sirih Dalam, Kel. Kebon Sirih <em>· 2,0 km</em></span></div>
+          </div>
+          <div class="media"><span class="th ph2"><svg class="i"><use href="#i-img"/></svg></span><span class="th ph3 vid"><svg class="i"><use href="#i-play"/></svg><small>0:24</small></span></div>
+          <div class="tlb"><svg class="i"><use href="#i-clip"/></svg><span><b>Bripka Andi, 08.25:</b> Koordinasi dengan Dishub, unit menuju lokasi.</span></div>
+        </div>
+        <div class="rc">
+          <div class="top"><span class="kind">PENGADUAN</span><span class="pill y">Diproses</span><span class="when"><svg class="i"><use href="#i-clock"/></svg>07.52 · 25 Nov</span></div>
+          <h4>Dompet hilang di area parkir kantor</h4>
+          <span class="eco"><svg class="i"><use href="#i-layers"/></svg>Perkantoran <u>· Wisma Menteng</u></span>
+          <div class="kv">
+            <div><svg class="i"><use href="#i-user"/></svg>Rudi Hartono · Satpam Wisma Menteng</div>
+            <div><svg class="i"><use href="#i-phone"/></svg><a>0857-1000-2323</a></div>
+            <div><svg class="i"><use href="#i-pin"/></svg><span>Jl. Menteng Raya 12, Kel. Menteng <em>· 1,6 km</em></span></div>
+          </div>
+          <div class="tlb"><svg class="i"><use href="#i-clip"/></svg><span><b>Aipda Rina, 08.05:</b> Minta rekaman CCTV ke pengelola gedung.</span></div>
         </div>
       </div>
-    </div></div><figcaption>B2 · Login langkah 1 (Nomor HP)</figcaption></figure>
+    </div>
+    <nav class="bn">
+      <a><svg class="i"><use href="#i-home"/></svg>Beranda</a>
+      <a class="on"><svg class="i"><use href="#i-clip"/></svg>Laporan<em>12</em></a>
+      <a><svg class="i"><use href="#i-chart"/></svg>Analitik</a>
+      <a><svg class="i"><use href="#i-user"/></svg>Profil</a>
+    </nav>
+  </div></div><figcaption>Daftar Tindak Lanjut · kartu<small>filter status dan ekosistem, semua kolom di tiap kartu</small></figcaption></figure>
 
-    <!-- B3 home -->
-    <figure><div class="phone"><div class="scr b-home">
-      <div class="map">
-        <svg viewBox="0 0 342 742" preserveAspectRatio="xMidYMid slice">
-          <defs>
-            <radialGradient id="glowR"><stop offset="0" stop-color="#EF4444" stop-opacity=".45"/><stop offset="1" stop-color="#EF4444" stop-opacity="0"/></radialGradient>
-            <radialGradient id="glowB"><stop offset="0" stop-color="#38BDF8" stop-opacity=".35"/><stop offset="1" stop-color="#38BDF8" stop-opacity="0"/></radialGradient>
-          </defs>
-          <rect width="342" height="742" fill="#08101F"/>
-          <rect x="210" y="170" width="80" height="60" rx="6" fill="#0B2219"/>
-          <path d="M-20 560 C 80 520, 120 600, 200 540 S 320 470, 380 500" stroke="#0B2B45" stroke-width="22" fill="none"/>
-          <g stroke="#131E35" stroke-width="5" fill="none">
-            <path d="M0 90H342M0 230H342M0 360H342M40 0V742M150 0V742M260 0V742M0 470H342"/>
-          </g>
-          <g stroke="#1B2944" stroke-width="11" fill="none" stroke-linecap="round">
-            <path d="M0 300H342"/><path d="M95 0V742"/><path d="M-10 690L342 380"/><path d="M205 0V300"/>
-          </g>
-          <g fill="#3A4A6B" font-size="9" font-family="Plus Jakarta Sans" font-weight="600">
-            <text x="104" y="150" transform="rotate(90 104 150)">JL. CIKINI RAYA</text>
-            <text x="230" y="294">JL. DIPONEGORO</text>
-            <text x="222" y="204" fill="#2E5A47">TAMAN</text>
-          </g>
-          <polyline points="95,560 95,300 205,300 205,250" fill="none" stroke="#38BDF8" stroke-width="3" stroke-dasharray="7 6" stroke-linecap="round"/>
-          <circle cx="205" cy="250" r="60" fill="url(#glowR)"/>
-          <circle cx="205" cy="250" r="10" fill="none" stroke="#EF4444" stroke-width="2"><animate attributeName="r" from="10" to="34" dur="1.6s" repeatCount="indefinite"/><animate attributeName="opacity" from="1" to="0" dur="1.6s" repeatCount="indefinite"/></circle>
-          <circle cx="205" cy="250" r="9" fill="#EF4444" stroke="#fff" stroke-width="3"/>
-          <circle cx="300" cy="140" r="6" fill="#F59E0B" stroke="#08101F" stroke-width="2"/>
-          <circle cx="40" cy="420" r="6" fill="#F59E0B" stroke="#08101F" stroke-width="2"/>
-          <circle cx="95" cy="560" r="44" fill="url(#glowB)"/>
-          <path d="M95 560 L70 500 A64 64 0 0 1 120 500 Z" fill="#38BDF8" opacity=".14"/>
-          <circle cx="95" cy="560" r="13" fill="#2563EB" stroke="#fff" stroke-width="3"/>
-          <path d="M95 552 l5 11 -5 -3 -5 3z" fill="#fff"/>
-          <g fill="#60A5FA" stroke="#08101F" stroke-width="2"><circle cx="270" cy="420" r="6"/><circle cx="40" cy="160" r="6"/></g>
-          <g fill="#64748B" font-size="8.5" font-family="JetBrains Mono" font-weight="700"><text x="280" y="424">R4-01</text><text x="50" y="164">R2-03</text></g>
-        </svg>
-      </div>
-      <div class="sb lt" style="background:linear-gradient(#08101F,transparent)"><span>9:41</span><svg><use href="#sbar"/></svg></div>
-      <div class="b-top">
-        <div class="chip"><svg class="emb" viewBox="0 0 64 72"><use href="#emblem"/></svg><div><span class="mono">UNIT R2-07</span><small class="mono">● PATROLI</small></div></div>
-        <div class="chip mono"><svg class="i" style="width:16px;height:16px;color:#38BDF8"><use href="#i-radio"/></svg>CH 3</div>
-        <div class="chip sq"><svg class="i" style="width:18px;height:18px"><use href="#i-bell"/></svg><span class="dot"></span></div>
-      </div>
-      <span class="pinlbl" style="top:198px;left:178px">SOS · 1,2 km</span>
-      <div class="sheet">
-        <div class="handle"></div>
-        <div class="sh-h"><b>Panggilan Aktif</b><span class="cnt">3</span><a>Lihat semua</a></div>
-        <div class="call">
-          <div class="r1"><span class="rd"></span>SOS DARURAT<span class="mono">00:02:14</span></div>
-          <h4>Ibu Siti Rahmawati</h4>
-          <p><span><svg class="i"><use href="#i-pin"/></svg>Jl. Cikini Raya 45</span><span><svg class="i"><use href="#i-car"/></svg>ETA 4 mnt</span></p>
-          <div class="acts"><a class="go"><svg class="i"><use href="#i-nav"/></svg>Terima &amp; Navigasi</a><a class="sqb"><svg class="i"><use href="#i-phone"/></svg></a><a class="sqb"><svg class="i"><use href="#i-msg"/></svg></a></div>
-        </div>
-        <div class="mini"><span class="d" style="background:#F59E0B"></span><b>Pencurian motor</b><small>2,4 km</small><svg class="i"><use href="#i-chev"/></svg></div>
-        <div class="shift">
-          <div class="mono">SHIFT<b>05:12:40</b></div>
-          <div class="mono">DITANGANI<b>7</b></div>
-          <div class="mono">JARAK<b>38 km</b></div>
-        </div>
-      </div>
-      <nav class="bn">
-        <a class="on"><svg class="i"><use href="#i-map"/></svg>Peta</a>
-        <a><svg class="i"><use href="#i-file"/></svg>Laporan</a>
-        <a class="sos"><span><svg class="i"><use href="#i-siren"/></svg></span></a>
-        <a><svg class="i"><use href="#i-chart"/></svg>Analitik</a>
-        <a><svg class="i"><use href="#i-user"/></svg>Profil</a>
-      </nav>
-    </div></div><figcaption>B3 · Beranda (Peta Komando)</figcaption></figure>
-
-    <!-- B4 analytics -->
-    <figure><div class="phone"><div class="scr b-an">
-      <div class="lightbar soft"></div>
+  <!-- DETAIL -->
+  <figure><div class="phone"><div class="scr det">
+    <div class="hd">
       <div class="sb lt"><span>9:41</span><svg><use href="#sbar"/></svg></div>
-      <div class="body">
-        <div class="hrow"><h2>Analitik Operasi</h2><span class="dt mono">24–30 NOV</span></div>
-        <div class="bseg"><span class="on">7 hari</span><span>30 hari</span><span>90 hari</span></div>
-        <div class="bcard">
-          <div class="lb mono">TOTAL INSIDEN</div>
-          <div class="big"><b>312</b><em>+12% vs pekan lalu</em></div>
-          <svg class="area" viewBox="0 0 300 92" preserveAspectRatio="none">
-            <defs><linearGradient id="ga" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#38BDF8" stop-opacity=".45"/><stop offset="1" stop-color="#38BDF8" stop-opacity="0"/></linearGradient></defs>
-            <path d="M0 70 L23 62 L46 66 L69 50 L92 56 L115 44 L138 52 L161 38 L184 46 L207 30 L230 40 L253 28 L276 34 L300 20 L300 92 L0 92Z" fill="url(#ga)"/>
-            <path d="M0 70 L23 62 L46 66 L69 50 L92 56 L115 44 L138 52 L161 38 L184 46 L207 30 L230 40 L253 28 L276 34 L300 20" fill="none" stroke="#38BDF8" stroke-width="2.2" vector-effect="non-scaling-stroke"/>
+      <div class="nav2"><span class="icbtn"><svg class="i"><use href="#i-left"/></svg></span><b>Detail Laporan</b><span class="icbtn"><svg class="i"><use href="#i-more"/></svg></span></div>
+      <h3>Percobaan pencurian di toko</h3>
+      <div class="idl"><span class="kind sos">SOS</span><span class="mono">#SOS-2511-0042</span>· masuk 08.42</div>
+      <div class="steps">
+        <div class="ok"><span><svg class="i"><use href="#i-check"/></svg></span>Diterima</div>
+        <div class="ok"><span><svg class="i"><use href="#i-check"/></svg></span>Diverifikasi</div>
+        <div class="cur"><span></span>Ditangani</div>
+        <div><span></span>Selesai</div>
+      </div>
+    </div>
+    <div class="body">
+      <div class="wrap">
+        <div class="mapc">
+          <svg viewBox="0 0 310 118" preserveAspectRatio="xMidYMid slice">
+            <rect width="310" height="118" fill="#E9EEF5"/>
+            <rect x="200" y="10" width="70" height="40" rx="6" fill="#D5EADB"/>
+            <path d="M-10 100 C 60 80, 120 112, 200 92 S 300 70, 330 80" stroke="#CFE0F5" stroke-width="12" fill="none"/>
+            <g stroke="#fff" stroke-width="9" fill="none" stroke-linecap="round"><path d="M0 60H310"/><path d="M120 0V118"/><path d="M230 60V118"/></g>
+            <g stroke="#fff" stroke-width="4" fill="none"><path d="M0 25H310M60 0V118M180 0V118M280 0V118"/></g>
+            <text x="126" y="14" font-size="8" font-weight="700" fill="#8A9BB8" font-family="Plus Jakarta Sans">JL. CIKINI RAYA</text>
+            <circle cx="150" cy="56" r="22" fill="#D92D20" opacity=".12"/>
+            <path d="M70 96 L120 60 L150 60" stroke="#0B2A6F" stroke-width="2.5" stroke-dasharray="5 4" fill="none"/>
+            <path d="M150 64s9-8 9-15a9 9 0 0 0-18 0c0 7 9 15 9 15z" fill="#D92D20" stroke="#fff" stroke-width="2"/>
+            <circle cx="150" cy="49" r="3" fill="#fff"/>
+            <circle cx="70" cy="96" r="6" fill="#0B2A6F" stroke="#fff" stroke-width="2.5"/>
           </svg>
+          <div class="ad"><div class="t"><b>Jl. Cikini Raya 45</b><small>Kel. Cikini · Kec. Menteng · 1,2 km</small></div><a><svg class="i"><use href="#i-arrow"/></svg>Rute</a></div>
         </div>
-        <div class="bkpis">
-          <div><small class="mono">RESPONS</small><b>6,4m</b><em style="color:#4ADE80">▼ 1,1m</em></div>
-          <div><small class="mono">SELESAI</small><b>94%</b><em style="color:#4ADE80">▲ 3 pt</em></div>
-          <div><small class="mono">SOS</small><b>48</b><em style="color:#FCA5A5">▲ 6</em></div>
+        <div class="info">
+          <div><span class="ic"><svg class="i"><use href="#i-layers"/></svg></span><span class="t"><small>Ekosistem</small><b>UMKM · commerceOS</b></span></div>
+          <div><span class="ic"><svg class="i"><use href="#i-user"/></svg></span><span class="t"><small>Dari siapa</small><b>Ibu Siti Rahmawati</b><small style="margin-top:1px">Pemilik · Toko Roti Sinar Jaya</small></span></div>
+          <div><span class="ic"><svg class="i"><use href="#i-phone"/></svg></span><span class="t"><small>No HP</small><b>0812-3456-7890</b></span><span class="act"><svg class="i"><use href="#i-phone"/></svg></span></div>
+          <div><span class="ic"><svg class="i"><use href="#i-cal"/></svg></span><span class="t"><small>Waktu</small><b>Selasa, 25 Nov 2026 · 08.42 WIB</b></span></div>
+          <div><span class="ic"><svg class="i"><use href="#i-news"/></svg></span><span class="t"><small>Berita</small><b style="font-weight:500;line-height:1.45">Dua orang mencoba membuka laci kasir saat toko sepi. Pelaku kabur ke arah Stasiun Cikini dengan motor hitam.</b></span></div>
         </div>
-        <div class="bcard">
-          <div class="lb mono">JAM RAWAN · KEPADATAN LAPORAN</div>
-          <div class="heat" id="heat"></div>
-          <div class="hleg"><span>Rendah</span><i style="background:rgba(239,68,68,.12)"></i><i style="background:rgba(239,68,68,.35)"></i><i style="background:rgba(239,68,68,.6)"></i><i style="background:rgba(239,68,68,.95)"></i><span>Tinggi</span></div>
+        <div class="sec" style="margin-top:16px"><h5>Lampiran</h5><span class="hint">3 foto/video · 1 suara</span></div>
+        <div class="lamp">
+          <span class="th ph1"><svg class="i"><use href="#i-img"/></svg></span>
+          <span class="th ph4"><svg class="i"><use href="#i-img"/></svg></span>
+          <span class="th ph3 vid"><svg class="i"><use href="#i-play"/></svg><small>0:18</small></span>
+          <span class="th aud"><svg class="i"><use href="#i-play"/></svg><span class="wave"></span><b class="mono">0:32</b></span>
         </div>
-        <div class="bcard">
-          <div class="lb mono">PERFORMA UNIT · TINGKAT RESPONS</div>
-          <div class="unit"><span class="cs mono">R2-07</span><div class="nm"><b>Bripka Andi (Anda)</b><div class="tr"><i style="--v:98%"></i></div></div><span class="v">98%</span></div>
-          <div class="unit"><span class="cs mono">R2-03</span><div class="nm"><b>Brigpol Dimas</b><div class="tr"><i style="--v:91%"></i></div></div><span class="v">91%</span></div>
-          <div class="unit"><span class="cs mono">R4-01</span><div class="nm"><b>Aipda Rina</b><div class="tr"><i style="--v:86%"></i></div></div><span class="v">86%</span></div>
+        <div class="sec" style="margin-top:16px"><h5>Riwayat Tindak Lanjut</h5></div>
+        <div class="tline">
+          <div class="e g"><span class="d"></span><div><b>Ditangani · Bripka Andi</b><small>08.47 · Unit R2-07 menuju lokasi, ETA 4 menit.</small></div></div>
+          <div class="e"><span class="d"></span><div><b>Diverifikasi · Bripka Andi</b><small>08.45 · Pelapor dihubungi, kejadian benar.</small></div></div>
+          <div class="e"><span class="d"></span><div><b>Diterima sistem</b><small>08.42 · Dikirim dari commerceOS, lokasi GPS ±8 m.</small></div></div>
         </div>
       </div>
-      <nav class="bn">
-        <a><svg class="i"><use href="#i-map"/></svg>Peta</a>
-        <a><svg class="i"><use href="#i-file"/></svg>Laporan</a>
-        <a class="sos"><span><svg class="i"><use href="#i-siren"/></svg></span></a>
-        <a class="on"><svg class="i"><use href="#i-chart"/></svg>Analitik</a>
-        <a><svg class="i"><use href="#i-user"/></svg>Profil</a>
-      </nav>
-    </div></div><figcaption>B4 · Analitik</figcaption></figure>
-  </div>
-</section>
-
-<!-- ======================================================= OPSI C -->
-<section class="opt c" id="c" style="--em-fill:#1D4ED8;--em-line:#FACC15;--em-star:#fff">
-  <div class="intro">
-    <div>
-      <h2>Opsi C · Patroli Terang</h2>
-      <p>Gaya modern dan ramah: putih bersih dengan garis livery biru-kuning seperti mobil patroli. Beranda menampilkan status wilayah, kartu SOS dengan geser-untuk-menanggapi (mencegah salah tekan), ubin besar, dan linimasa aktivitas. Navigasi bawah melayang.</p>
     </div>
-    <div class="sw"><i style="background:#1E3A8A"></i><i style="background:#1D4ED8"></i><i style="background:#FACC15"></i><i style="background:#DC2626"></i><i style="background:#F6F8FC"></i></div>
-  </div>
-  <div class="screens">
+    <div class="abar">
+      <div class="in">Tulis tindak lanjut…</div>
+      <a class="btn pri">Perbarui</a>
+    </div>
+  </div></div><figcaption>Detail &amp; Tindak Lanjut<small>peta, data pelapor, lampiran, langkah status, catatan</small></figcaption></figure>
+</div>
 
-    <!-- C1 splash -->
-    <figure><div class="phone"><div class="scr c-splash">
-      <div class="sb"><span>9:41</span><svg><use href="#sbar"/></svg></div>
-      <div class="c1">
-        <svg class="emb" viewBox="0 0 64 72"><use href="#emblem"/></svg>
-        <h1>Polmas Digital</h1>
-        <div class="s">Polisi Masyarakat · Siaga 24 Jam</div>
-        <div class="dots"><i></i><i></i><i></i></div>
-      </div>
-      <div class="band"></div>
-      <div class="band b2"></div>
-      <div class="ft"><b>Bersama Masyarakat Menjaga Kamtibmas</b>v2.0 · Didukung SiagaSOS</div>
-    </div></div><figcaption>C1 · Splash Screen</figcaption></figure>
+<!-- TABEL LANDSCAPE -->
+<div class="screens" style="padding-top:0">
+  <figure><div class="phone land"><div class="scr">
+    <div class="tbar"><h3>Tindak Lanjut</h3><div class="chips"><span class="on">Semua<b>34</b></span><span>Darurat<b>3</b></span><span>Diproses<b>7</b></span><span>Selesai<b>24</b></span></div><div class="vt"><span><svg class="i"><use href="#i-list"/></svg></span><span class="on"><svg class="i"><use href="#i-table"/></svg></span></div></div>
+    <div class="tbl-wrap">
+      <table class="rt">
+        <thead><tr>
+          <th><svg class="i"><use href="#i-news"/></svg>Berita</th>
+          <th><svg class="i"><use href="#i-phone"/></svg>No HP</th>
+          <th><svg class="i"><use href="#i-layers"/></svg>Ekosistem</th>
+          <th><svg class="i"><use href="#i-user"/></svg>Dari Siapa</th>
+          <th><svg class="i"><use href="#i-video"/></svg>Foto/Video</th>
+          <th><svg class="i"><use href="#i-pin"/></svg>Location</th>
+          <th><svg class="i"><use href="#i-cal"/></svg>Waktu</th>
+          <th><svg class="i"><use href="#i-checkc"/></svg>Status</th>
+          <th><svg class="i"><use href="#i-clip"/></svg>Tindak Lanjut</th>
+        </tr></thead>
+        <tbody>
+          <tr><td style="min-width:180px"><b>Percobaan pencurian di toko</b><small>SOS</small></td><td><a>0812-3456-7890</a></td><td><b>UMKM</b><small>commerceOS</small></td><td><b>Ibu Siti Rahmawati</b><small>Toko Roti Sinar Jaya</small></td><td><span class="th ph1"><svg class="i"><use href="#i-img"/></svg></span> <span class="th ph3 vid"><svg class="i"><use href="#i-play"/></svg><small>0:18</small></span></td><td><b>Kel. Cikini</b><small>Jl. Cikini Raya 45 · 1,2 km</small></td><td><b>08.42</b><small>25 Nov</small></td><td><span class="pill r">Darurat</span></td><td style="min-width:170px;color:#B42318;font-weight:700">Belum ditanggapi</td></tr>
+          <tr><td><b>Parkir liar menutup akses gang</b><small>Pengaduan</small></td><td><a>0813-2211-4455</a></td><td><b>Lingkungan</b><small>tata-warga</small></td><td><b>Pak Budi Santoso</b><small>Ketua RT 05</small></td><td><span class="th ph2"><svg class="i"><use href="#i-img"/></svg></span> <span class="th ph3 vid"><svg class="i"><use href="#i-play"/></svg><small>0:24</small></span></td><td><b>Kel. Kebon Sirih</b><small>Jl. Kebon Sirih Dalam · 2,0 km</small></td><td><b>08.10</b><small>25 Nov</small></td><td><span class="pill y">Diproses</span></td><td>Koordinasi Dishub, unit menuju lokasi<small>Bripka Andi · 08.25</small></td></tr>
+          <tr><td><b>Dompet hilang di area parkir kantor</b><small>Pengaduan</small></td><td><a>0857-1000-2323</a></td><td><b>Perkantoran</b><small>Wisma Menteng</small></td><td><b>Rudi Hartono</b><small>Satpam</small></td><td><small>Tidak ada</small></td><td><b>Kel. Menteng</b><small>Jl. Menteng Raya 12 · 1,6 km</small></td><td><b>07.52</b><small>25 Nov</small></td><td><span class="pill y">Diproses</span></td><td>Minta rekaman CCTV<small>Aipda Rina · 08.05</small></td></tr>
+          <tr><td><b>Keributan pelajar di depan sekolah</b><small>Pengaduan</small></td><td><a>0812-9090-1122</a></td><td><b>Pendidikan</b><small>SIS Sekolah</small></td><td><b>Bu Ratna Dewi</b><small>Guru SMPN 1</small></td><td><span class="th ph1 vid"><svg class="i"><use href="#i-play"/></svg><small>0:41</small></span></td><td><b>Kel. Cikini</b><small>Jl. Cikini Raya 87 · 0,9 km</small></td><td><b>07.35</b><small>25 Nov</small></td><td><span class="pill g">Selesai</span></td><td>Kerumunan dibubarkan<small>Brigpol Dimas · 07.58</small></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <span class="hint">Geser ke kanan<svg class="i"><use href="#i-arrow"/></svg></span>
+  </div></div><figcaption>Daftar Tindak Lanjut · tabel<small>HP dimiringkan, kolom sama dengan contoh tabel</small></figcaption></figure>
+</div>
 
-    <!-- C2 login -->
-    <figure><div class="phone"><div class="scr c-login">
-      <div class="hero">
-        <div class="sb lt" style="position:relative;z-index:2"><span>9:41</span><svg><use href="#sbar"/></svg></div>
-        <div class="bx"><svg class="emb" viewBox="0 0 64 72"><use href="#emblem"/></svg><div><b>Polmas Digital</b><small>Aplikasi Petugas Polmas</small></div></div>
-        <div class="band"></div>
-      </div>
-      <div class="sheet2">
-        <h2>Masuk Petugas</h2>
-        <p class="sub">Gunakan nomor dari daftar Nomor Darurat.</p>
-        <div class="cfield"><span class="idf"></span><span class="cc">+62</span>812 3456 7890<span class="ok"><svg class="i"><use href="#i-check"/></svg></span></div>
-        <div class="cfield" style="margin-top:12px;border-color:#E2E8F0;letter-spacing:.2em"><svg class="i" style="color:#94A3B8"><use href="#i-lock"/></svg>••••••••<svg class="i" style="color:#94A3B8;margin-left:auto"><use href="#i-eye"/></svg></div>
-        <div class="chk"><i><svg class="i"><use href="#i-check"/></svg></i>Ingat nomor &amp; sandi di perangkat ini</div>
-        <a class="btn pri">Masuk<svg class="i"><use href="#i-arrow"/></svg></a>
-        <div class="cinfo"><svg class="i"><use href="#i-shield"/></svg><span>Login pertama? Anda akan diminta membuat kata sandi.</span></div>
-        <div class="em"><span>Dalam keadaan darurat?</span><a><svg class="i"><use href="#i-phone"/></svg>Panggil 110</a></div>
-      </div>
-    </div></div><figcaption>C2 · Login (Nomor HP + kata sandi)</figcaption></figure>
+<!-- =========================== ANALITIK =========================== -->
+<div class="grp"><h2>3 · Analitik</h2><p>Empat tab. Filter periode dan ekosistem berlaku untuk semua tab. Contoh data: Kec. Menteng, 24–30 Nov 2026, 312 laporan.</p></div>
+<div class="screens">
 
-    <!-- C3 home -->
-    <figure><div class="phone"><div class="scr c-home">
-      <div class="sb"><span>9:41</span><svg><use href="#sbar"/></svg></div>
-      <div class="body">
-        <div class="ctop">
-          <div class="cav">RK</div>
-          <div class="t"><small>Selamat pagi,</small><b>Aipda Rina Kartika</b></div>
-          <div class="cic"><svg class="i"><use href="#i-bell"/></svg><span class="dot"></span></div>
+  <!-- RINGKASAN -->
+  <figure><div class="phone"><div class="scr an">
+    <div class="hd">
+      <div class="sb lt"><span>9:41</span><svg><use href="#sbar"/></svg></div>
+      <h2>Analitik</h2>
+      <p><svg class="i"><use href="#i-shield"/></svg>Kec. Menteng · 24–30 Nov 2026</p>
+      <div class="atabs"><span class="on">Ringkasan</span><span>Ekosistem</span><span>Waktu &amp; Wilayah</span><span>Kinerja</span></div>
+    </div>
+    <div class="flt"><span><svg class="i"><use href="#i-cal"/></svg>7 hari terakhir<svg class="i"><use href="#i-down"/></svg></span><span><svg class="i"><use href="#i-layers"/></svg>Semua ekosistem<svg class="i"><use href="#i-down"/></svg></span></div>
+    <div class="body">
+      <div class="wrap">
+        <div class="kpis">
+          <div class="kpi"><span class="k" style="background:#E8EEFB;color:#0B2A6F"><svg class="i"><use href="#i-file"/></svg></span><small>Total laporan</small><b>312</b><em class="nt">▲ 12% dari pekan lalu</em></div>
+          <div class="kpi"><span class="k" style="background:#FEE4E2;color:#D92D20"><svg class="i"><use href="#i-siren"/></svg></span><small>SOS darurat</small><b>48</b><em class="nt">15% dari total</em></div>
+          <div class="kpi"><span class="k" style="background:#FEF3D6;color:#B98A0E"><svg class="i"><use href="#i-clock"/></svg></span><small>Respons median</small><b>6,4 <u>mnt</u></b><em class="up">▼ 1,1 mnt lebih cepat</em></div>
+          <div class="kpi"><span class="k" style="background:#D1FADF;color:#027A48"><svg class="i"><use href="#i-check"/></svg></span><small>Selesai</small><b>92%</b><em class="up">▲ 3 poin</em></div>
         </div>
-        <div class="chero">
-          <div class="band"></div>
-          <small><svg class="i"><use href="#i-pin"/></svg>Status Wilayah · Kel. Cikini</small>
-          <h3>Siaga <span>LEVEL 2</span></h3>
-          <p>3 laporan aktif · 2 unit di lapangan</p>
-          <div class="prog"><div class="l"><span>Rute patroli</span><span>3 / 5 titik</span></div><div class="tr"><i style="--v:60%"></i></div></div>
-        </div>
-        <div class="csos">
-          <div class="r">
-            <div class="ia"><svg class="i"><use href="#i-siren"/></svg></div>
-            <div class="t"><small>SOS MASUK</small><b>Bpk. Hendra Wijaya</b><span>Pencurian · 800 m dari Anda</span></div>
-            <div class="tm">menunggu<b>02:14</b></div>
-          </div>
-          <div class="swipe"><span class="k"><svg class="i"><use href="#i-arrow"/></svg></span><span>Geser untuk menanggapi</span></div>
-        </div>
-        <div class="tiles">
-          <div class="tile"><div class="ti" style="background:#E0E7FF;color:#1D4ED8"><svg class="i"><use href="#i-file"/></svg></div><b>12</b><small>Laporan masuk</small></div>
-          <div class="tile"><div class="ti" style="background:#FEF9C3;color:#A16207"><svg class="i"><use href="#i-car"/></svg></div><b>3/5</b><small>Titik patroli</small></div>
-          <div class="tile"><div class="ti" style="background:#FEE2E2;color:#DC2626"><svg class="i"><use href="#i-phone"/></svg></div><b>110</b><small>Panggil pusat</small></div>
-          <div class="tile"><div class="ti" style="background:#DCFCE7;color:#15803D"><svg class="i"><use href="#i-radio"/></svg></div><b>4</b><small>Unit terdekat</small></div>
-        </div>
-        <div class="csec"><h5>Aktivitas Hari Ini</h5><a>Riwayat</a></div>
-        <div class="tl">
-          <div class="e" style="color:#DC2626"><span class="h">08.42</span><span class="dt"></span><div class="x"><b style="color:#0F172A">SOS diterima</b><small>Jl. Cikini Raya · menunggu respons</small></div></div>
-          <div class="e" style="color:#1D4ED8"><span class="h">08.10</span><span class="dt"></span><div class="x"><b style="color:#0F172A">Laporan diselesaikan</b><small>Kecelakaan ringan · Diponegoro</small></div></div>
-          <div class="e" style="color:#EAB308"><span class="h">07.05</span><span class="dt"></span><div class="x"><b style="color:#0F172A">Apel pagi &amp; mulai patroli</b><small>Polsek Menteng</small></div></div>
-        </div>
-      </div>
-      <nav class="cnav">
-        <a class="on"><svg class="i"><use href="#i-home"/></svg>Beranda</a>
-        <a><svg class="i"><use href="#i-file"/></svg></a>
-        <a class="s"><svg class="i"><use href="#i-siren"/></svg></a>
-        <a><svg class="i"><use href="#i-chart"/></svg></a>
-        <a><svg class="i"><use href="#i-user"/></svg></a>
-      </nav>
-    </div></div><figcaption>C3 · Beranda</figcaption></figure>
-
-    <!-- C4 analytics -->
-    <figure><div class="phone"><div class="scr c-an">
-      <div class="sb"><span>9:41</span><svg><use href="#sbar"/></svg></div>
-      <div class="body">
-        <div class="top2"><h2>Analitik</h2><span class="msel"><svg class="i"><use href="#i-cal"/></svg>Nov 2026<svg class="i"><use href="#i-down"/></svg></span></div>
-        <div class="cblue">
-          <div class="band"></div>
-          <div class="t"><small>Laporan terselesaikan</small><b>296 <u>/ 312</u></b><em>▲ 4% dari Oktober</em></div>
-          <div class="ring">
-            <svg viewBox="0 0 88 88"><circle cx="44" cy="44" r="36" fill="none" stroke="rgba(255,255,255,.18)" stroke-width="9"/><circle cx="44" cy="44" r="36" fill="none" stroke="#FACC15" stroke-width="9" stroke-linecap="round" pathLength="100" stroke-dasharray="95 100"/></svg>
-            <b>95%</b>
+        <div class="cp">
+          <div class="hrow"><h5>Laporan per Hari</h5><span class="hint">Teramai: Sabtu</span></div>
+          <div class="leg"><span><i style="background:#D92D20"></i>SOS</span><span><i style="background:#C9D5EE"></i>Pengaduan</span></div>
+          <div class="sbar">
+            <div><span class="n">38</span><span class="bx" style="--v:59%;--s:5;--p:33"><b></b><u></u></span><span class="lab">Sen</span></div>
+            <div><span class="n">44</span><span class="bx" style="--v:69%;--s:6;--p:38"><b></b><u></u></span><span class="lab">Sel</span></div>
+            <div><span class="n">40</span><span class="bx" style="--v:63%;--s:6;--p:34"><b></b><u></u></span><span class="lab">Rab</span></div>
+            <div><span class="n">46</span><span class="bx" style="--v:72%;--s:7;--p:39"><b></b><u></u></span><span class="lab">Kam</span></div>
+            <div><span class="n">43</span><span class="bx" style="--v:67%;--s:6;--p:37"><b></b><u></u></span><span class="lab">Jum</span></div>
+            <div class="hi"><span class="n">58</span><span class="bx" style="--v:91%;--s:11;--p:47"><b></b><u></u></span><span class="lab">Sab</span></div>
+            <div><span class="n">43</span><span class="bx" style="--v:67%;--s:7;--p:36"><b></b><u></u></span><span class="lab">Min</span></div>
           </div>
         </div>
-        <div class="ccard">
-          <div class="hrow"><div><h5>Waktu Respons</h5><div class="v">6,4 <u>mnt rata-rata</u></div></div><span class="gch">Di bawah target</span></div>
-          <svg class="line" viewBox="0 0 300 130">
-            <defs><linearGradient id="gl" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1D4ED8" stop-opacity=".22"/><stop offset="1" stop-color="#1D4ED8" stop-opacity="0"/></linearGradient></defs>
+        <div class="cp">
+          <div class="hrow"><h5>Kategori Kejadian</h5><span class="hint">312 laporan</span></div>
+          <div class="donut">
+            <div class="d">
+              <svg viewBox="0 0 120 120">
+                <circle cx="60" cy="60" r="46" fill="none" stroke="#EEF2F8" stroke-width="16"/>
+                <circle cx="60" cy="60" r="46" fill="none" stroke="#D92D20" stroke-width="16" pathLength="100" stroke-dasharray="15 85" stroke-dashoffset="0"/>
+                <circle cx="60" cy="60" r="46" fill="none" stroke="#0B2A6F" stroke-width="16" pathLength="100" stroke-dasharray="20 80" stroke-dashoffset="-15"/>
+                <circle cx="60" cy="60" r="46" fill="none" stroke="#3D63C9" stroke-width="16" pathLength="100" stroke-dasharray="18 82" stroke-dashoffset="-35"/>
+                <circle cx="60" cy="60" r="46" fill="none" stroke="#D4A82A" stroke-width="16" pathLength="100" stroke-dasharray="14 86" stroke-dashoffset="-53"/>
+                <circle cx="60" cy="60" r="46" fill="none" stroke="#8FA6DD" stroke-width="16" pathLength="100" stroke-dasharray="12 88" stroke-dashoffset="-67"/>
+                <circle cx="60" cy="60" r="46" fill="none" stroke="#8C6A0A" stroke-width="16" pathLength="100" stroke-dasharray="7 93" stroke-dashoffset="-79"/>
+                <circle cx="60" cy="60" r="46" fill="none" stroke="#98A6C0" stroke-width="16" pathLength="100" stroke-dasharray="6 94" stroke-dashoffset="-86"/>
+                <circle cx="60" cy="60" r="46" fill="none" stroke="#D3DAE6" stroke-width="16" pathLength="100" stroke-dasharray="8 92" stroke-dashoffset="-92"/>
+              </svg>
+              <div class="ctr"><b>312</b><small>laporan</small></div>
+            </div>
+            <div class="lg">
+              <div><i style="background:#D92D20"></i>SOS darurat<b>48</b></div>
+              <div><i style="background:#0B2A6F"></i>Kehilangan<b>62</b></div>
+              <div><i style="background:#3D63C9"></i>Ketertiban<b>55</b></div>
+              <div><i style="background:#D4A82A"></i>Parkir liar<b>44</b></div>
+              <div><i style="background:#8FA6DD"></i>Kebisingan<b>38</b></div>
+              <div><i style="background:#8C6A0A"></i>Pungli<b>21</b></div>
+              <div><i style="background:#98A6C0"></i>Patroli<b>18</b></div>
+              <div><i style="background:#D3DAE6"></i>Lainnya<b>26</b></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <nav class="bn">
+      <a><svg class="i"><use href="#i-home"/></svg>Beranda</a>
+      <a><svg class="i"><use href="#i-clip"/></svg>Laporan<em>12</em></a>
+      <a class="on"><svg class="i"><use href="#i-chart"/></svg>Analitik</a>
+      <a><svg class="i"><use href="#i-user"/></svg>Profil</a>
+    </nav>
+  </div></div><figcaption>Analitik · Ringkasan<small>KPI, tren harian SOS vs pengaduan, kategori</small></figcaption></figure>
+
+  <!-- EKOSISTEM -->
+  <figure><div class="phone"><div class="scr an">
+    <div class="hd">
+      <div class="sb lt"><span>9:41</span><svg><use href="#sbar"/></svg></div>
+      <h2>Analitik</h2>
+      <p><svg class="i"><use href="#i-shield"/></svg>Kec. Menteng · 24–30 Nov 2026</p>
+      <div class="atabs"><span>Ringkasan</span><span class="on">Ekosistem</span><span>Waktu &amp; Wilayah</span><span>Kinerja</span></div>
+    </div>
+    <div class="flt"><span><svg class="i"><use href="#i-cal"/></svg>7 hari terakhir<svg class="i"><use href="#i-down"/></svg></span><span><svg class="i"><use href="#i-layers"/></svg>Semua ekosistem<svg class="i"><use href="#i-down"/></svg></span></div>
+    <div class="body">
+      <div class="wrap">
+        <div class="cp" style="margin-top:0">
+          <div class="hrow"><h5>Ekosistem Paling Sering Melapor</h5></div>
+          <div class="ecor"><span class="ic" style="background:#E8EEFB;color:#0B2A6F"><svg class="i"><use href="#i-store"/></svg></span><div class="m"><div><b>UMKM</b> <small>commerceOS</small></div><span class="tr"><i style="--v:100%"></i></span></div><div class="n">118<small>38%</small></div></div>
+          <div class="ecor"><span class="ic" style="background:#EEF1FA;color:#3D63C9"><svg class="i"><use href="#i-homes"/></svg></span><div class="m"><div><b>Lingkungan</b> <small>tata-warga</small></div><span class="tr"><i style="--v:81%;background:#3D63C9"></i></span></div><div class="n">96<small>31%</small></div></div>
+          <div class="ecor"><span class="ic" style="background:#FBF3DC;color:#8C6A0A"><svg class="i"><use href="#i-school"/></svg></span><div class="m"><div><b>Pendidikan</b> <small>SIS Sekolah</small></div><span class="tr"><i style="--v:35%;background:#D4A82A"></i></span></div><div class="n">41<small>13%</small></div></div>
+          <div class="ecor"><span class="ic" style="background:#F1F4F9;color:#475569"><svg class="i"><use href="#i-office"/></svg></span><div class="m"><div><b>Perkantoran</b> <small>Wisma Menteng</small></div><span class="tr"><i style="--v:28%;background:#8FA6DD"></i></span></div><div class="n">33<small>11%</small></div></div>
+          <div class="ecor"><span class="ic" style="background:#F1F4F9;color:#475569"><svg class="i"><use href="#i-users"/></svg></span><div class="m"><div><b>Komunitas</b> <small>Ojol Peduli</small></div><span class="tr"><i style="--v:20%;background:#98A6C0"></i></span></div><div class="n">24<small>8%</small></div></div>
+        </div>
+        <div class="ins"><svg class="i"><use href="#i-bulb"/></svg><span><b>UMKM paling sering melapor</b>, terutama kehilangan dan parkir liar. Lingkungan paling banyak soal ketertiban dan kebisingan malam.</span></div>
+        <div class="cp">
+          <div class="hrow"><h5>Kategori per Ekosistem</h5><span class="hint">jumlah laporan</span></div>
+          <table class="mx" id="mx">
+            <thead><tr><th></th><th>Hilang</th><th>Tertib</th><th>Parkir</th><th>Bising</th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+        <div class="cp">
+          <div class="hrow"><h5>Waktu Respons per Ekosistem</h5><span class="hint">median</span></div>
+          <div class="rsp">
+            <div class="r"><span>Perkantoran</span><span class="tr"><i style="--v:49%"></i></span><b>4,9m</b></div>
+            <div class="r"><span>UMKM</span><span class="tr"><i style="--v:52%"></i></span><b>5,2m</b></div>
+            <div class="r"><span>Lingkungan</span><span class="tr"><i style="--v:68%"></i></span><b>6,8m</b></div>
+            <div class="r"><span>Pendidikan</span><span class="tr"><i style="--v:74%"></i></span><b>7,4m</b></div>
+            <div class="r over"><span>Komunitas</span><span class="tr"><i style="--v:91%"></i></span><b style="color:#B42318">9,1m</b></div>
+            <div class="cap">garis merah = target SOS 15 menit</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <nav class="bn">
+      <a><svg class="i"><use href="#i-home"/></svg>Beranda</a>
+      <a><svg class="i"><use href="#i-clip"/></svg>Laporan<em>12</em></a>
+      <a class="on"><svg class="i"><use href="#i-chart"/></svg>Analitik</a>
+      <a><svg class="i"><use href="#i-user"/></svg>Profil</a>
+    </nav>
+  </div></div><figcaption>Analitik · Ekosistem<small>siapa paling sering melapor, kategorinya, kecepatan respons</small></figcaption></figure>
+
+  <!-- WAKTU & WILAYAH -->
+  <figure><div class="phone"><div class="scr an">
+    <div class="hd">
+      <div class="sb lt"><span>9:41</span><svg><use href="#sbar"/></svg></div>
+      <h2>Analitik</h2>
+      <p><svg class="i"><use href="#i-shield"/></svg>Kec. Menteng · 24–30 Nov 2026</p>
+      <div class="atabs" style="transform:translateX(-70px)"><span>Ringkasan</span><span>Ekosistem</span><span class="on">Waktu &amp; Wilayah</span><span>Kinerja</span></div>
+    </div>
+    <div class="flt"><span><svg class="i"><use href="#i-cal"/></svg>7 hari terakhir<svg class="i"><use href="#i-down"/></svg></span><span><svg class="i"><use href="#i-layers"/></svg>Semua ekosistem<svg class="i"><use href="#i-down"/></svg></span></div>
+    <div class="body">
+      <div class="wrap">
+        <div class="cp" style="margin-top:0">
+          <div class="hrow"><h5>Jam Rawan</h5><span class="hint">laporan per jam</span></div>
+          <div class="hours" id="hours"></div>
+          <div class="hax"><span>00</span><span>06</span><span>12</span><span>18</span><span>23</span></div>
+        </div>
+        <div class="cp">
+          <div class="hrow"><h5>Hari × Jam</h5><span class="hint">kepadatan laporan</span></div>
+          <div class="heat" id="heat"></div>
+          <div class="hleg"><span>Sepi</span><i style="background:rgba(11,42,111,.08)"></i><i style="background:rgba(11,42,111,.3)"></i><i style="background:rgba(11,42,111,.6)"></i><i style="background:rgba(11,42,111,.95)"></i><span>Ramai</span></div>
+        </div>
+        <div class="ins"><svg class="i"><use href="#i-bulb"/></svg><span><b>Saran patroli:</b> Sabtu–Minggu pukul 19.00–22.00 di Kel. Cikini dan Menteng.</span></div>
+        <div class="cp kel">
+          <div class="hrow"><h5>Wilayah (Kelurahan)</h5><span class="hint">vs pekan lalu</span></div>
+          <div class="r"><span>Cikini</span><span class="tr"><i style="--v:100%"></i></span><b>86</b><em class="dn">▲ 14%</em></div>
+          <div class="r"><span>Menteng</span><span class="tr"><i style="--v:84%"></i></span><b>72</b><em class="dn">▲ 6%</em></div>
+          <div class="r"><span>Kebon Sirih</span><span class="tr"><i style="--v:71%"></i></span><b>61</b><em class="up">▼ 3%</em></div>
+          <div class="r"><span>Gondangdia</span><span class="tr"><i style="--v:60%"></i></span><b>52</b><em class="nt">0%</em></div>
+          <div class="r"><span>Pegangsaan</span><span class="tr"><i style="--v:48%"></i></span><b>41</b><em class="up">▼ 9%</em></div>
+        </div>
+      </div>
+    </div>
+    <nav class="bn">
+      <a><svg class="i"><use href="#i-home"/></svg>Beranda</a>
+      <a><svg class="i"><use href="#i-clip"/></svg>Laporan<em>12</em></a>
+      <a class="on"><svg class="i"><use href="#i-chart"/></svg>Analitik</a>
+      <a><svg class="i"><use href="#i-user"/></svg>Profil</a>
+    </nav>
+  </div></div><figcaption>Analitik · Waktu &amp; Wilayah<small>jam rawan, hari × jam, kelurahan, saran patroli</small></figcaption></figure>
+
+  <!-- KINERJA -->
+  <figure><div class="phone"><div class="scr an">
+    <div class="hd">
+      <div class="sb lt"><span>9:41</span><svg><use href="#sbar"/></svg></div>
+      <h2>Analitik</h2>
+      <p><svg class="i"><use href="#i-shield"/></svg>Kec. Menteng · 24–30 Nov 2026</p>
+      <div class="atabs" style="transform:translateX(-120px)"><span>Ringkasan</span><span>Ekosistem</span><span>Waktu &amp; Wilayah</span><span class="on">Kinerja</span></div>
+    </div>
+    <div class="flt"><span><svg class="i"><use href="#i-cal"/></svg>7 hari terakhir<svg class="i"><use href="#i-down"/></svg></span><span><svg class="i"><use href="#i-layers"/></svg>Semua ekosistem<svg class="i"><use href="#i-down"/></svg></span></div>
+    <div class="body">
+      <div class="wrap">
+        <div class="cp" style="margin-top:0">
+          <div class="hrow"><h5>Menunggu Tindak Lanjut</h5><span class="pill r">3 lewat 30 mnt</span></div>
+          <div class="wait"><span class="kind">ADUAN</span><div class="t"><b>Pungli parkir pasar</b><small>Komunitas · Kel. Pegangsaan</small></div><span class="age">58m</span></div>
+          <div class="wait"><span class="kind">ADUAN</span><div class="t"><b>Musik keras tengah malam</b><small>Lingkungan · Kel. Gondangdia</small></div><span class="age">42m</span></div>
+          <div class="wait"><span class="kind">ADUAN</span><div class="t"><b>Lampu jalan padam, rawan</b><small>Lingkungan · Kel. Menteng</small></div><span class="age">35m</span></div>
+        </div>
+        <div class="cp fun">
+          <div class="hrow"><h5>Alur Tindak Lanjut</h5><span class="hint">312 laporan</span></div>
+          <div class="r"><div><span>Masuk</span><span>312</span></div><span class="tr"><i style="--v:100%;background:#C9D5EE"></i></span></div>
+          <div class="r"><div><span>Diterima</span><span>305 <small>98%</small></span></div><span class="tr"><i style="--v:98%;background:#8FA6DD"></i></span><p class="drop">7 laporan dinyatakan tidak valid (palsu atau ganda)</p></div>
+          <div class="r"><div><span>Ditangani</span><span>296 <small>95%</small></span></div><span class="tr"><i style="--v:95%;background:#3D63C9"></i></span></div>
+          <div class="r"><div><span>Selesai</span><span>288 <small>92%</small></span></div><span class="tr"><i style="--v:92%;background:#0B2A6F"></i></span></div>
+        </div>
+        <div class="cp">
+          <div class="hrow"><div><h5>Tren Waktu Respons</h5><span class="hint">median per minggu, 8 minggu</span></div><span class="pill g">6,4 mnt</span></div>
+          <svg class="line" viewBox="0 0 300 120">
+            <defs><linearGradient id="gl" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#0B2A6F" stop-opacity=".18"/><stop offset="1" stop-color="#0B2A6F" stop-opacity="0"/></linearGradient></defs>
             <g stroke="#EEF2F7" stroke-width="1"><path d="M0 20H300M0 60H300M0 100H300"/></g>
-            <path d="M10 40H290" stroke="#DC2626" stroke-width="1.5" stroke-dasharray="5 5"/>
-            <text x="290" y="34" text-anchor="end" font-size="9.5" font-weight="700" fill="#DC2626" font-family="Plus Jakarta Sans">Target 8 mnt</text>
-            <path d="M10 28 L50 34 L90 39 L130 46 L170 42 L210 51 L250 54 L290 56 L290 120 L10 120Z" fill="url(#gl)"/>
-            <polyline points="10,28 50,34 90,39 130,46 170,42 210,51 250,54 290,56" fill="none" stroke="#1D4ED8" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
-            <circle cx="290" cy="56" r="5" fill="#fff" stroke="#1D4ED8" stroke-width="3"/>
+            <path d="M10 40H290" stroke="#D92D20" stroke-width="1.5" stroke-dasharray="5 5"/>
+            <text x="290" y="34" text-anchor="end" font-size="9.5" font-weight="700" fill="#D92D20" font-family="Plus Jakarta Sans">target 15 mnt</text>
+            <path d="M10 28 L50 34 L90 39 L130 46 L170 42 L210 51 L250 54 L290 56 L290 112 L10 112Z" fill="url(#gl)"/>
+            <polyline points="10,28 50,34 90,39 130,46 170,42 210,51 250,54 290,56" fill="none" stroke="#0B2A6F" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+            <circle cx="290" cy="56" r="5" fill="#fff" stroke="#D4A82A" stroke-width="3"/>
           </svg>
           <div class="xl"><span>M1</span><span>M2</span><span>M3</span><span>M4</span><span>M5</span><span>M6</span><span>M7</span><span>M8</span></div>
         </div>
-        <div class="ccard">
-          <div class="hrow"><h5>Kategori Kejadian</h5><span class="hint">312 laporan</span></div>
-          <div class="hb">
-            <div class="r"><span class="ic" style="background:#E0E7FF;color:#1D4ED8"><svg class="i"><use href="#i-alert"/></svg></span><div class="m"><div><span>Pencurian</span><b>106</b></div><div class="tr"><i style="--v:100%;background:#1D4ED8"></i></div></div></div>
-            <div class="r"><span class="ic" style="background:#FEF9C3;color:#A16207"><svg class="i"><use href="#i-car"/></svg></span><div class="m"><div><span>Kecelakaan</span><b>69</b></div><div class="tr"><i style="--v:65%;background:#FACC15"></i></div></div></div>
-            <div class="r"><span class="ic" style="background:#FEE2E2;color:#DC2626"><svg class="i"><use href="#i-users"/></svg></span><div class="m"><div><span>Keributan</span><b>56</b></div><div class="tr"><i style="--v:53%;background:#DC2626"></i></div></div></div>
-            <div class="r"><span class="ic" style="background:#F1F5F9;color:#475569"><svg class="i"><use href="#i-file"/></svg></span><div class="m"><div><span>Lainnya</span><b>81</b></div><div class="tr"><i style="--v:76%;background:#94A3B8"></i></div></div></div>
-          </div>
-        </div>
-        <div class="ccard">
-          <div class="hrow"><h5>Petugas Teraktif</h5><span class="hint">bulan ini</span></div>
-          <div class="lead"><span class="md" style="background:linear-gradient(135deg,#FACC15,#CA8A04)">1</span><div class="t"><b>Bripka Andi Saputra</b><small>Unit R2-07</small></div><div class="n">38<small>laporan</small></div></div>
-          <div class="lead"><span class="md" style="background:linear-gradient(135deg,#CBD5E1,#64748B)">2</span><div class="t"><b>Aipda Rina Kartika</b><small>Unit R4-01 · Anda</small></div><div class="n">33<small>laporan</small></div></div>
-          <div class="lead"><span class="md" style="background:linear-gradient(135deg,#FDBA74,#C2410C)">3</span><div class="t"><b>Brigpol Dimas Pratama</b><small>Unit R2-03</small></div><div class="n">29<small>laporan</small></div></div>
+        <div class="cp">
+          <div class="hrow"><h5>Per Petugas</h5><span class="hint">selesai · respons</span></div>
+          <div class="wait"><div class="av">AS</div><div class="t"><b>Bripka Andi Saputra</b><small>40 ditangani</small></div><span style="font-weight:800">38 · 5,1m</span></div>
+          <div class="wait"><div class="av" style="box-shadow:none">RK</div><div class="t"><b>Aipda Rina Kartika</b><small>35 ditangani</small></div><span style="font-weight:800">33 · 6,0m</span></div>
+          <div class="wait"><div class="av" style="box-shadow:none">DP</div><div class="t"><b>Brigpol Dimas Pratama</b><small>31 ditangani</small></div><span style="font-weight:800">29 · 7,2m</span></div>
         </div>
       </div>
-      <nav class="cnav">
-        <a><svg class="i"><use href="#i-home"/></svg></a>
-        <a><svg class="i"><use href="#i-file"/></svg></a>
-        <a class="s"><svg class="i"><use href="#i-siren"/></svg></a>
-        <a class="on"><svg class="i"><use href="#i-chart"/></svg>Analitik</a>
-        <a><svg class="i"><use href="#i-user"/></svg></a>
-      </nav>
-    </div></div><figcaption>C4 · Analitik</figcaption></figure>
-  </div>
-</section>
+    </div>
+    <nav class="bn">
+      <a><svg class="i"><use href="#i-home"/></svg>Beranda</a>
+      <a><svg class="i"><use href="#i-clip"/></svg>Laporan<em>12</em></a>
+      <a class="on"><svg class="i"><use href="#i-chart"/></svg>Analitik</a>
+      <a><svg class="i"><use href="#i-user"/></svg>Profil</a>
+    </nav>
+  </div></div><figcaption>Analitik · Kinerja<small>yang tertunda, alur status, tren respons, per petugas</small></figcaption></figure>
+</div>
+
+<!-- =========================== PROFIL =========================== -->
+<div class="grp"><h2>4 · Profil</h2><p>Peran, wilayah, dan ekosistem diambil dari data Nomor Darurat (diatur admin), jadi petugas hanya bisa melihatnya. Yang bisa diubah petugas: nama, notifikasi, tema, kata sandi, dan perangkat.</p></div>
+<div class="screens">
+  <figure><div class="phone"><div class="scr prof">
+    <div class="body">
+      <div class="hd">
+        <div class="sb lt"><span>9:41</span><svg><use href="#sbar"/></svg></div>
+        <div class="ptop"><span></span><b>Profil</b><span class="icbtn" style="width:38px;height:38px;border-radius:12px"><svg class="i"><use href="#i-more"/></svg></span></div>
+        <div class="pav">AS<em><svg class="i"><use href="#i-edit"/></svg></em></div>
+        <h2>Bripka Andi Saputra</h2>
+        <p class="rl">Bhabinkamtibmas · Polsek Menteng</p>
+        <div class="badges"><span class="on">HP ini menerima SOS</span><span>Kec. Menteng</span></div>
+      </div>
+      <div class="wrap">
+        <div class="mstat">
+          <div><b>38</b><small>Ditangani</small></div>
+          <div><b>5,1m</b><small>Respons</small></div>
+          <div><b>97%</b><small>Selesai</small></div>
+        </div>
+        <p style="font-size:11px;color:var(--mute);margin:6px 2px 0">Kinerja 30 hari terakhir</p>
+        <div class="sec" style="margin-top:16px"><h5>Penugasan</h5><span class="hint">dari Nomor Darurat</span></div>
+        <div class="plist">
+          <div><span class="ic"><svg class="i"><use href="#i-shield"/></svg></span><span class="t"><small>Peran</small><b>Bhabinkamtibmas</b></span><svg class="i" style="width:16px;height:16px;color:#A0AEC4"><use href="#i-lock"/></svg></div>
+          <div><span class="ic"><svg class="i"><use href="#i-pin"/></svg></span><span class="t"><small>Wilayah</small><b>Kec. Menteng · 5 kelurahan</b></span><svg class="i" style="width:16px;height:16px;color:#A0AEC4"><use href="#i-lock"/></svg></div>
+          <div><span class="ic"><svg class="i"><use href="#i-layers"/></svg></span><span class="t"><small>Ekosistem yang dilayani</small>
+            <span class="eco-row"><span class="eco">UMKM</span><span class="eco">Lingkungan</span><span class="eco">Pendidikan</span><span class="eco">+2</span></span></span></div>
+          <div><span class="ic"><svg class="i"><use href="#i-phone"/></svg></span><span class="t"><small>Nomor HP (login)</small><b>0812-3456-7890</b></span><svg class="i" style="width:16px;height:16px;color:#A0AEC4"><use href="#i-lock"/></svg></div>
+        </div>
+        <div class="sec" style="margin-top:16px"><h5>Pengaturan</h5></div>
+        <div class="plist">
+          <div><span class="ic" style="background:#FEE4E2;color:#D92D20"><svg class="i"><use href="#i-siren"/></svg></span><span class="t"><b>Notifikasi SOS</b><small>Sirene &amp; getar saat SOS masuk</small></span><span class="tg"></span></div>
+          <div><span class="ic"><svg class="i"><use href="#i-moon"/></svg></span><span class="t"><b>Tema gelap</b></span><span class="tg off"></span></div>
+          <div><span class="ic"><svg class="i"><use href="#i-key"/></svg></span><span class="t"><b>Ubah kata sandi</b></span><svg class="i go"><use href="#i-chev"/></svg></div>
+          <div><span class="ic"><svg class="i"><use href="#i-device"/></svg></span><span class="t"><b>Perangkat terdaftar</b><small>HP ini aktif menerima SOS</small></span><svg class="i go"><use href="#i-chev"/></svg></div>
+        </div>
+        <div class="plist" style="margin-top:10px">
+          <div><span class="ic"><svg class="i"><use href="#i-help"/></svg></span><span class="t"><b>Bantuan &amp; kontak admin</b></span><svg class="i go"><use href="#i-chev"/></svg></div>
+          <div><span class="ic"><svg class="i"><use href="#i-info"/></svg></span><span class="t"><b>Tentang aplikasi</b></span><span class="val">v2.0</span></div>
+        </div>
+        <a class="logout"><svg class="i"><use href="#i-out"/></svg>Keluar</a>
+        <p class="ver">Polmas Digital v2.0 · Didukung SiagaSOS</p>
+      </div>
+    </div>
+    <nav class="bn">
+      <a><svg class="i"><use href="#i-home"/></svg>Beranda</a>
+      <a><svg class="i"><use href="#i-clip"/></svg>Laporan<em>12</em></a>
+      <a><svg class="i"><use href="#i-chart"/></svg>Analitik</a>
+      <a class="on"><svg class="i"><use href="#i-user"/></svg>Profil</a>
+    </nav>
+  </div></div><figcaption>Profil<small>penugasan, kinerja bulan ini, pengaturan, keluar</small></figcaption></figure>
+</div>
 
 <script>
-  // tab opsi
-  document.querySelectorAll('.tabs button').forEach(b => b.onclick = () => {
-    document.querySelectorAll('.tabs button').forEach(x => x.classList.toggle('on', x === b));
-    document.querySelectorAll('.opt').forEach(s => s.classList.toggle('on', s.id === b.dataset.t));
-    history.replaceState(null, '', '#' + b.dataset.t);
-  });
-  const h = location.hash.slice(1);
-  if (h) document.querySelector(`.tabs [data-t="${h}"]`)?.click();
+  // Jam rawan: 24 jam, total 312 laporan (contoh)
+  const hrs=[6,4,3,2,2,3,5,9,12,13,14,13,15,13,12,13,15,17,24,30,32,28,16,11];
+  const hEl=document.getElementById('hours');
+  hEl.innerHTML=hrs.map((v,h)=>`<i class="${h===20?'pk':(h>=19&&h<=21?'hi':'')}" style="--v:${Math.round(v/32*100)}%" title="${String(h).padStart(2,'0')}.00 · ${v} laporan"></i>`).join('')
+    + `<span class="call" style="left:${(20.5/24*100).toFixed(1)}%;bottom:calc(100% + 3px)">20.00 · 32</span>`;
 
-  // heatmap jam rawan (data contoh): malam & akhir pekan lebih padat
-  const heat = document.getElementById('heat');
-  const days = ['Sen','Sel','Rab','Kam','Jum','Sab','Min'];
-  const hourW = [.15,.08,.05,.1,.3,.35,.4,.45,.55,.75,.9,.6];
-  let html = '<span></span>' + ['00','','04','','08','','12','','16','','20',''].map(t => `<span class="hl">${t}</span>`).join('');
-  days.forEach((d, i) => {
-    const wk = (i >= 4 ? 1.15 : 1) * (0.85 + ((i * 37) % 10) / 50);
-    html += `<span>${d}</span>`;
-    hourW.forEach((w, j) => {
-      const v = Math.min(1, w * wk * (0.85 + ((i * 7 + j * 13) % 9) / 30));
-      html += `<i style="background:rgba(239,68,68,${(0.08 + v * 0.9).toFixed(2)})"></i>`;
-    });
-  });
-  heat.innerHTML = html;
+  // Hari x blok 3 jam (contoh): malam dan akhir pekan lebih ramai
+  const days=['Sen','Sel','Rab','Kam','Jum','Sab','Min'], dayT=[38,44,40,46,43,58,43];
+  const blockW=hrs.reduce((a,v,i)=>{a[Math.floor(i/3)]+=v;return a},[0,0,0,0,0,0,0,0]);
+  const bt=blockW.reduce((a,b)=>a+b,0);
+  let maxc=0;
+  const cells=days.map((d,i)=>blockW.map((w,j)=>{const v=dayT[i]*w/bt*(i>=5&&j>=6?1.25:1);maxc=Math.max(maxc,v);return v;}));
+  let html='<span></span>'+['00','03','06','09','12','15','18','21'].map(t=>`<span class="hl">${t}</span>`).join('');
+  cells.forEach((row,i)=>{html+=`<span>${days[i]}</span>`;row.forEach(v=>{html+=`<i style="background:rgba(11,42,111,${(0.06+v/maxc*0.9).toFixed(2)})"></i>`});});
+  document.getElementById('heat').innerHTML=html;
+
+  // Matriks ekosistem x kategori (contoh)
+  const rows=[['UMKM',28,14,19,6],['Lingkungan',12,22,9,21],['Pendidikan',9,8,6,4],['Perkantoran',8,5,7,2],['Komunitas',5,6,3,5]];
+  document.querySelector('#mx tbody').innerHTML=rows.map(r=>'<tr><td>'+r[0]+'</td>'+r.slice(1).map(v=>{const a=0.06+v/28*0.9;return `<td style="background:rgba(11,42,111,${a.toFixed(2)});color:${a>.5?'#fff':'#0B2A6F'}">${v}</td>`}).join('')+'</tr>').join('');
 </script>
 </body>
 </html>

@@ -5,7 +5,7 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
 
 /// Push FCM (project Firebase `siagasos-a61e9`). SOS yang memanggil nomor penerima dikirim server ke kanal Android
-/// `polmas_sos` (sirene, prioritas tertinggi) sehingga tetap berbunyi saat app ditutup. Saat app terbuka, push hanya
+/// `polmas_sos_v2` (sirene commerceOS, prioritas tertinggi) sehingga tetap berbunyi saat app ditutup. Saat app terbuka, push hanya
 /// memicu [onSos] (cek /inbox → layar panggilan penuh).
 ///
 /// Tanpa konfigurasi Firebase (mis. iOS belum punya GoogleService-Info.plist) semua fungsi diam-diam nonaktif;

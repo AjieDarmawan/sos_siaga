@@ -58,11 +58,12 @@ class _SosCallScreenState extends State<SosCallScreen> with SingleTickerProvider
             usageType: AndroidUsageType.alarm,
             contentType: AndroidContentType.sonification,
             audioFocus: AndroidAudioFocus.gainTransient,
+            stayAwake: true,
           ),
           iOS: AudioContextIOS(category: AVAudioSessionCategory.playback),
         ),
       );
-      await _player.play(AssetSource('sounds/siren.wav'), volume: 1);
+      await _player.play(AssetSource('sounds/sos_siren.mp3'), volume: 1);
     } catch (_) {
       // Bunyi gagal tidak boleh menghalangi layar panggilan.
     }

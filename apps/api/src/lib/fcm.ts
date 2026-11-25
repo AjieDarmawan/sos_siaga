@@ -17,11 +17,11 @@ export const SOS_CHANNEL_ID = 'siagasos_sos';
 
 /**
  * Dua project Firebase: `pos` = app klien (satpam di POS, env FCM_SERVICE_ACCOUNT), `pk` = app Polmas Keamanan
- * (project baru, env PK_FCM_SERVICE_ACCOUNT, channel `polmas_sos` + suara `siren`).
+ * (project baru, env PK_FCM_SERVICE_ACCOUNT, channel `polmas_sos_v2` + suara `sos_siren`, sama dengan commerceOS).
  */
 export interface FcmProfile { env: string; channel: string; sound: string }
 export const POS_FCM: FcmProfile = { env: 'FCM_SERVICE_ACCOUNT', channel: SOS_CHANNEL_ID, sound: 'sos_siren' };
-export const PK_FCM: FcmProfile = { env: 'PK_FCM_SERVICE_ACCOUNT', channel: 'polmas_sos', sound: 'siren' };
+export const PK_FCM: FcmProfile = { env: 'PK_FCM_SERVICE_ACCOUNT', channel: 'polmas_sos_v2', sound: 'sos_siren' };
 
 interface ServiceAccount { project_id: string; client_email: string; private_key: string; token_uri?: string }
 

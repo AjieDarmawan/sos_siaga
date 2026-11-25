@@ -384,6 +384,7 @@ async function main() {
   ok(pkPush.length === 1 && /push SOS ke [01] dari 1 penerima/.test(pkPush[0]!), 'PK: SOS → push FCM ke HP penerima Polmas Keamanan, tercatat di timeline');
   const inbox = await call('GET', '/v1/pk/inbox', { token: pkT });
   ok(inbox.status === 200 && inbox.data.calls.some((c: any) => c.id === pkSos.data.id), 'PK: SOS muncul sebagai panggilan masuk (app sumber tanpa polmas_source)');
+  ok(typeof inbox.data.open_reports === 'number', 'PK: inbox membawa jumlah laporan belum ditanggapi (badge Laporan)');
   const pkOther = await call('GET', `/v1/pk/reports/${liveRep.data.id}`, { token: pkT });
   ok(pkOther.status === 404, 'PK: SOS yang tidak memanggil nomornya → 404');
   const pkDet = await call('GET', `/v1/pk/reports/${pkSos.data.id}`, { token: pkT });
@@ -404,14 +405,38 @@ async function main() {
   ok(pkTl.data.timeline.filter((e: any) => e.actor_kind === 'responder').length >= 3, 'PK: tanggapan tercatat di timeline dashboard tenant');
   const pkHist = await call('GET', '/v1/pk/history?scope=me', { token: pkT });
   ok(pkHist.data.items.some((r: any) => r.id === pkSos.data.id && r.last_response?.action === 'selesai'), 'PK: riwayat Saya memuat SOS + tanggapan terakhir');
+  const pkCnt = await call('GET', '/v1/pk/reports?scope=me&status=selesai', { token: pkT });
+  ok(pkCnt.data.counts?.selesai >= 1 && pkCnt.data.counts.semua >= pkCnt.data.counts.selesai && pkCnt.data.items.every((r: any) => r.status === 'selesai'),
+    'PK: daftar membawa jumlah per status (chip) yang mengabaikan filter status');
   const pkAn = await call('GET', '/v1/pk/analytics/summary?period=7d', { token: pkT });
   const pkEv = await call('GET', '/v1/pk/analytics/evaluation?period=7d', { token: pkT });
   ok(pkAn.status === 200 && pkAn.data.trend.length === 7 && pkAn.data.totals.sos >= 1 && pkEv.status === 200 && pkEv.data.current.selesai >= 1,
     'PK: analisa (tren 7 hari) & evaluasi menghitung SOS penerima');
+  ok(/^SOS-\d{4}-[0-9A-F]{4}$/.test(pkDet.data.code ?? ''), 'PK: nomor tiket pendek di detail laporan');
+  ok(pkAn.data.funnel?.selesai >= 1 && pkAn.data.officers?.some((o: any) => o.is_me && o.selesai >= 1)
+    && typeof pkAn.data.totals.median_response_s === 'number' && Array.isArray(pkAn.data.by_ecosystem) && 'patrol_hint' in pkAn.data,
+    'PK: analitik mockup (alur status, per petugas, median respons, ekosistem, saran patroli)');
+  const pkAnSrc = await call('GET', '/v1/pk/analytics/summary?period=7d&source=umkm', { token: pkT });
+  const pkAnBad = await call('GET', '/v1/pk/analytics/summary?period=7d&source=xx', { token: pkT });
+  ok(pkAnSrc.status === 200 && pkAnSrc.data.source === 'umkm' && pkAnBad.status === 422, 'PK: filter ekosistem di analitik (nilai asing ditolak)');
+  const pkStats = await call('GET', '/v1/pk/me/stats', { token: pkT });
+  ok(pkStats.status === 200 && pkStats.data.handled >= 1 && pkStats.data.resolved >= 1, 'PK: kinerja saya (Profil) menghitung SOS yang saya selesaikan');
+  await call('POST', '/v1/pk/me/device', { token: pkT, body: { fcm_token: `smoke-pk-fcm-${pkPhone}`, platform: 'android', device_name: 'Samsung SM-A546E' } });
+  const pkDevs = await call('GET', '/v1/pk/me/devices', { token: pkT });
+  const myDev = pkDevs.data.items?.find((d: any) => d.token_tail === pkPhone.slice(-6));
+  ok(myDev?.device_name === 'Samsung SM-A546E' && !('fcm_token' in myDev), 'PK: daftar perangkat (nama HP, token tidak dibocorkan)');
+  const pkPwBad = await call('POST', '/v1/pk/me/password', { token: pkT, body: { current_password: 'salah', new_password: 'satpam-baru-123' } });
+  const pkPw = await call('POST', '/v1/pk/me/password', { token: pkT, body: { current_password: 'satpam-rahasia-1', new_password: 'satpam-baru-123' } });
+  const pkOldSess = await call('GET', '/v1/pk/me', { token: pkSetup.data.token });
+  const pkStill = await call('GET', '/v1/pk/me', { token: pkT });
+  ok(pkPwBad.status === 401 && pkPw.status === 204 && pkOldSess.status === 401 && pkStill.status === 200,
+    'PK: ubah kata sandi (lama wajib benar, sesi lain dicabut, sesi ini tetap)');
+  const pkRmDev = await call('POST', `/v1/pk/me/devices/${myDev?.id}/remove`, { token: pkT });
+  ok(pkRmDev.status === 204, 'PK: lupakan perangkat dari Profil');
   await call('PUT', '/v1/sdk/contacts', { headers: sdkH(pkLive), body: { reporter: { ref: 'kasir_pk' }, contacts: [] } });
   await call('POST', '/v1/pk/auth/logout', { token: pkT });
   await call('POST', '/v1/pk/auth/logout', { token: pkSetup.data.token });
-  const pkGone = await call('POST', '/v1/pk/auth/login', { body: { phone: pkPhone, password: 'satpam-rahasia-1' } });
+  const pkGone = await call('POST', '/v1/pk/auth/login', { body: { phone: pkPhone, password: 'satpam-baru-123' } });
   ok(pkGone.status === 403 && pkGone.data.error.code === 'no_role', 'PK: nomor dihapus dari Nomor Darurat → tidak bisa login lagi');
 
   for (let i = 0; i < 2; i++) await call('POST', '/v1/sdk/reports', { headers: sdkH(pkLive, { 'Idempotency-Key': uuid() }), body: { reporter: { ref: 'user_999' } } });

@@ -4,7 +4,7 @@ import 'package:intl/date_symbol_data_local.dart';
 import 'package:polmas_keamanan/core/format.dart';
 import 'package:polmas_keamanan/core/models.dart';
 import 'package:polmas_keamanan/theme/tokens.dart';
-import 'package:polmas_keamanan/widgets/common.dart';
+import 'package:polmas_keamanan/widgets/ui.dart';
 
 void main() {
   setUpAll(() => initializeDateFormatting('id'));
@@ -20,6 +20,13 @@ void main() {
   });
 
   group('model', () {
+    test('nomor tiket & ekosistem', () {
+      final r = Report({'id': 'abcd1234-0000', 'kind': 'sos', 'code': 'SOS-2511-ABCD', 'source_label': 'UMKM', 'app_name': 'commerceOS', 'created_at': '2026-11-25T10:00:00Z'});
+      expect(r.code, 'SOS-2511-ABCD');
+      expect(r.ecosystemLabel, 'UMKM');
+      expect(r.ecosystemApp, 'commerceOS');
+    });
+
     test('status SOS baru = Darurat merah, laporan baru = Baru navy', () {
       expect(statusStyle(PkStatus.baru, sos: true).label, 'Darurat');
       expect(statusStyle(PkStatus.baru, sos: true).color, PK.red);
@@ -61,10 +68,10 @@ void main() {
   testWidgets('lencana status selalu berteks (bukan warna saja)', (tester) async {
     await tester.pumpWidget(
       const MaterialApp(
-        home: Scaffold(body: StatusBadge(status: PkStatus.baru, sos: true)),
+        home: Scaffold(body: Column(children: [StatusPill(status: PkStatus.baru, sos: true), StatusPill(status: PkStatus.ditangani, sos: false)])),
       ),
     );
     expect(find.text('Darurat'), findsOneWidget);
-    expect(find.bySemanticsLabel('Status Darurat'), findsOneWidget);
+    expect(find.text('Diproses'), findsOneWidget);
   });
 }

@@ -132,6 +132,15 @@ export const maskName = (n: string | null | undefined) =>
 
 const round3 = (v: number) => Math.round(v * 1000) / 1000;
 
+/**
+ * Nomor tiket pendek untuk layar Detail, mis. "SOS-2511-3F9A": jenis, tahun+bulan WIB, 4 karakter awal id.
+ * Bukan kunci unik (id tetap uuid); cukup untuk disebut di telepon/radio.
+ */
+export function reportCode(r: { id: string; kind: string; created_at: string | Date }) {
+  const wib = new Date(new Date(r.created_at).getTime() + 7 * 3600_000).toISOString();
+  return `${r.kind === 'pengaduan' ? 'LAP' : 'SOS'}-${wib.slice(2, 4)}${wib.slice(5, 7)}-${r.id.slice(0, 4).toUpperCase()}`;
+}
+
 /** Bentuk satu laporan untuk aplikasi. Identitas & lokasi persis hanya untuk petugas, pelapor sendiri, dan kontak daruratnya. */
 export function serializePk(r: any, pk: PkContext, media?: { image: number; video: number; audio: number }) {
   const own = r.reporter_phone_norm === pk.phone;
@@ -140,6 +149,7 @@ export function serializePk(r: any, pk: PkContext, media?: { image: number; vide
   const cd = r.complaint_details ?? null;
   return {
     id: r.id,
+    code: reportCode(r),
     kind: r.kind === 'pengaduan' ? 'laporan' : 'sos',
     category: r.category,
     title: cd?.title ?? null,
@@ -162,6 +172,8 @@ export function serializePk(r: any, pk: PkContext, media?: { image: number; vide
     resolved_at: r.resolved_at,
     occurred_at: cd?.occurred_at ?? null,
     media: media ?? { image: r.n_image ?? 0, video: r.n_video ?? 0, audio: r.n_audio ?? 0 },
+    video_s: r.video_s ?? null,
+    audio_s: r.audio_s ?? null,
     last_response: r.last_action ? { action: r.last_action, officer: r.last_officer, note: r.last_note, created_at: r.last_response_at } : null,
     is_demo: r.app_name?.includes('(Demo)') ?? false,
   };
@@ -176,6 +188,9 @@ export const PK_COLUMNS = `
   (SELECT count(*)::int FROM report_media m WHERE m.report_id = r.id AND m.status = 'ready' AND m.kind = 'video') AS n_video,
   (SELECT count(*)::int FROM report_media m WHERE m.report_id = r.id AND m.status = 'ready' AND m.kind = 'audio') AS n_audio,
   (SELECT m.storage_key FROM report_media m WHERE m.report_id = r.id AND m.status = 'ready' AND m.kind = 'image' ORDER BY m.created_at LIMIT 1) AS thumb_key,
+  ARRAY(SELECT m.storage_key FROM report_media m WHERE m.report_id = r.id AND m.status = 'ready' AND m.kind = 'image' ORDER BY m.created_at LIMIT 3) AS thumb_keys,
+  (SELECT m.duration_s FROM report_media m WHERE m.report_id = r.id AND m.status = 'ready' AND m.kind = 'video' ORDER BY m.created_at LIMIT 1) AS video_s,
+  (SELECT m.duration_s FROM report_media m WHERE m.report_id = r.id AND m.status = 'ready' AND m.kind = 'audio' ORDER BY m.created_at LIMIT 1) AS audio_s,
   lr.action AS last_action, lr.officer AS last_officer, lr.note AS last_note, lr.created_at AS last_response_at`;
 export const PK_LAST_RESPONSE = `
   LEFT JOIN LATERAL (SELECT action, officer, note, created_at FROM pk_responses x WHERE x.report_id = r.id ORDER BY created_at DESC LIMIT 1) lr ON true`;

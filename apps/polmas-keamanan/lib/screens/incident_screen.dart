@@ -1,5 +1,3 @@
-import 'dart:math' as math;
-
 import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -14,12 +12,13 @@ import '../core/models.dart';
 import '../theme/tokens.dart';
 import '../widgets/common.dart';
 import '../widgets/map_widgets.dart';
-import 'video_screen.dart';
+import '../widgets/ui.dart';
+import 'video_screen.dart' show VideoScreen;
 
 Future<void> openIncident(BuildContext context, String id) => Navigator.of(context).push(MaterialPageRoute(builder: (_) => IncidentScreen(id: id)));
 
-/// Detail insiden (FR-06, FR-07, FR-17): peta kecil, kartu pengirim, bukti yang bisa digeser, garis waktu status, dan
-/// aksi Hubungi / Verifikasi / Tangani / Selesaikan di bawah layar (terjangkau satu tangan).
+/// Detail & Tindak Lanjut (mockup): header navy (judul, jenis, nomor tiket, langkah Diterima → Diverifikasi →
+/// Ditangani → Selesai), peta + Rute, info pelapor, lampiran, riwayat tindak lanjut, dan bilah tulis + Perbarui.
 class IncidentScreen extends StatefulWidget {
   const IncidentScreen({super.key, required this.id});
   final String id;
@@ -28,14 +27,21 @@ class IncidentScreen extends StatefulWidget {
 }
 
 class _IncidentScreenState extends State<IncidentScreen> {
+  final _note = TextEditingController();
   Map? _d;
   String? _error;
-  String? _busy;
+  bool _busy = false;
 
   @override
   void initState() {
     super.initState();
     _load();
+  }
+
+  @override
+  void dispose() {
+    _note.dispose();
+    super.dispose();
   }
 
   Future<void> _load() async {
@@ -55,10 +61,12 @@ class _IncidentScreenState extends State<IncidentScreen> {
   List<String> get _actions => ((_d?['actions'] as List?) ?? const []).cast<String>();
 
   Future<void> _respond(String action, {String? note}) async {
-    setState(() => _busy = action);
+    setState(() => _busy = true);
     final state = AppScope.read(context);
     try {
       await state.api.post('/reports/${widget.id}/responses', {'action': action, 'note': ?note});
+      _note.clear();
+      FocusManager.instance.primaryFocus?.unfocus();
       await _load();
       state.bump();
       if (!mounted) return;
@@ -70,7 +78,7 @@ class _IncidentScreenState extends State<IncidentScreen> {
     } on ApiException catch (e) {
       if (mounted) showToast(context, e.message, error: true);
     } finally {
-      if (mounted) setState(() => _busy = null);
+      if (mounted) setState(() => _busy = false);
     }
   }
 
@@ -91,56 +99,101 @@ class _IncidentScreenState extends State<IncidentScreen> {
     if (_actions.contains('hubungi')) await _respond('hubungi');
   }
 
-  Future<void> _confirm(String action) async {
-    final title = switch (action) {
-      'verifikasi' => 'Verifikasi laporan',
-      'tangani' => 'Tangani laporan',
-      'selesai' => 'Selesaikan laporan',
-      'tidak_valid' => 'Tandai tidak valid',
-      'terima' => 'Terima laporan',
-      _ => 'Kirim catatan',
-    };
-    final note = await showModalBottomSheet<String>(
+  void _route(({double lat, double lng}) l) => launchUrl(
+    Uri.parse('https://www.google.com/maps/dir/?api=1&destination=${l.lat},${l.lng}'),
+    mode: LaunchMode.externalApplication,
+  );
+
+  /// "Perbarui": pilih status baru (aksi yang diizinkan server) atau kirim catatan saja.
+  Future<void> _update() async {
+    final note = _note.text.trim();
+    final choices = [
+      for (final a in const ['terima', 'verifikasi', 'tangani', 'selesai', 'tidak_valid'])
+        if (_actions.contains(a)) a,
+      if (_actions.contains('catatan') && note.isNotEmpty) 'catatan',
+    ];
+    if (choices.isEmpty) {
+      showToast(context, 'Tulis catatan tindak lanjut terlebih dahulu', error: true);
+      return;
+    }
+    final action = await showModalBottomSheet<String>(
       context: context,
-      isScrollControlled: true,
-      builder: (_) => _NoteSheet(title: title, required: action == 'catatan', danger: action == 'tidak_valid'),
+      showDragHandle: true,
+      builder: (context) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 0, 20, 4),
+              child: Text('Perbarui status', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: context.ink)),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
+              child: Text(
+                note.isEmpty ? 'Tanpa catatan. Tulis di kolom bawah bila perlu.' : 'Catatan: "$note"',
+                style: TextStyle(fontSize: 13, color: context.ink2),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            for (final a in choices)
+              ListTile(
+                leading: Icon(_actionIcon[a], color: a == 'tidak_valid' ? context.dangerText : context.brand),
+                title: Text(_actionLabel[a]!, style: const TextStyle(fontWeight: FontWeight.w700)),
+                subtitle: Text(_actionHint[a]!),
+                onTap: () => Navigator.pop(context, a),
+              ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
     );
-    if (note == null) return;
-    await _respond(action, note: note.isEmpty ? null : note);
+    if (action != null) await _respond(action, note: note.isEmpty ? null : note);
   }
 
-  PreferredSizeWidget _appBar(Report? r) {
-    final acts = _actions;
-    return AppBar(
-      title: const Text('Detail Laporan'),
-      actions: [
-        if (r != null)
-          PopupMenuButton<String>(
-            tooltip: 'Menu lainnya',
-            icon: const Icon(Icons.more_vert_rounded),
-            onSelected: (v) {
-              final loc = r.location;
-              switch (v) {
-                case 'hubungi':
-                  _call();
-                case 'peta':
-                  if (loc != null) {
-                    launchUrl(Uri.parse('https://www.google.com/maps/search/?api=1&query=${loc.lat},${loc.lng}'), mode: LaunchMode.externalApplication);
-                  }
-                default:
-                  _confirm(v);
-              }
-            },
-            itemBuilder: (_) => [
-              if (r.reporterPhone != null) const PopupMenuItem(value: 'hubungi', child: Text('Hubungi pelapor')),
-              if (r.location != null) const PopupMenuItem(value: 'peta', child: Text('Buka di aplikasi peta')),
-              if (acts.contains('terima')) const PopupMenuItem(value: 'terima', child: Text('Terima laporan')),
-              if (acts.contains('catatan')) const PopupMenuItem(value: 'catatan', child: Text('Kirim catatan ke pelapor')),
-              if (acts.contains('tidak_valid')) const PopupMenuItem(value: 'tidak_valid', child: Text('Tandai tidak valid')),
-            ],
+  static const _actionLabel = {
+    'terima': 'Diterima',
+    'verifikasi': 'Diverifikasi',
+    'tangani': 'Ditangani',
+    'selesai': 'Selesai',
+    'tidak_valid': 'Tidak valid',
+    'catatan': 'Kirim catatan saja',
+  };
+  static const _actionHint = {
+    'terima': 'Saya menerima laporan ini',
+    'verifikasi': 'Pelapor dihubungi, kejadian benar',
+    'tangani': 'Petugas menuju / di lokasi',
+    'selesai': 'Kejadian sudah ditangani',
+    'tidak_valid': 'Laporan palsu atau ganda',
+    'catatan': 'Status tidak berubah',
+  };
+  static const _actionIcon = {
+    'terima': Icons.mark_email_read_outlined,
+    'verifikasi': Icons.verified_outlined,
+    'tangani': Icons.directions_run_rounded,
+    'selesai': Icons.check_circle_outline_rounded,
+    'tidak_valid': Icons.block_rounded,
+    'catatan': Icons.chat_bubble_outline_rounded,
+  };
+
+  Future<void> _invalid() async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Tandai tidak valid?'),
+        content: const Text('Laporan ditutup sebagai palsu atau ganda. Pelapor akan melihat status ini.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Batal')),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: PK.red),
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Tandai'),
           ),
-      ],
+        ],
+      ),
     );
+    if (ok == true) await _respond('tidak_valid', note: _note.text.trim().isEmpty ? null : _note.text.trim());
   }
 
   @override
@@ -148,401 +201,290 @@ class _IncidentScreenState extends State<IncidentScreen> {
     final d = _d;
     if (d == null) {
       return Scaffold(
-        appBar: _appBar(null),
+        backgroundColor: context.pageBg,
+        appBar: AppBar(title: const Text('Detail Laporan')),
         body: _error != null ? ErrorState(message: _error!, onRetry: _load) : const Center(child: CircularProgressIndicator()),
       );
     }
     final r = Report(d);
-    final t = Theme.of(context).textTheme;
     final media = (d['media'] as List).cast<Map>();
     final timeline = (d['timeline'] as List).cast<Map>();
     final complaint = d['complaint'] as Map?;
     final loc = r.location;
     final trail = ((d['trail'] as List?) ?? const []).cast<Map>();
     final dist = r.distanceFrom(AppScope.of(context).here);
-    final notes = timeline.where((e) => (e['note'] as String?)?.isNotEmpty == true).length;
+    final photosVideos = media.where((m) => m['kind'] != 'audio').toList();
+    final audios = media.where((m) => m['kind'] == 'audio').toList();
+    final history = timeline.reversed.toList();
     return Scaffold(
       backgroundColor: context.pageBg,
-      appBar: _appBar(r),
-      body: RefreshIndicator(
-        onRefresh: _load,
-        child: ListView(
-          padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
-          children: [
-            if (loc != null)
-              ClipRRect(
-                borderRadius: BorderRadius.circular(PK.rCard),
-                child: SizedBox(
-                  height: 150,
-                  child: _MiniMap(lat: loc.lat, lng: loc.lng, sos: r.isSos, trail: trail),
-                ),
-              ),
-            const SizedBox(height: 14),
-            Row(
+      body: Column(
+        children: [
+          NavyHeader(
+            radius: 26,
+            padding: const EdgeInsets.fromLTRB(16, 2, 16, 18),
+            child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Expanded(
-                  child: Text(r.headline, style: t.titleLarge?.copyWith(fontWeight: FontWeight.w800)),
+                Row(
+                  children: [
+                    HeaderIconButton(icon: Icons.chevron_left_rounded, tooltip: 'Kembali', size: 38, onTap: () => Navigator.pop(context)),
+                    const Expanded(
+                      child: Text('Detail Laporan', textAlign: TextAlign.center, style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+                    ),
+                    PopupMenuButton<String>(
+                      tooltip: 'Menu lainnya',
+                      onSelected: (v) => switch (v) {
+                        'hubungi' => _call(),
+                        'rute' => loc == null ? null : _route(loc),
+                        'tidak_valid' => _invalid(),
+                        _ => null,
+                      },
+                      itemBuilder: (_) => [
+                        if (r.reporterPhone != null) const PopupMenuItem(value: 'hubungi', child: Text('Telepon pelapor')),
+                        if (loc != null) const PopupMenuItem(value: 'rute', child: Text('Buka rute di aplikasi peta')),
+                        if (_actions.contains('tidak_valid')) const PopupMenuItem(value: 'tidak_valid', child: Text('Tandai tidak valid')),
+                      ],
+                      child: const IgnorePointer(child: HeaderIconButton(icon: Icons.more_horiz_rounded, tooltip: 'Menu lainnya', size: 38)),
+                    ),
+                  ],
                 ),
-                if (r.isDemo) const DemoTag(),
+                const SizedBox(height: 12),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: Text(r.headline, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800, height: 1.3)),
+                    ),
+                    if (r.isDemo) const DemoTag(),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    KindTag(sos: r.isSos),
+                    const SizedBox(width: 6),
+                    Text(
+                      '#${r.code}',
+                      style: const TextStyle(fontFamily: 'monospace', fontSize: 11.5, color: PK.headerMute, fontWeight: FontWeight.w700),
+                    ),
+                    Text(' · masuk ${fmtTime(r.createdAt)}', style: const TextStyle(fontSize: 11.5, color: PK.headerMute)),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                _Steps(r: r),
               ],
             ),
-            const SizedBox(height: 8),
-            Align(
-              alignment: Alignment.centerLeft,
-              child: StatusBadge(status: r.status, sos: r.isSos),
-            ),
-            const SizedBox(height: 10),
-            Row(
-              children: [
-                Icon(Icons.calendar_today_rounded, size: 16, color: context.ink2),
-                const SizedBox(width: 6),
-                Expanded(
-                  child: Text(fmtDayTime(r.createdAt), style: t.bodyMedium?.copyWith(color: context.ink2)),
-                ),
-                if (dist != null) ...[
-                  Icon(Icons.location_on_outlined, size: 16, color: context.ink2),
-                  const SizedBox(width: 4),
-                  Text(dist, style: t.bodyMedium?.copyWith(color: context.ink2)),
-                ],
-              ],
-            ),
-            if (r.message != null) ...[const SizedBox(height: 10), Text(r.message!, style: t.bodyLarge)],
-            if (complaint != null) ...[
-              if (complaint['location_text'] != null) _InfoRow(Icons.place_rounded, 'Lokasi kejadian', complaint['location_text'] as String),
-              if (complaint['occurred_at'] != null)
-                _InfoRow(Icons.schedule_rounded, 'Waktu kejadian', fmtDateTime(DateTime.parse(complaint['occurred_at'] as String).toLocal())),
-              if (complaint['suspect'] != null) _InfoRow(Icons.person_search_rounded, 'Ciri pelaku', complaint['suspect'] as String),
-              if (complaint['witness'] != null) _InfoRow(Icons.record_voice_over_rounded, 'Saksi', complaint['witness'] as String),
-            ],
-            const SizedBox(height: 14),
-            _SenderCard(r: r, onCall: r.reporterPhone != null ? _call : null),
-            const SizedBox(height: 18),
-            Row(
-              children: [
-                Expanded(
-                  child: Text('Bukti Laporan (${media.length})', style: t.titleMedium?.copyWith(fontWeight: FontWeight.w800)),
-                ),
-                if (media.isNotEmpty)
-                  TextButton(
-                    onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => _MediaGrid(media: media))),
-                    style: TextButton.styleFrom(foregroundColor: context.dangerText),
-                    child: const Text('Lihat semua', style: TextStyle(fontWeight: FontWeight.w700)),
+          ),
+          Expanded(
+            child: RefreshIndicator(
+              onRefresh: _load,
+              child: ListView(
+                padding: const EdgeInsets.fromLTRB(16, 14, 16, 20),
+                children: [
+                  if (loc != null)
+                    Container(
+                      clipBehavior: Clip.antiAlias,
+                      decoration: BoxDecoration(
+                        color: context.surface,
+                        borderRadius: BorderRadius.circular(18),
+                        border: Border.all(color: context.isDark ? context.hairline : const Color(0xFFE8EDF5)),
+                      ),
+                      child: Column(
+                        children: [
+                          SizedBox(height: 118, child: _MiniMap(lat: loc.lat, lng: loc.lng, sos: r.isSos, trail: trail)),
+                          Padding(
+                            padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+                            child: Row(
+                              children: [
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        r.locationText ?? r.sourcePlace ?? 'Titik GPS pelapor',
+                                        style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: context.ink),
+                                      ),
+                                      Text(
+                                        [
+                                          if (r.kelurahan != null) 'Kel. ${r.kelurahan!.name}',
+                                          if (r.kecamatan != null) 'Kec. ${r.kecamatan!.name}',
+                                          ?dist,
+                                        ].join(' · ').ifEmpty('Wilayah sedang ditentukan'),
+                                        style: TextStyle(fontSize: 11.5, color: context.ink2),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                FilledButton.icon(
+                                  onPressed: () => _route(loc),
+                                  style: FilledButton.styleFrom(
+                                    backgroundColor: PK.navy,
+                                    minimumSize: const Size(0, 36),
+                                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(11)),
+                                  ),
+                                  icon: const Icon(Icons.arrow_forward_rounded, size: 15, color: PK.gold2),
+                                  label: const Text('Rute', style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w800)),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  Panel(
+                    border: true,
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+                    child: Column(
+                      children: [
+                        _Info(icon: Icons.layers_outlined, label: 'Ekosistem', value: [r.ecosystemLabel, ?r.ecosystemApp].join(' · ')),
+                        _Info(icon: Icons.person_outline_rounded, label: 'Dari siapa', value: r.reporterName, sub: r.sourcePlace),
+                        _Info(
+                          icon: Icons.phone_outlined,
+                          label: 'No HP',
+                          value: r.reporterPhone == null ? 'Disamarkan' : fmtPhone(r.reporterPhone!),
+                          action: r.reporterPhone == null ? null : _call,
+                        ),
+                        _Info(icon: Icons.calendar_today_outlined, label: 'Waktu', value: '${fmtDay(r.createdAt)} · ${fmtTime(r.createdAt)} WIB'),
+                        if (complaint?['occurred_at'] != null)
+                          _Info(
+                            icon: Icons.schedule_rounded,
+                            label: 'Waktu kejadian',
+                            value: fmtDateTime(DateTime.parse(complaint!['occurred_at'] as String).toLocal()),
+                          ),
+                        if (complaint?['suspect'] != null) _Info(icon: Icons.person_search_outlined, label: 'Ciri pelaku', value: complaint!['suspect'] as String),
+                        if (complaint?['witness'] != null) _Info(icon: Icons.record_voice_over_outlined, label: 'Saksi', value: complaint!['witness'] as String),
+                        _Info(icon: Icons.newspaper_rounded, label: 'Berita', value: r.message ?? r.headline, plain: true, last: true),
+                      ],
+                    ),
                   ),
-              ],
-            ),
-            const SizedBox(height: 6),
-            if (media.isEmpty)
-              Text('Pelapor belum melampirkan foto atau video.', style: t.bodyMedium?.copyWith(color: context.ink2))
-            else
-              _MediaStrip(media: media),
-            const SizedBox(height: 20),
-            Text('Status Penanganan', style: t.titleMedium?.copyWith(fontWeight: FontWeight.w800)),
-            const SizedBox(height: 10),
-            _Stepper(r: r, timeline: timeline),
-            if (notes > 0) ...[
-              const SizedBox(height: 12),
-              AppCard(
-                padding: EdgeInsets.zero,
-                child: ExpansionTile(
-                  shape: const Border(),
-                  title: Text('Catatan & aktivitas ($notes)', style: t.titleSmall),
-                  childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                  children: [_Timeline(items: timeline)],
-                ),
+                  SectionHead(
+                    'Lampiran',
+                    trailing: Text(
+                      media.isEmpty
+                          ? 'tidak ada'
+                          : [
+                              if (photosVideos.isNotEmpty) '${photosVideos.length} foto/video',
+                              if (audios.isNotEmpty) '${audios.length} suara',
+                            ].join(' · '),
+                      style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600, color: context.ink2),
+                    ),
+                  ),
+                  if (media.isEmpty)
+                    Text('Pelapor belum melampirkan foto, video, atau suara.', style: TextStyle(fontSize: 13, color: context.ink2))
+                  else ...[
+                    if (photosVideos.isNotEmpty)
+                      GridView.count(
+                        crossAxisCount: 3,
+                        shrinkWrap: true,
+                        physics: const NeverScrollableScrollPhysics(),
+                        mainAxisSpacing: 8,
+                        crossAxisSpacing: 8,
+                        childAspectRatio: 1.25,
+                        children: [for (final m in photosVideos) _MediaTile(m: m)],
+                      ),
+                    for (final a in audios) _AudioTile(m: a),
+                  ],
+                  const SectionHead('Riwayat Tindak Lanjut'),
+                  Panel(
+                    border: true,
+                    margin: EdgeInsets.zero,
+                    padding: const EdgeInsets.all(14),
+                    child: Column(children: [for (final (i, e) in history.indexed) _TimelineRow(e: e, first: i == 0, last: i == history.length - 1)]),
+                  ),
+                ],
               ),
-            ],
-            const SizedBox(height: 16),
-          ],
-        ),
-      ),
-      bottomNavigationBar: _actionBar(r),
-    );
-  }
-
-  /// Bilah aksi bawah (satu tangan): Verifikasi (garis merah), Tangani (emas), Selesaikan (hijau).
-  /// Aksi ditentukan server: penerima Nomor Darurat hanya untuk laporan yang memanggil nomornya, Bhabinkamtibmas untuk
-  /// kecamatannya, peran lain hanya melihat (tombol Hubungi bila nomor pelapor terlihat).
-  Widget? _actionBar(Report r) {
-    final acts = _actions;
-    final closed = const {PkStatus.selesai, PkStatus.tidakValid, PkStatus.dibatalkan}.contains(r.status);
-    if (acts.isEmpty) {
-      if (closed) {
-        return _BarShell(
-          child: Row(
-            children: [
-              Icon(Icons.lock_rounded, size: 18, color: context.ink2),
-              const SizedBox(width: 8),
-              Expanded(child: Text('Laporan sudah ditutup.', style: Theme.of(context).textTheme.bodyMedium)),
-            ],
+            ),
           ),
-        );
-      }
-      if (r.reporterPhone == null) return null;
-      return _BarShell(
-        child: PrimaryButton(label: 'Hubungi pelapor', icon: Icons.call_rounded, color: PK.green, onPressed: _call),
-      );
-    }
-    final busy = _busy != null;
-    return _BarShell(
-      child: Row(
-        children: [
-          _ActBtn(
-            label: 'Verifikasi',
-            icon: Icons.check_rounded,
-            outlined: true,
-            color: PK.red,
-            loading: _busy == 'verifikasi',
-            onTap: acts.contains('verifikasi') && !busy ? () => _confirm('verifikasi') : null,
-          ),
-          const SizedBox(width: 8),
-          _ActBtn(
-            label: 'Tangani',
-            icon: Icons.person_rounded,
-            color: const Color(0xFFE0A21B),
-            loading: _busy == 'tangani',
-            onTap: acts.contains('tangani') && !busy ? () => _confirm('tangani') : null,
-          ),
-          const SizedBox(width: 8),
-          _ActBtn(
-            label: 'Selesaikan',
-            icon: Icons.check_rounded,
-            color: PK.green,
-            loading: _busy == 'selesai',
-            onTap: acts.contains('selesai') && !busy ? () => _confirm('selesai') : null,
-          ),
+          _bottomBar(r),
         ],
       ),
     );
   }
-}
 
-class _BarShell extends StatelessWidget {
-  const _BarShell({required this.child});
-  final Widget child;
-  @override
-  Widget build(BuildContext context) => Container(
-    decoration: BoxDecoration(
+  Widget _bottomBar(Report r) {
+    final closed = const {PkStatus.selesai, PkStatus.tidakValid, PkStatus.dibatalkan}.contains(r.status);
+    final pad = EdgeInsets.fromLTRB(14, 10, 14, 10 + MediaQuery.of(context).padding.bottom);
+    final deco = BoxDecoration(
       color: context.surface,
       border: Border(top: BorderSide(color: context.hairline)),
-    ),
-    padding: EdgeInsets.fromLTRB(16, 12, 16, 12 + MediaQuery.of(context).padding.bottom),
-    child: child,
-  );
-}
-
-class _ActBtn extends StatelessWidget {
-  const _ActBtn({required this.label, required this.icon, required this.color, this.onTap, this.outlined = false, this.loading = false});
-  final String label;
-  final IconData icon;
-  final Color color;
-  final VoidCallback? onTap;
-  final bool outlined, loading;
-  @override
-  Widget build(BuildContext context) {
-    final enabled = onTap != null;
-    final child = loading
-        ? SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2.5, color: outlined ? color : Colors.white))
-        : FittedBox(
-            fit: BoxFit.scaleDown,
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(icon, size: 18),
-                const SizedBox(width: 4),
-                Text(label, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
-              ],
-            ),
-          );
-    final shape = RoundedRectangleBorder(borderRadius: BorderRadius.circular(12));
-    return Expanded(
-      child: SizedBox(
-        height: 50,
-        child: outlined
-            ? OutlinedButton(
-                onPressed: onTap,
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: context.dangerText,
-                  side: BorderSide(color: enabled ? color : context.hairline, width: 1.5),
-                  shape: shape,
-                  padding: const EdgeInsets.symmetric(horizontal: 6),
-                ),
-                child: child,
-              )
-            : FilledButton(
-                onPressed: onTap,
-                style: FilledButton.styleFrom(
-                  backgroundColor: color,
-                  foregroundColor: Colors.white,
-                  disabledBackgroundColor: color.withValues(alpha: 0.3),
-                  disabledForegroundColor: Colors.white,
-                  shape: shape,
-                  padding: const EdgeInsets.symmetric(horizontal: 6),
-                ),
-                child: child,
+    );
+    if (_actions.isEmpty) {
+      return Container(
+        padding: pad,
+        decoration: deco,
+        child: Row(
+          children: [
+            Icon(closed ? Icons.lock_outline_rounded : Icons.visibility_outlined, size: 18, color: context.ink2),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                closed ? 'Laporan sudah ditutup.' : 'Anda hanya dapat melihat laporan ini.',
+                style: TextStyle(fontSize: 13, color: context.ink2),
               ),
-      ),
-    );
-  }
-}
-
-/// Langkah Status Penanganan: Diterima → Diverifikasi → Ditangani → Selesai. Selesai = centang hijau + waktu,
-/// berikutnya = lingkaran abu "Menunggu …".
-class _Stepper extends StatelessWidget {
-  const _Stepper({required this.r, required this.timeline});
-  final Report r;
-  final List<Map> timeline;
-
-  DateTime? _at(String action) {
-    final e = timeline.where((x) => x['kind'] == 'response' && x['action'] == action).firstOrNull;
-    return e == null ? null : DateTime.parse(e['at'] as String).toLocal();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final t = Theme.of(context).textTheme;
-    final s = r.status;
-    final verified = r.raw['verified_at'] is String ? DateTime.parse(r.raw['verified_at'] as String).toLocal() : null;
-    final level = switch (s) {
-      PkStatus.baru => 0,
-      PkStatus.diterima => 1,
-      PkStatus.diverifikasi => 2,
-      PkStatus.ditangani => 3,
-      _ => 4,
-    };
-    final closedOther = s == PkStatus.tidakValid || s == PkStatus.dibatalkan;
-    final steps = <(String, DateTime?, bool, String)>[
-      ('Diterima', r.acknowledgedAt ?? _at('terima'), level >= 1, 'Menunggu diterima'),
-      ('Diverifikasi', verified ?? _at('verifikasi'), level >= 2 && (verified != null || level >= 3), 'Menunggu verifikasi'),
-      ('Ditangani', _at('tangani'), level >= 3 && !closedOther, 'Menunggu penanganan'),
-      (
-        s == PkStatus.tidakValid
-            ? 'Tidak valid'
-            : s == PkStatus.dibatalkan
-            ? 'Dibatalkan'
-            : 'Selesai',
-        r.resolvedAt,
-        level >= 4,
-        'Menunggu penyelesaian',
-      ),
-    ];
-    final firstPending = steps.indexWhere((x) => !x.$3);
-    return Column(
-      children: [
-        for (final (i, (label, at, done, waiting)) in steps.indexed)
-          IntrinsicHeight(
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                SizedBox(
-                  width: 30,
-                  child: Column(
-                    children: [
-                      Container(
-                        width: 22,
-                        height: 22,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: done ? (closedOther && i == 3 ? PK.grey : PK.green) : Colors.transparent,
-                          border: done ? null : Border.all(color: context.hairline, width: 2),
-                        ),
-                        child: done ? const Icon(Icons.check_rounded, size: 15, color: Colors.white) : null,
-                      ),
-                      if (i < steps.length - 1) Expanded(child: Container(width: 2, color: done && steps[i + 1].$3 ? PK.green : context.hairline)),
-                    ],
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Padding(
-                    padding: EdgeInsets.only(bottom: i < steps.length - 1 ? 14 : 0),
-                    child: Semantics(
-                      label: '$label: ${done ? (at != null ? fmtDayTime(at) : 'selesai') : (i == firstPending ? waiting : 'belum')}',
-                      excludeSemantics: true,
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            label,
-                            style: t.titleSmall?.copyWith(fontWeight: FontWeight.w700, color: done ? context.ink : context.ink2),
-                          ),
-                          Text(done ? (at != null ? fmtDayTime(at) : 'Selesai') : (i == firstPending ? waiting : '–'), style: t.bodySmall),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-              ],
             ),
-          ),
-      ],
-    );
-  }
-}
-
-/// Semua bukti dalam kisi 3 kolom.
-class _MediaGrid extends StatelessWidget {
-  const _MediaGrid({required this.media});
-  final List<Map> media;
-  @override
-  Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(title: Text('Bukti Laporan (${media.length})')),
-    body: GridView.count(
-      padding: const EdgeInsets.all(12),
-      crossAxisCount: 3,
-      mainAxisSpacing: 8,
-      crossAxisSpacing: 8,
-      children: [for (final (i, m) in media.indexed) _MediaTile(m: m, index: i)],
-    ),
-  );
-}
-
-class _SenderCard extends StatelessWidget {
-  const _SenderCard({required this.r, this.onCall});
-  final Report r;
-  final VoidCallback? onCall;
-  @override
-  Widget build(BuildContext context) {
-    final t = Theme.of(context).textTheme;
-    return AppCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+            if (r.reporterPhone != null && !closed)
+              FilledButton.icon(
+                onPressed: _call,
+                style: FilledButton.styleFrom(backgroundColor: PK.green),
+                icon: const Icon(Icons.phone_rounded, size: 16),
+                label: const Text('Telepon'),
+              ),
+          ],
+        ),
+      );
+    }
+    return Container(
+      padding: pad,
+      decoration: deco,
+      child: Row(
         children: [
-          Row(
-            children: [
-              CircleAvatar(
-                radius: 24,
-                backgroundColor: context.brand.withValues(alpha: 0.12),
-                child: Text(
-                  r.reporterName.isEmpty ? '?' : r.reporterName[0],
-                  style: TextStyle(color: context.brand, fontWeight: FontWeight.w800, fontSize: 18),
+          Expanded(
+            child: Container(
+              height: 44,
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              decoration: BoxDecoration(
+                color: context.pageBg,
+                borderRadius: BorderRadius.circular(13),
+                border: Border.all(color: context.hairline),
+              ),
+              child: TextField(
+                controller: _note,
+                maxLength: 1000,
+                textInputAction: TextInputAction.send,
+                onSubmitted: (_) => _update(),
+                style: TextStyle(fontSize: 13, color: context.ink),
+                decoration: InputDecoration(
+                  hintText: 'Tulis tindak lanjut…',
+                  hintStyle: const TextStyle(fontSize: 12.5, color: Color(0xFF94A3B8)),
+                  counterText: '',
+                  border: InputBorder.none,
+                  enabledBorder: InputBorder.none,
+                  focusedBorder: InputBorder.none,
+                  filled: false,
+                  isCollapsed: true,
+                  contentPadding: const EdgeInsets.symmetric(vertical: 13),
                 ),
               ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(r.isMine ? '${r.reporterName} (Anda)' : r.reporterName, style: t.titleMedium),
-                    if (r.reporterPhone != null) Text(fmtPhone(r.reporterPhone!), style: t.bodySmall) else Text('Identitas disamarkan', style: t.bodySmall),
-                  ],
-                ),
-              ),
-              if (onCall != null)
-                IconButton.filled(
-                  tooltip: 'Telepon pelapor',
-                  style: IconButton.styleFrom(backgroundColor: PK.green, minimumSize: const Size(48, 48)),
-                  onPressed: onCall,
-                  icon: const Icon(Icons.call_rounded, color: Colors.white),
-                ),
-            ],
+            ),
           ),
-          const Divider(height: 24),
-          _InfoRow(sourceIcon(r.source), 'Aplikasi asal', [r.sourceLabel, ?r.sourcePlace].join(' · ')),
-          _InfoRow(
-            Icons.place_rounded,
-            'Wilayah',
-            [if (r.kelurahan != null) 'Kel. ${r.kelurahan!.name}', if (r.kecamatan != null) 'Kec. ${r.kecamatan!.name}'].join(', ').ifEmpty('Belum diketahui'),
+          const SizedBox(width: 8),
+          SizedBox(
+            height: 44,
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(colors: [Color(0xFF123A94), PK.navy]),
+                borderRadius: BorderRadius.circular(13),
+              ),
+              child: TextButton(
+                onPressed: _busy ? null : _update,
+                style: TextButton.styleFrom(foregroundColor: Colors.white, padding: const EdgeInsets.symmetric(horizontal: 14)),
+                child: _busy
+                    ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                    : const Text('Perbarui', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800)),
+              ),
+            ),
           ),
         ],
       ),
@@ -554,30 +496,196 @@ extension on String {
   String ifEmpty(String other) => isEmpty ? other : this;
 }
 
-class _InfoRow extends StatelessWidget {
-  const _InfoRow(this.icon, this.label, this.value);
+/// Langkah status di header: lingkaran emas bercentang untuk yang sudah, cincin putih untuk yang sedang.
+class _Steps extends StatelessWidget {
+  const _Steps({required this.r});
+  final Report r;
+  @override
+  Widget build(BuildContext context) {
+    final s = r.status;
+    final verified = r.raw['verified_at'] != null;
+    final done = [
+      s != PkStatus.baru,
+      verified || s == PkStatus.ditangani || s == PkStatus.selesai,
+      s == PkStatus.ditangani || s == PkStatus.selesai,
+      s == PkStatus.selesai,
+    ];
+    final closedOther = s == PkStatus.tidakValid || s == PkStatus.dibatalkan;
+    final labels = ['Diterima', 'Diverifikasi', 'Ditangani', closedOther ? (s == PkStatus.tidakValid ? 'Tidak valid' : 'Dibatalkan') : 'Selesai'];
+    if (closedOther) done[3] = true;
+    final current = done.indexWhere((x) => !x);
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        for (var i = 0; i < 4; i++)
+          Expanded(
+            child: Semantics(
+              label: '${labels[i]}: ${done[i] ? 'sudah' : (i == current ? 'sedang' : 'belum')}',
+              excludeSemantics: true,
+              child: Column(
+                children: [
+                  SizedBox(
+                    height: 24,
+                    child: Stack(
+                      alignment: Alignment.center,
+                      children: [
+                        if (i > 0)
+                          Positioned(
+                            left: 0,
+                            right: null,
+                            child: FractionallySizedBox(widthFactor: 0.5, child: Container(height: 2)),
+                          ),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Container(height: 2, color: i == 0 ? Colors.transparent : (done[i] || i == current ? PK.gold : Colors.white24)),
+                            ),
+                            Expanded(
+                              child: Container(height: 2, color: i == 3 ? Colors.transparent : (done[i + 1] || i + 1 == current ? PK.gold : Colors.white24)),
+                            ),
+                          ],
+                        ),
+                        Container(
+                          width: 24,
+                          height: 24,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: done[i] ? (closedOther && i == 3 ? PK.headerMute : PK.gold) : (i == current ? Colors.white : const Color(0xFF1A3576)),
+                            border: Border.all(color: done[i] || i == current ? PK.gold : Colors.white24, width: 2),
+                            boxShadow: i == current ? const [BoxShadow(color: Color(0x4DD4A82A), spreadRadius: 4)] : null,
+                          ),
+                          child: done[i]
+                              ? const Icon(Icons.check_rounded, size: 13, color: PK.navy2)
+                              : i == current
+                              ? Center(
+                                  child: Container(width: 8, height: 8, decoration: const BoxDecoration(color: PK.navy, shape: BoxShape.circle)),
+                                )
+                              : null,
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    labels[i],
+                    style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: done[i] || i == current ? Colors.white : const Color(0xFF8EA2CC)),
+                  ),
+                ],
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+class _Info extends StatelessWidget {
+  const _Info({required this.icon, required this.label, required this.value, this.sub, this.action, this.plain = false, this.last = false});
   final IconData icon;
   final String label, value;
+  final String? sub;
+  final VoidCallback? action;
+  final bool plain, last;
   @override
-  Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.only(top: 10),
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.symmetric(vertical: 10),
+    decoration: BoxDecoration(
+      border: last ? null : Border(bottom: BorderSide(color: context.isDark ? context.hairline : const Color(0xFFF1F4F9))),
+    ),
     child: Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Icon(icon, size: 20, color: context.ink2),
-        const SizedBox(width: 10),
+        Container(
+          width: 32,
+          height: 32,
+          decoration: BoxDecoration(color: context.isDark ? context.hairline : const Color(0xFFEEF2FB), borderRadius: BorderRadius.circular(10)),
+          child: Icon(icon, size: 16, color: context.brand),
+        ),
+        const SizedBox(width: 12),
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(label, style: Theme.of(context).textTheme.bodySmall),
-              Text(value, style: Theme.of(context).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600)),
+              Text(label, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: context.ink2)),
+              const SizedBox(height: 1),
+              Text(value, style: TextStyle(fontSize: 13, height: plain ? 1.45 : 1.3, fontWeight: plain ? FontWeight.w500 : FontWeight.w700, color: context.ink)),
+              if (sub != null) Text(sub!, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: context.ink2)),
             ],
           ),
         ),
+        if (action != null)
+          Tooltip(
+            message: 'Telepon pelapor',
+            child: Material(
+              color: const Color(0xFFD1FADF),
+              borderRadius: BorderRadius.circular(11),
+              child: InkWell(
+                borderRadius: BorderRadius.circular(11),
+                onTap: action,
+                child: const SizedBox(width: 34, height: 34, child: Icon(Icons.phone_outlined, size: 16, color: PK.greenDark)),
+              ),
+            ),
+          ),
       ],
     ),
   );
+}
+
+class _TimelineRow extends StatelessWidget {
+  const _TimelineRow({required this.e, required this.first, required this.last});
+  final Map e;
+  final bool first, last;
+  @override
+  Widget build(BuildContext context) {
+    final at = DateTime.parse(e['at'] as String).toLocal();
+    final note = e['note'] as String?;
+    final actor = '${e['actor'] ?? ''}${e['is_me'] == true ? ' (Anda)' : ''}';
+    return IntrinsicHeight(
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          SizedBox(
+            width: 12,
+            child: Column(
+              children: [
+                Container(
+                  width: 12,
+                  height: 12,
+                  margin: const EdgeInsets.only(top: 3),
+                  decoration: BoxDecoration(
+                    color: first ? PK.gold : PK.navy,
+                    shape: BoxShape.circle,
+                    boxShadow: [BoxShadow(color: first ? const Color(0xFFFBF1D3) : PK.navySoft, spreadRadius: 3)],
+                  ),
+                ),
+                if (!last) Expanded(child: Container(width: 2, margin: const EdgeInsets.only(top: 3), color: context.hairline)),
+              ],
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Padding(
+              padding: EdgeInsets.only(bottom: last ? 0 : 14),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    [e['title'] as String? ?? '', if (actor.isNotEmpty) actor].join(' · '),
+                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: context.ink),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    [fmtTime(at), if (note != null && note.isNotEmpty) note].join(' · '),
+                    style: TextStyle(fontSize: 11.5, height: 1.4, color: context.ink2),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class _MiniMap extends StatelessWidget {
@@ -599,20 +707,17 @@ class _MiniMap extends StatelessWidget {
         ),
         children: [
           osmTiles(context),
-          if (path.length > 1)
-            PolylineLayer(
-              polylines: [Polyline(points: path, color: PK.navy, strokeWidth: 3)],
-            ),
+          if (path.length > 1) PolylineLayer(polylines: [Polyline(points: path, color: PK.navy, strokeWidth: 3)]),
           MarkerLayer(
             markers: [
               Marker(
                 point: p,
-                width: 50,
-                height: 50,
+                width: 44,
+                height: 44,
                 alignment: Alignment.topCenter,
                 child: Icon(
                   Icons.location_on_rounded,
-                  size: 46,
+                  size: 40,
                   color: sos ? PK.red : PK.navy,
                   shadows: const [Shadow(color: Color(0x55000000), blurRadius: 6)],
                 ),
@@ -626,136 +731,119 @@ class _MiniMap extends StatelessWidget {
   }
 }
 
-/// Deretan gambar mini bukti (bisa digeser): foto, video (ikon putar), suara.
-class _MediaStrip extends StatelessWidget {
-  const _MediaStrip({required this.media});
-  final List<Map> media;
-  @override
-  Widget build(BuildContext context) => SizedBox(
-    height: 92,
-    child: ListView.separated(
-      scrollDirection: Axis.horizontal,
-      itemCount: media.length,
-      separatorBuilder: (_, _) => const SizedBox(width: 8),
-      itemBuilder: (_, i) => SizedBox(
-        width: 108,
-        child: _MediaTile(m: media[i], index: i),
-      ),
-    ),
-  );
-}
-
 class _MediaTile extends StatelessWidget {
-  const _MediaTile({required this.m, required this.index});
+  const _MediaTile({required this.m});
   final Map m;
-  final int index;
-
-  void _open(BuildContext context) {
-    final url = m['url'] as String?;
-    if (url == null) return;
-    switch (m['kind']) {
-      case 'video':
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (_) => VideoScreen(url: url, title: 'Bukti video'),
-          ),
-        );
-      case 'image':
-        Navigator.push(context, MaterialPageRoute(builder: (_) => _ImageViewer(url: url)));
-      default:
-        final p = AudioPlayer();
-        p.play(UrlSource(url));
-        showModalBottomSheet(
-          context: context,
-          builder: (context) => Padding(
-            padding: const EdgeInsets.fromLTRB(24, 0, 24, 32),
-            child: Row(
-              children: [
-                const Icon(Icons.graphic_eq_rounded, size: 32),
-                const SizedBox(width: 16),
-                const Expanded(child: Text('Memutar rekaman suara…')),
-                IconButton(tooltip: 'Hentikan', icon: const Icon(Icons.stop_circle_rounded, size: 36), onPressed: () => Navigator.pop(context)),
-              ],
-            ),
-          ),
-        ).whenComplete(p.dispose);
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     final url = m['url'] as String?;
-    final kind = m['kind'] as String;
-    final label = kind == 'video'
-        ? 'Video'
-        : kind == 'image'
-        ? 'Foto'
-        : 'Suara';
+    final video = m['kind'] == 'video';
     return Semantics(
       button: true,
-      label: '$label bukti ${index + 1}',
+      label: video ? 'Putar video bukti' : 'Lihat foto bukti',
       excludeSemantics: true,
-      child: ClipRRect(
+      child: InkWell(
         borderRadius: BorderRadius.circular(12),
-        child: Material(
-          color: const Color(0xFF1F2937),
-          child: InkWell(
-            onTap: () => _open(context),
-            child: Stack(
-              fit: StackFit.expand,
-              children: [
-                if (kind == 'image' && url != null)
-                  Image.network(
-                    url,
-                    fit: BoxFit.cover,
-                    errorBuilder: (_, _, _) => const _MediaFallback(icon: Icons.broken_image_rounded),
-                  )
-                else
-                  _MediaFallback(icon: kind == 'video' ? Icons.videocam_rounded : Icons.graphic_eq_rounded, gradient: true),
-                if (kind == 'video')
-                  Center(
-                    child: Container(
-                      width: 38,
-                      height: 38,
-                      decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle),
-                      child: const Icon(Icons.play_arrow_rounded, color: PK.text, size: 26),
-                    ),
-                  ),
-                if (m['duration_s'] != null)
-                  Positioned(
-                    right: 6,
-                    bottom: 6,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
-                      decoration: BoxDecoration(color: Colors.black54, borderRadius: BorderRadius.circular(5)),
-                      child: Text(
-                        fmtDuration(m['duration_s'] as num),
-                        style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w700),
-                      ),
-                    ),
-                  ),
-              ],
-            ),
-          ),
+        onTap: url == null
+            ? null
+            : () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => video ? VideoScreen(url: url, title: 'Bukti video') : _ImageViewer(url: url)),
+              ),
+        child: LayoutBuilder(
+          builder: (_, c) => MediaThumb(url: url, kind: m['kind'] as String, seconds: m['duration_s'] as num?, width: c.maxWidth, height: c.maxHeight),
         ),
       ),
     );
   }
 }
 
-class _MediaFallback extends StatelessWidget {
-  const _MediaFallback({required this.icon, this.gradient = false});
-  final IconData icon;
-  final bool gradient;
+/// Rekaman suara: ▶ + gelombang + durasi, putar di tempat.
+class _AudioTile extends StatefulWidget {
+  const _AudioTile({required this.m});
+  final Map m;
   @override
-  Widget build(BuildContext context) => DecoratedBox(
-    decoration: BoxDecoration(
-      gradient: gradient ? const LinearGradient(colors: [PK.navy, Color(0xFF1E3A8A), PK.redDark], begin: Alignment.topLeft, end: Alignment.bottomRight) : null,
-      color: gradient ? null : Colors.black,
+  State<_AudioTile> createState() => _AudioTileState();
+}
+
+class _AudioTileState extends State<_AudioTile> {
+  final _player = AudioPlayer();
+  bool _playing = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _player.onPlayerComplete.listen((_) => mounted ? setState(() => _playing = false) : null);
+  }
+
+  @override
+  void dispose() {
+    _player.dispose();
+    super.dispose();
+  }
+
+  Future<void> _toggle() async {
+    final url = widget.m['url'] as String?;
+    if (url == null) return;
+    if (_playing) {
+      await _player.stop();
+    } else {
+      await _player.play(UrlSource(url));
+    }
+    if (mounted) setState(() => _playing = !_playing);
+  }
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.only(top: 8),
+    child: Material(
+      color: context.isDark ? context.hairline : const Color(0xFFEEF2F8),
+      borderRadius: BorderRadius.circular(12),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: _toggle,
+        child: SizedBox(
+          height: 46,
+          child: Row(
+            children: [
+              const SizedBox(width: 12),
+              Icon(_playing ? Icons.stop_rounded : Icons.play_arrow_rounded, color: context.brand),
+              const SizedBox(width: 10),
+              Expanded(child: CustomPaint(size: const Size(double.infinity, 22), painter: _WavePainter(context.brand))),
+              const SizedBox(width: 10),
+              Text(
+                widget.m['duration_s'] == null ? 'Suara' : fmtClock(widget.m['duration_s'] as num),
+                style: TextStyle(fontFamily: 'monospace', fontSize: 11.5, fontWeight: FontWeight.w700, color: context.brand),
+              ),
+              const SizedBox(width: 12),
+            ],
+          ),
+        ),
+      ),
     ),
-    child: Center(child: Icon(icon, color: Colors.white, size: 56)),
   );
+}
+
+class _WavePainter extends CustomPainter {
+  _WavePainter(this.color);
+  final Color color;
+  static const _h = [0.4, 0.7, 0.35, 0.9, 0.5, 1.0, 0.45, 0.75, 0.3, 0.85, 0.55, 0.95, 0.4, 0.7, 0.5, 0.8, 0.35, 0.65, 0.9, 0.45];
+  @override
+  void paint(Canvas canvas, Size size) {
+    final p = Paint()
+      ..color = color.withValues(alpha: 0.8)
+      ..strokeWidth = 2
+      ..strokeCap = StrokeCap.round;
+    final n = (size.width / 5).floor();
+    for (var i = 0; i < n; i++) {
+      final h = _h[i % _h.length] * size.height;
+      final x = i * 5.0 + 1;
+      canvas.drawLine(Offset(x, (size.height - h) / 2), Offset(x, (size.height + h) / 2), p);
+    }
+  }
+
+  @override
+  bool shouldRepaint(_WavePainter o) => o.color != color;
 }
 
 class _ImageViewer extends StatelessWidget {
@@ -772,123 +860,7 @@ class _ImageViewer extends StatelessWidget {
   );
 }
 
-class _Timeline extends StatelessWidget {
-  const _Timeline({required this.items});
-  final List<Map> items;
-  @override
-  Widget build(BuildContext context) {
-    final t = Theme.of(context).textTheme;
-    return Column(
-      children: [
-        for (final (i, e) in items.indexed)
-          IntrinsicHeight(
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                SizedBox(
-                  width: 28,
-                  child: Column(
-                    children: [
-                      Container(
-                        width: 14,
-                        height: 14,
-                        margin: const EdgeInsets.only(top: 3),
-                        decoration: BoxDecoration(
-                          color: _color(context, e),
-                          shape: BoxShape.circle,
-                          border: Border.all(color: context.surface, width: 2),
-                        ),
-                      ),
-                      if (i < items.length - 1) Expanded(child: Container(width: 2, color: context.hairline)),
-                    ],
-                  ),
-                ),
-                Expanded(
-                  child: Padding(
-                    padding: EdgeInsets.only(bottom: i < items.length - 1 ? 16 : 0),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(e['title'] as String? ?? '', style: t.titleSmall),
-                        Text(
-                          '${e['actor'] ?? ''}${e['is_me'] == true ? ' (Anda)' : ''} · ${fmtDateTime(DateTime.parse(e['at'] as String).toLocal())}',
-                          style: t.bodySmall,
-                        ),
-                        if (e['note'] != null && (e['note'] as String).isNotEmpty) ...[
-                          const SizedBox(height: 4),
-                          Text(e['note'] as String, style: t.bodyMedium),
-                        ],
-                      ],
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-      ],
-    );
-  }
-
-  Color _color(BuildContext context, Map e) => switch (e['action'] ?? e['kind']) {
-    'created' => context.danger,
-    'selesai' => PK.green,
-    'tidak_valid' => PK.grey,
-    'terima' || 'verifikasi' || 'tangani' || 'status' => PK.gold,
-    _ => context.brand,
-  };
-}
-
-class _NoteSheet extends StatefulWidget {
-  const _NoteSheet({required this.title, required this.required, this.danger = false});
-  final String title;
-  final bool required, danger;
-  @override
-  State<_NoteSheet> createState() => _NoteSheetState();
-}
-
-class _NoteSheetState extends State<_NoteSheet> {
-  final _c = TextEditingController();
-  String? _error;
-  @override
-  void dispose() {
-    _c.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) => Padding(
-    padding: EdgeInsets.fromLTRB(20, 0, 20, 20 + MediaQuery.of(context).viewInsets.bottom),
-    child: Column(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(widget.title, style: Theme.of(context).textTheme.titleLarge),
-        const SizedBox(height: 4),
-        Text('Catatan ini terlihat oleh pelapor dan pengguna di kecamatan yang sama.', style: Theme.of(context).textTheme.bodySmall),
-        const SizedBox(height: 16),
-        TextField(
-          controller: _c,
-          autofocus: true,
-          minLines: 3,
-          maxLines: 5,
-          maxLength: 1000,
-          decoration: InputDecoration(hintText: widget.required ? 'Tulis catatan' : 'Catatan (opsional)', errorText: _error),
-        ),
-        const SizedBox(height: 8),
-        PrimaryButton(
-          label: 'Kirim',
-          color: widget.danger ? PK.redDark : null,
-          onPressed: () {
-            if (widget.required && _c.text.trim().isEmpty) return setState(() => _error = 'Catatan wajib diisi');
-            Navigator.pop(context, _c.text.trim());
-          },
-        ),
-      ],
-    ),
-  );
-}
-
-/// Centang selesai: garis centang tergambar (500 ms spring) dengan percikan kecil.
+/// Centang selesai: lingkaran hijau membesar + "Laporan selesai", tutup sendiri setelah 1,4 dtk.
 Future<void> showCompletedCheck(BuildContext context) async {
   HapticFeedback.heavyImpact();
   await showGeneralDialog(
@@ -896,114 +868,40 @@ Future<void> showCompletedCheck(BuildContext context) async {
     barrierDismissible: true,
     barrierLabel: 'Tutup',
     barrierColor: Colors.black38,
-    transitionDuration: const Duration(milliseconds: 150),
-    pageBuilder: (context, _, _) => const _CheckDialog(),
-  );
-}
-
-class _CheckDialog extends StatefulWidget {
-  const _CheckDialog();
-  @override
-  State<_CheckDialog> createState() => _CheckDialogState();
-}
-
-class _CheckDialogState extends State<_CheckDialog> with SingleTickerProviderStateMixin {
-  late final _c = AnimationController(vsync: this, duration: const Duration(milliseconds: 900));
-  @override
-  void initState() {
-    super.initState();
-    _c.forward();
-    Future.delayed(const Duration(milliseconds: 1600), () {
-      if (mounted) Navigator.of(context).pop();
-    });
-  }
-
-  @override
-  void dispose() {
-    _c.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final reduce = context.reduceMotion;
-    return Center(
-      child: Semantics(
-        liveRegion: true,
-        label: 'Laporan selesai ditangani',
-        child: Container(
-          width: 220,
-          padding: const EdgeInsets.all(24),
-          decoration: BoxDecoration(color: context.surface, borderRadius: BorderRadius.circular(24)),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              AnimatedBuilder(
-                animation: _c,
-                builder: (_, _) => CustomPaint(size: const Size(120, 120), painter: _CheckPainter(reduce ? 1 : _c.value)),
-              ),
-              const SizedBox(height: 12),
-              const Material(
-                type: MaterialType.transparency,
-                child: Text('Laporan selesai', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
-              ),
-            ],
+    transitionDuration: const Duration(milliseconds: 220),
+    transitionBuilder: (context, a, _, child) =>
+        ScaleTransition(scale: CurvedAnimation(parent: a, curve: context.reduceMotion ? Curves.linear : Curves.easeOutBack), child: child),
+    pageBuilder: (context, _, _) {
+      Future.delayed(const Duration(milliseconds: 1400), () {
+        if (context.mounted && Navigator.of(context).canPop()) Navigator.of(context).pop();
+      });
+      return Center(
+        child: Semantics(
+          liveRegion: true,
+          label: 'Laporan selesai ditangani',
+          child: Container(
+            width: 210,
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(color: context.surface, borderRadius: BorderRadius.circular(24)),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 84,
+                  height: 84,
+                  decoration: const BoxDecoration(color: Color(0xFFD1FADF), shape: BoxShape.circle),
+                  child: const Icon(Icons.check_rounded, size: 52, color: PK.greenDark),
+                ),
+                const SizedBox(height: 14),
+                Material(
+                  type: MaterialType.transparency,
+                  child: Text('Laporan selesai', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: context.ink)),
+                ),
+              ],
+            ),
           ),
         ),
-      ),
-    );
-  }
-}
-
-class _CheckPainter extends CustomPainter {
-  _CheckPainter(this.t);
-  final double t;
-  @override
-  void paint(Canvas canvas, Size s) {
-    final c = s.center(Offset.zero);
-    final circleT = Curves.elasticOut.transform((t / 0.55).clamp(0, 1));
-    canvas.drawCircle(c, 40 * circleT, Paint()..color = PK.green);
-    // centang tergambar
-    final checkT = ((t - 0.25) / 0.4).clamp(0.0, 1.0);
-    final a = c + const Offset(-18, 2), b = c + const Offset(-5, 15), d = c + const Offset(20, -13);
-    final path = Path()..moveTo(a.dx, a.dy);
-    if (checkT < 0.4) {
-      final p = Offset.lerp(a, b, checkT / 0.4)!;
-      path.lineTo(p.dx, p.dy);
-    } else {
-      path.lineTo(b.dx, b.dy);
-      final p = Offset.lerp(b, d, (checkT - 0.4) / 0.6)!;
-      path.lineTo(p.dx, p.dy);
-    }
-    if (checkT > 0) {
-      canvas.drawPath(
-        path,
-        Paint()
-          ..color = Colors.white
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = 7
-          ..strokeCap = StrokeCap.round
-          ..strokeJoin = StrokeJoin.round,
       );
-    }
-    // percikan kecil
-    final sparkT = ((t - 0.45) / 0.55).clamp(0.0, 1.0);
-    if (sparkT > 0 && sparkT < 1) {
-      for (var i = 0; i < 8; i++) {
-        final ang = i * math.pi / 4;
-        final r1 = 46 + 14 * sparkT, r2 = r1 + 8 * (1 - sparkT);
-        canvas.drawLine(
-          c + Offset(math.cos(ang) * r1, math.sin(ang) * r1),
-          c + Offset(math.cos(ang) * r2, math.sin(ang) * r2),
-          Paint()
-            ..color = (i.isEven ? PK.gold : PK.red).withValues(alpha: 1 - sparkT)
-            ..strokeWidth = 3
-            ..strokeCap = StrokeCap.round,
-        );
-      }
-    }
-  }
-
-  @override
-  bool shouldRepaint(_CheckPainter old) => old.t != t;
+    },
+  );
 }

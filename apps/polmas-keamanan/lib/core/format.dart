@@ -10,6 +10,15 @@ final _dateTime = DateFormat('d MMM y, HH.mm', 'id');
 String fmtDay(DateTime d) => _day.format(d);
 String fmtShort(DateTime d) => _short.format(d);
 String fmtTime(DateTime d) => _time.format(d);
+
+/// "Sabtu".
+String fmtWeekday(DateTime d) => DateFormat('EEEE', 'id').format(d);
+
+/// "Sab".
+String fmtWeekdayShort(DateTime d) => const ['Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab', 'Min'][d.weekday - 1];
+
+/// "25 Nov".
+String fmtDayMonth(DateTime d) => DateFormat('d MMM', 'id').format(d);
 String fmtDateTime(DateTime d) => _dateTime.format(d);
 
 /// "Hari ini", "Kemarin", atau tanggal lengkap: judul kelompok riwayat per hari.

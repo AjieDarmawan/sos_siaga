@@ -19,7 +19,7 @@
 		<string>https</string>
 	</array>
 	<key>CFBundleDisplayName</key>
-	<string>Polmas Keamanan</string>
+	<string>Polmas Digital</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>

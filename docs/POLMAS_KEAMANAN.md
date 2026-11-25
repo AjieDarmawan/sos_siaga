@@ -48,7 +48,7 @@ Prinsip tetap: jalur `POST /v1/sdk/reports` tidak bergantung pada FCM/WA (dikiri
 ## 4. Fitur
 
 ### 4.1 Panggilan SOS masuk (FCM + sirene)
-- SOS yang mencantumkan nomor penerima → push FCM prioritas tinggi (kanal `polmas_sos`, suara sirene), juga saat app
+- SOS yang mencantumkan nomor penerima → push FCM prioritas tinggi (kanal `polmas_sos_v2`, suara sirene commerceOS `sos_siren`), juga saat app
   tertutup / layar terkunci → layar panggilan penuh (Terima / Abaikan).
 - Bhabinkamtibmas juga menerima SOS dari kecamatan wilayah tugasnya.
 - Saat app terbuka: polling 4 dtk tetap ada sebagai cadangan.

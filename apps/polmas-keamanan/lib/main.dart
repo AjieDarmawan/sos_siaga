@@ -76,7 +76,7 @@ class _PolmasAppState extends State<PolmasApp> {
       child: ListenableBuilder(
         listenable: widget.state,
         builder: (context, _) => MaterialApp(
-          title: 'Polmas Keamanan',
+          title: 'Polmas Digital',
           debugShowCheckedModeBanner: false,
           navigatorKey: navigatorKey,
           theme: buildTheme(Brightness.light),

@@ -13,6 +13,7 @@ Legenda: ✅ selesai & teruji · 🟡 sebagian · ⬜ belum
 - **Fase:** M1 ✅ (API, landing, portal, panel admin), M2 SDK web 🟡 (belum publish npm), M3 🟡 (dashboard + media ✅, web push belum), **M4 SDK mobile 🟡 sedang dikerjakan** (Flutter/Android/iOS teruji, tombol melayang baru Flutter).
 - **Prioritas user (2026-11-21): FOKUS MOBILE DULU, web nanti.**
 - **Berikutnya, urut:**
+  0. 🟡 **Polmas Keamanan = mockup Opsi A, persis sampai datanya** (kode selesai, tinggal cek visual di HP) (keputusan user 2026-11-25). Acuan: [docs/mockups/polmas-digital.html](docs/mockups/polmas-digital.html). Checklist di bagian "Polmas Digital: samakan dengan mockup" di bawah.
   1. ~~Verifikasi SDK iOS~~ ✅ 20/20 (2026-11-23).
   2. **`SOSFloatingButton`**: Flutter ✅ (2026-11-23). **Sisa: Android (`SOSFloatingButtonView`) dan iOS (SwiftUI `.sosFloatingButton()`)** dengan perilaku sama (permintaan user, meniru `DraggableSosMenu` di `tata-warga-mobile/lib/view/widgets/draggable_sos_menu.dart`):
      tombol bulat kecil melayang di pojok kanan bawah, bisa digeser + menempel ke tepi + posisi diingat (SharedPreferences/UserDefaults), area kosong tidak menangkap sentuhan;
@@ -148,6 +149,37 @@ pnpm -r typecheck
 - Bila mengubah perilaku API, jalankan ulang `pnpm smoke`, lalu perbarui README (daftar endpoint) dan `docs/STATUS.md`.
 
 ---
+
+## Polmas Digital: samakan dengan mockup (Opsi A v2)
+
+Acuan tunggal: [docs/mockups/polmas-digital.html](docs/mockups/polmas-digital.html) (link pratinjau privat: https://claude.ai/artifact/5kbdvDjHnJ4UG6j1GYDJ9C).
+Target: tampilan, teks, urutan, dan **data** sama dengan mockup. Data contoh di mockup (Kec. Menteng, 312 laporan) hanya contoh; di app semua angka dari API.
+Status data: ✅ API sudah ada · 🟡 ada tapi perlu diubah · ⬜ belum ada.
+
+**Struktur & navigasi**
+- ✅ Navigasi bawah 4 tab (Beranda, Laporan, Analitik, Profil), tanpa tombol SOS; badge Laporan = `open_reports` dari `/inbox`.
+- ✅ Splash & Login sesuai mockup (satu kartu nomor + kata sandi; login pertama berubah jadi "Buat kata sandi"; "Ingat di perangkat ini" sungguhan).
+- ✅ Layar Riwayat/Berita/Video/Notifikasi/Wilayah dibuang; "Saya" jadi cakupan di filter Laporan. Paket `fl_chart`, `share_plus`, `pdf`, `path_provider` dilepas.
+- ✅ Ikon & nama: ikon peluncur Android (adaptif + monokrom) & iOS dari lambang perisai-bintang, ikon notifikasi FCM `ic_stat_polmas`, layar pembuka bawaan navy + lambang (Android 12+ juga), nama tampil "Polmas Digital". Sumber render: SVG → Chrome headless (skrip di luar repo; lambang = `PolmasEmblem` di `lib/widgets/ui.dart`).
+
+**Beranda** ✅ header, kartu merah SOS (SOS baru terbaru; tidak ada → kartu "Tidak ada SOS yang menunggu"), 4 angka (`/dashboard`), Tindak Lanjut Terbaru kartu/tabel.
+
+**Laporan** ✅ kartu 9 kolom (`ReportCard`), tabel 9 kolom (`ReportTable`, otomatis saat HP miring), chip status + jumlah (`counts`), chip ekosistem, cari, filter periode/jenis/cakupan.
+
+**Detail** ✅ header + nomor tiket + langkah status, peta + Rute (Google Maps), info, lampiran (foto/video/suara diputar di tempat), riwayat, bilah "Tulis tindak lanjut…" + Perbarui (pilih status yang diizinkan server).
+
+**Analitik** ✅ 4 tab dari `/analytics/summary` + `/evaluation`, filter periode (7/30/90 hari) + ekosistem. Target garis respons = SLA SOS server (15 menit).
+
+**Profil** ✅ ubah nama (pensil di avatar), label "HP ini menerima SOS", kinerja 30 hari (`/me/stats`), penugasan terkunci (+ ganti peran bila > 1), Notifikasi SOS, Tema gelap, Ubah kata sandi (`/me/password`), Perangkat terdaftar (`/me/devices`, nama HP via `device_info_plus`), Bantuan, Tentang, Keluar.
+
+**Belum**
+- ⬜ Cek visual di HP: APK debug sudah terpasang di HP (24117RN76O, `adb reverse tcp:4000`), tapi HP terkunci saat sesi ini. Login demo `0800 111 0002` / `demo1234` setelah `pnpm seed:pk`.
+- ⬜ `GoogleService-Info.plist` iOS (push iOS belum aktif).
+
+**Keputusan user (2026-11-25)**
+1. Layar Riwayat, Berita, Video, Notifikasi, Wilayah **dibuang** dari app.
+2. Status tugas + shift **tidak perlu**: dihapus dari Beranda & Profil (mockup ikut diperbarui).
+3. Kategori **mengikuti API** apa adanya (label dari `categoryLabel`), tidak dipetakan ulang.
 
 ## Log session
 
@@ -314,3 +346,16 @@ pnpm -r typecheck
 - App: login langsung ke Beranda (tanpa konfirmasi wilayah; polling SOS dulu dilewati selama `needsArea` → diperbaiki), header & app bar navy seragam, baris peran dari Nomor Darurat, tab Kecamatan hanya untuk yang punya wilayah, kolom Tindak Lanjut (kartu/tabel) + Foto/Video, label pilar, luapan teks diperbaiki (test huruf 130%), FCM (`firebase_messaging`, kanal `polmas_sos` + `res/raw/siren`, `getToken` sengaja dipakai).
 - Teruji: `pnpm smoke` 136 cek (sebelum restart API dengan kredensial asli), `pnpm -r typecheck`, `flutter analyze` bersih, test app 9/9.
 - Perlu: restart API (memuat `PK_FCM_SERVICE_ACCOUNT`), uji ujung-ke-ujung di HP, `GoogleService-Info.plist` untuk iOS.
+
+### 2026-11-25 · Mockup HTML Polmas Digital (3 opsi desain)
+- [docs/mockups/polmas-digital.html](docs/mockups/polmas-digital.html): 3 opsi gaya (A Bhayangkara navy-emas, B Komando Malam gelap/peta, C Patroli Terang livery biru-kuning), masing-masing Splash, Login (nomor → kata sandi, sesuai PRD), Beranda, Analitik, ukuran HP 360×760. Lambang perisai-bintang generik, bukan logo resmi Polri.
+- User memilih **Opsi A**; versi 2: tombol SOS dihapus dari navigasi (petugas penerima), kartu/tabel memuat semua kolom Tindak Lanjut, layar Detail + Tindak Lanjut, Analitik 4 tab (Ringkasan, Ekosistem, Waktu & Wilayah, Kinerja), layar Profil. Opsi B/C dibuang dari file.
+- Belum diterapkan ke `apps/polmas-keamanan`.
+- **Keputusan user:** app Polmas Keamanan dibuat sama persis dengan mockup Opsi A v2, termasuk datanya. Daftar selisih UI + API ada di bagian "Polmas Digital: samakan dengan mockup".
+
+### 2026-11-25 · App Polmas Keamanan disamakan dengan mockup Opsi A (+ data API)
+- API: migrasi `014_polmas_device_name.sql`; `/analytics/summary` + `source`, `median_response_s`, `by_ecosystem`, `matrix`, `by_kelurahan.prev_n`, `funnel`, `officers`, `weekly.median_response_s`, `patrol_hint`, `sla_min`; `/analytics/evaluation` + `source` + median; `/me/stats`, `/me/devices`, `/me/devices/:id/remove`, `/me/password`; `/me.ecosystems`; laporan + `code`, `video_s`, `audio_s`, `thumb_urls`; `/reports.counts`; `/inbox.open_reports`. Smoke 145/145, `pnpm -r typecheck` ✅. README & STATUS (keputusan 23) diperbarui.
+- App: tulis ulang splash, login, shell 4 tab, beranda, laporan (kartu/tabel), detail, analitik 4 tab, profil di atas `lib/widgets/ui.dart`; token warna disamakan mockup; ikon/nama aplikasi baru. `flutter analyze` bersih, test 10/10 (termasuk kartu & tabel tanpa luapan pada huruf 130%).
+- Mockup ikut disamakan dengan yang bisa disajikan data asli (Selesai 7 hari, 7 hari terakhir, target 15 menit, alur dari "Masuk", tanpa notifikasi pengaduan, pensil ubah nama). Tautan artifact mockup lama sudah tidak aktif; file lokal tetap acuan.
+- Sirene SOS diganti dengan sirene commerceOS (`sos_siren.mp3`, 20 dtk) untuk layar panggilan (`assets/sounds/`) dan push (`res/raw/`). Kanal Android baru `polmas_sos_v2` (suara kanal tidak bisa diubah; `polmas_sos` lama dihapus app), server `PK_FCM` ikut ke `polmas_sos_v2`/`sos_siren`.
+- FCM diuji ke HP asli (Xiaomi 24117RN76O, akun 0800 111 0001): server → FCM `sent`, notifikasi tampil di kanal `polmas_sos_v2` dan sistem memutar `raw/sos_siren`. Catatan: setelah `adb install` ulang, app harus dibuka sekali (status "stopped" menahan push); di Xiaomi aktifkan Autostart agar push tetap masuk saat app ditutup.

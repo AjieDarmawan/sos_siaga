@@ -1,13 +1,12 @@
-import 'dart:math' as math;
-
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../theme/tokens.dart';
-import '../widgets/brand.dart';
+import '../widgets/ui.dart';
 import 'login_screen.dart';
 
-/// Splash: latar putih, bendera merah putih berkibar di belakang logo perisai, "Polmas Keamanan",
-/// "Aman bersama masyarakat", siluet kota abu-abu di bawah. Pindah ke login setelah ±1,5 dtk; sentuh untuk melewati.
+/// Splash (mockup A1): navy radial, lambang emas dalam lingkaran putus-putus berputar, "POLMAS / DIGITAL",
+/// motto, bilah muat emas, strip merah-putih di bawah. Pindah ke login ±1,8 dtk; sentuh untuk melewati.
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
   @override
@@ -15,14 +14,14 @@ class SplashScreen extends StatefulWidget {
 }
 
 class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMixin {
-  late final _wave = AnimationController(vsync: this, duration: const Duration(milliseconds: 2400))..repeat();
-  late final _intro = AnimationController(vsync: this, duration: const Duration(milliseconds: 700))..forward();
+  late final _spin = AnimationController(vsync: this, duration: const Duration(seconds: 30))..repeat();
+  late final _load = AnimationController(vsync: this, duration: const Duration(milliseconds: 1800))..forward();
   bool _left = false;
 
   @override
   void initState() {
     super.initState();
-    Future.delayed(const Duration(milliseconds: 1500), _go);
+    Future.delayed(const Duration(milliseconds: 1800), _go);
   }
 
   void _go() {
@@ -32,151 +31,167 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
       PageRouteBuilder(
         transitionDuration: PK.splashOut,
         pageBuilder: (_, _, _) => const LoginScreen(),
-        transitionsBuilder: (context, a, _, child) {
-          final c = CurvedAnimation(parent: a, curve: Curves.easeOut);
-          if (context.reduceMotion) return FadeTransition(opacity: c, child: child);
-          return FadeTransition(
-            opacity: c,
-            child: SlideTransition(
-              position: Tween(begin: const Offset(0, 0.08), end: Offset.zero).animate(c),
-              child: child,
-            ),
-          );
-        },
+        transitionsBuilder: (context, a, _, child) => FadeTransition(opacity: CurvedAnimation(parent: a, curve: Curves.easeOut), child: child),
       ),
     );
   }
 
   @override
   void dispose() {
-    _wave.dispose();
-    _intro.dispose();
+    _spin.dispose();
+    _load.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     final reduce = context.reduceMotion;
-    final size = MediaQuery.of(context).size;
-    return GestureDetector(
-      onTap: _go,
-      child: Scaffold(
-        backgroundColor: Colors.white,
-        body: Stack(
-          children: [
-            // bendera berkibar melintang di belakang logo
-            Positioned(
-              top: size.height * 0.08,
-              left: -size.width * 0.1,
-              right: -size.width * 0.1,
-              height: size.height * 0.3,
-              child: ExcludeSemantics(
-                child: Transform.rotate(
-                  angle: -0.12,
-                  child: AnimatedBuilder(
-                    animation: _wave,
-                    builder: (_, _) => CustomPaint(painter: _BigFlagPainter(reduce ? 0 : _wave.value)),
-                  ),
-                ),
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: SystemUiOverlayStyle.light,
+      child: GestureDetector(
+        onTap: _go,
+        child: Scaffold(
+          body: DecoratedBox(
+            decoration: const BoxDecoration(
+              gradient: RadialGradient(
+                center: Alignment(0, -0.28),
+                radius: 1.1,
+                colors: [Color(0xFF1C4BB0), PK.navy, Color(0xFF041030)],
+                stops: [0, 0.46, 1],
               ),
             ),
-            const Positioned(left: 0, right: 0, bottom: 0, child: SkylineIllustration(height: 170, grey: true)),
-            SafeArea(
-              child: Column(
-                children: [
-                  SizedBox(height: size.height * 0.16),
-                  FadeTransition(
-                    opacity: CurvedAnimation(parent: _intro, curve: Curves.easeOut),
-                    child: ScaleTransition(
-                      scale: Tween(begin: reduce ? 1.0 : 0.88, end: 1.0).animate(CurvedAnimation(parent: _intro, curve: Curves.easeOutBack)),
+            child: Stack(
+              children: [
+                Positioned.fill(child: CustomPaint(painter: _Stripes())),
+                Column(
+                  children: [
+                    Expanded(
                       child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          const PolmasLogo(size: 150),
-                          const SizedBox(height: 18),
-                          const Text(
-                            'Polmas',
-                            style: TextStyle(fontSize: 46, height: 1.05, fontWeight: FontWeight.w900, color: PK.navy),
+                          SizedBox(
+                            width: 180,
+                            height: 180,
+                            child: Stack(
+                              alignment: Alignment.center,
+                              children: [
+                                Container(
+                                  decoration: const BoxDecoration(
+                                    shape: BoxShape.circle,
+                                    gradient: RadialGradient(colors: [Color(0x47D4A82A), Color(0x00D4A82A)], stops: [0, 0.66]),
+                                  ),
+                                ),
+                                RotationTransition(
+                                  turns: reduce ? const AlwaysStoppedAnimation(0) : _spin,
+                                  child: Padding(
+                                    padding: const EdgeInsets.all(6),
+                                    child: CustomPaint(size: const Size.square(168), painter: _DashedCircle()),
+                                  ),
+                                ),
+                                const PolmasEmblem(size: 98),
+                              ],
+                            ),
                           ),
+                          const SizedBox(height: 22),
                           const Text(
-                            'Keamanan',
-                            style: TextStyle(fontSize: 46, height: 1.05, fontWeight: FontWeight.w900, fontStyle: FontStyle.italic, color: PK.red),
+                            'POLMAS',
+                            style: TextStyle(color: Colors.white, fontSize: 31, fontWeight: FontWeight.w800, letterSpacing: 5),
                           ),
-                          const SizedBox(height: 10),
-                          Text(
-                            'Aman bersama masyarakat',
-                            style: TextStyle(fontSize: 18, color: PK.text.withValues(alpha: 0.85), fontWeight: FontWeight.w500),
+                          const SizedBox(height: 4),
+                          const Padding(
+                            padding: EdgeInsets.only(left: 8),
+                            child: Text(
+                              'DIGITAL',
+                              style: TextStyle(color: PK.gold2, fontSize: 13, fontWeight: FontWeight.w700, letterSpacing: 8),
+                            ),
+                          ),
+                          const SizedBox(height: 20),
+                          const Text(
+                            'Melindungi · Mengayomi · Melayani',
+                            style: TextStyle(color: PK.headerMute, fontSize: 12.5, letterSpacing: 0.6),
                           ),
                         ],
                       ),
                     ),
-                  ),
-                  const Spacer(),
-                  // indikator memuat (pil merah + titik abu)
-                  ExcludeSemantics(
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Container(
-                          width: 28,
-                          height: 6,
-                          decoration: BoxDecoration(color: PK.red, borderRadius: BorderRadius.circular(3)),
-                        ),
-                        const SizedBox(width: 6),
-                        Container(
-                          width: 14,
-                          height: 6,
-                          decoration: BoxDecoration(color: const Color(0xFFCBD2DC), borderRadius: BorderRadius.circular(3)),
-                        ),
-                      ],
+                    Padding(
+                      padding: EdgeInsets.fromLTRB(52, 0, 52, 46 + MediaQuery.of(context).padding.bottom),
+                      child: Column(
+                        children: [
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(4),
+                            child: AnimatedBuilder(
+                              animation: _load,
+                              builder: (_, _) => LinearProgressIndicator(
+                                value: reduce ? null : 0.08 + _load.value * 0.84,
+                                minHeight: 4,
+                                backgroundColor: Colors.white.withValues(alpha: 0.15),
+                                valueColor: const AlwaysStoppedAnimation(PK.gold),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          const Text('Menyiapkan sistem keamanan…', style: TextStyle(color: PK.headerMute, fontSize: 12)),
+                          const SizedBox(height: 24),
+                          Text('v2.0 · Didukung SiagaSOS', style: TextStyle(color: PK.headerMute.withValues(alpha: 0.55), fontSize: 11)),
+                        ],
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 28),
-                ],
-              ),
+                  ],
+                ),
+                const Positioned(left: 0, right: 0, bottom: 0, child: MerahPutih(height: 6)),
+              ],
             ),
-          ],
+          ),
         ),
       ),
     );
   }
 }
 
-/// Bendera lebar berkibar: pita merah di atas, putih di bawah, gelombang sinus + bayangan lipatan.
-class _BigFlagPainter extends CustomPainter {
-  _BigFlagPainter(this.t);
-  final double t;
+/// Strip merah-putih tipis di tepi bawah.
+class MerahPutih extends StatelessWidget {
+  const MerahPutih({super.key, this.height = 6});
+  final double height;
   @override
-  void paint(Canvas canvas, Size s) {
-    const steps = 48;
-    double wave(double u) => math.sin(u * math.pi * 2.2 - t * math.pi * 2) * s.height * 0.07;
-    Path band(double top, double bottom) {
-      final p = Path();
-      for (var i = 0; i <= steps; i++) {
-        final x = s.width * i / steps;
-        i == 0 ? p.moveTo(x, top + wave(i / steps)) : p.lineTo(x, top + wave(i / steps));
-      }
-      for (var i = steps; i >= 0; i--) {
-        p.lineTo(s.width * i / steps, bottom + wave(i / steps));
-      }
-      return p..close();
-    }
+  Widget build(BuildContext context) => ExcludeSemantics(
+    child: Column(
+      children: [
+        Container(height: height / 2, color: const Color(0xFFE11D2E)),
+        Container(height: height / 2, color: Colors.white),
+      ],
+    ),
+  );
+}
 
-    canvas.drawPath(
-      band(s.height * 0.1, s.height * 0.48),
-      Paint()..shader = const LinearGradient(colors: [PK.redDark, PK.red, Color(0xFFE53935)]).createShader(Offset.zero & s),
-    );
-    canvas.drawPath(band(s.height * 0.48, s.height * 0.86), Paint()..color = const Color(0xFFF3F4F7));
-    for (var i = 0; i < steps; i++) {
-      final shade = math.sin((i / steps) * math.pi * 2.2 - t * math.pi * 2);
-      if (shade > 0) continue;
-      final x = s.width * i / steps;
-      canvas.drawRect(
-        Rect.fromLTWH(x, s.height * 0.1 + wave(i / steps), s.width / steps + 1, s.height * 0.76),
-        Paint()..color = Colors.black.withValues(alpha: -shade * 0.05),
-      );
+class _Stripes extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final p = Paint()
+      ..color = const Color(0x09FFFFFF)
+      ..strokeWidth = 2;
+    for (double x = -size.height; x < size.width; x += 14) {
+      canvas.drawLine(Offset(x, size.height), Offset(x + size.height, 0), p);
     }
   }
 
   @override
-  bool shouldRepaint(_BigFlagPainter old) => old.t != t;
+  bool shouldRepaint(_) => false;
+}
+
+class _DashedCircle extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final p = Paint()
+      ..color = const Color(0x80D4A82A)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1;
+    final r = Rect.fromLTWH(0, 0, size.width, size.height);
+    const n = 72;
+    for (var i = 0; i < n; i++) {
+      canvas.drawArc(r, i * 2 * 3.14159 / n, 3.14159 / n, false, p);
+    }
+  }
+
+  @override
+  bool shouldRepaint(_) => false;
 }

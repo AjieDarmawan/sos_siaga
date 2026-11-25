@@ -181,14 +181,23 @@ polmasRouter.use(requirePk);
 // ---------------------------------------------------------------- profil, peran, wilayah
 
 async function mePayload(pk: PkContext) {
-  const { roles, scopeName } = await withPlatform(async (c) => {
+  const { roles, scopeName, eco } = await withPlatform(async (c) => {
     const roles = (await c.query(
       `SELECT ro.id, ro.role, ro.unit, ro.kecamatan_code, wk.nama AS kecamatan_name, ro.kelurahan_code, wl.nama AS kelurahan_name
        FROM pk_user_roles ro LEFT JOIN wilayah wk ON wk.kode = ro.kecamatan_code LEFT JOIN wilayah wl ON wl.kode = ro.kelurahan_code
        WHERE ro.user_id = $1 ORDER BY (ro.role = 'bhabinkamtibmas') DESC, ro.created_at`, [pk.userId])).rows;
     const s = scopeOf(pk);
     const scopeName = s ? (await c.query(`SELECT nama FROM wilayah WHERE kode = $1`, [s])).rows[0]?.nama ?? null : null;
-    return { roles, scopeName };
+    // Ekosistem yang dilayani (Profil): app yang mencantumkan nomor ini di Nomor Darurat, plus untuk Bhabinkamtibmas
+    // app Polmas yang punya laporan di kecamatannya 90 hari terakhir.
+    const eco = (await c.query(
+      `SELECT DISTINCT a.polmas_source AS source, a.name AS app_name FROM emergency_contacts e JOIN apps a ON a.id = e.app_id
+       WHERE e.phone = $1 AND e.active AND a.disabled_at IS NULL AND a.polmas_source IS NOT NULL
+       UNION
+       SELECT DISTINCT a.polmas_source, a.name FROM reports r JOIN apps a ON a.id = r.app_id
+       WHERE $2::boolean AND $3::text IS NOT NULL AND r.kecamatan_code = $3 AND r.mode = 'live' AND a.polmas_source IS NOT NULL
+         AND a.disabled_at IS NULL AND r.created_at > now() - interval '90 days'`, [pk.phone, isOfficer(pk), s])).rows;
+    return { roles, scopeName, eco };
   });
   const s = scopeOf(pk);
   return {
@@ -202,6 +211,7 @@ async function mePayload(pk: PkContext) {
     area: pk.area,
     area_location: pk.areaLat == null ? null : { lat: pk.areaLat, lng: pk.areaLng },
     scope: s ? { code: s, name: scopeName } : null,
+    ecosystems: eco.map((e) => ({ source: e.source, label: SOURCE_LABEL[e.source] ?? e.source, app_name: e.app_name })),
     needs_area: !pk.area?.district,
     can_respond: canRespondAny(pk),
     is_officer: isOfficer(pk),
@@ -226,6 +236,7 @@ polmasRouter.patch('/me', async (req, res) => {
 const deviceBody = z.object({
   fcm_token: z.string().min(10).max(4096),
   platform: z.enum(['android', 'ios', 'web', 'other']).optional(),
+  device_name: z.string().trim().max(80).optional(),
 });
 
 /** Daftarkan token FCM perangkat ini (dipanggil app setelah login & saat token berganti). Token pindah pemilik bila HP dipakai nomor lain. */
@@ -234,10 +245,77 @@ polmasRouter.post('/me/device', async (req, res) => {
   const b = parse(deviceBody, req.body);
   await enforce(`pk-device:${pk.userId}`, 30, 3600);
   await withPlatform((c) => c.query(
-    `INSERT INTO pk_devices (user_id, fcm_token, platform) VALUES ($1,$2,$3)
-     ON CONFLICT (fcm_token) DO UPDATE SET user_id = EXCLUDED.user_id, platform = EXCLUDED.platform, updated_at = now()`,
-    [pk.userId, b.fcm_token, b.platform ?? null]));
+    `INSERT INTO pk_devices (user_id, fcm_token, platform, device_name) VALUES ($1,$2,$3,$4)
+     ON CONFLICT (fcm_token) DO UPDATE SET user_id = EXCLUDED.user_id, platform = EXCLUDED.platform,
+       device_name = coalesce(EXCLUDED.device_name, pk_devices.device_name), updated_at = now()`,
+    [pk.userId, b.fcm_token, b.platform ?? null, b.device_name || null]));
   res.status(204).end();
+});
+
+/**
+ * Perangkat terdaftar (Profil). Token tidak dikirim balik; `token_tail` (6 karakter terakhir) cukup bagi app untuk
+ * menandai "perangkat ini".
+ */
+polmasRouter.get('/me/devices', async (_req, res) => {
+  const pk = pkOf(res);
+  const rows = await withPlatform((c) => c.query(
+    `SELECT id, platform, device_name, right(fcm_token, 6) AS token_tail, created_at, updated_at
+     FROM pk_devices WHERE user_id = $1 ORDER BY updated_at DESC`, [pk.userId]).then((r) => r.rows));
+  res.set('Cache-Control', 'no-store').json({ items: rows });
+});
+
+polmasRouter.post('/me/devices/:id/remove', async (req, res) => {
+  const pk = pkOf(res);
+  const id = String(req.params.id);
+  if (!/^[0-9a-f-]{36}$/i.test(id)) throw notFound('Perangkat');
+  const n = await withPlatform(async (c) => {
+    const r = await c.query(`DELETE FROM pk_devices WHERE id = $1 AND user_id = $2`, [id, pk.userId]);
+    if (r.rowCount) await audit(c, pk.userId, 'device_removed', null, { id }, req.ip);
+    return r.rowCount;
+  });
+  if (!n) throw notFound('Perangkat');
+  res.status(204).end();
+});
+
+/** Ubah kata sandi dari Profil. Sesi lain milik nomor ini ikut dicabut; sesi yang dipakai sekarang tetap. */
+polmasRouter.post('/me/password', async (req, res) => {
+  const pk = pkOf(res);
+  const b = parse(z.object({
+    current_password: z.string().min(1).max(200),
+    new_password: z.string().min(8, 'Password minimal 8 karakter').max(200),
+  }), req.body);
+  await enforce(`pk-password:${pk.userId}`, 10, 3600);
+  const user = await withPlatform((c) => c.query(`SELECT password_hash FROM pk_users WHERE id = $1`, [pk.userId]).then((r) => r.rows[0]));
+  if (!(await verifyPassword(b.current_password, user.password_hash))) {
+    throw new ApiError(401, 'invalid_password', 'Password lama salah.');
+  }
+  const hash = await hashPassword(b.new_password);
+  await withPlatform(async (c) => {
+    await c.query(`UPDATE pk_users SET password_hash = $2 WHERE id = $1`, [pk.userId, hash]);
+    await c.query(`UPDATE pk_sessions SET revoked_at = now() WHERE user_id = $1 AND id <> $2 AND revoked_at IS NULL`, [pk.userId, pk.sessionId]);
+    await audit(c, pk.userId, 'password_changed', null, null, req.ip);
+  });
+  res.status(204).end();
+});
+
+/**
+ * Kinerja saya (kartu di Profil): laporan yang saya tanggapi dalam N hari, berapa yang saya selesaikan,
+ * dan median waktu tanggapan pertama saya sejak laporan masuk.
+ */
+polmasRouter.get('/me/stats', async (req, res) => {
+  const pk = pkOf(res);
+  const { days } = parse(z.object({ days: z.coerce.number().int().min(1).max(365).default(30) }), req.query);
+  const row = await withPlatform((c) => c.query(
+    `WITH mine AS (
+       SELECT x.report_id, min(x.created_at) AS first_at, bool_or(x.action = 'selesai') AS done
+       FROM pk_responses x WHERE x.user_id = $1 AND x.created_at > now() - make_interval(days => $2) GROUP BY 1)
+     SELECT count(*)::int AS handled, count(*) FILTER (WHERE m.done)::int AS resolved,
+            round(percentile_cont(0.5) WITHIN GROUP (ORDER BY extract(epoch FROM m.first_at - r.created_at)))::int AS median_response_s
+     FROM mine m JOIN reports r ON r.id = m.report_id`, [pk.userId, days]).then((r) => r.rows[0]));
+  res.set('Cache-Control', 'no-store').json({
+    days, handled: row.handled, resolved: row.resolved, median_response_s: row.median_response_s,
+    pct_resolved: row.handled ? Math.round((row.resolved / row.handled) * 100) : null,
+  });
 });
 
 /** Lepas token perangkat (logout / Lupakan perangkat): HP ini tidak lagi menerima SOS untuk nomor ini. */
@@ -354,6 +432,7 @@ async function listReports(req: Request, res: Response, defaults: Partial<z.infe
   const params: unknown[] = f.scope === 'me' ? [pk.phone, pk.userId] : scopeParams(pk);
   const where = [PK_BASE, f.scope === 'me' ? mineWhere({ phone: 1, user: 2 }) : SCOPE];
   if (f.kind) where.push(f.kind === 'sos' ? `r.kind = 'sos'` : `r.kind = 'pengaduan'`);
+  const statusAt = where.length;
   if (f.status) where.push(STATUS_SQL[f.status]!);
   if (f.kelurahan) { params.push(f.kelurahan); where.push(`r.kelurahan_code = $${params.length}`); }
   if (f.source) { params.push(f.source); where.push(`a.polmas_source = $${params.length}`); }
@@ -365,17 +444,30 @@ async function listReports(req: Request, res: Response, defaults: Partial<z.infe
   if (f.from) { params.push(f.from); where.push(`r.created_at >= ($${params.length}::date)::timestamp AT TIME ZONE 'Asia/Jakarta'`); }
   if (f.to) { params.push(f.to); where.push(`r.created_at < ($${params.length}::date + 1)::timestamp AT TIME ZONE 'Asia/Jakarta'`); }
   if (f.before) { params.push(f.before); where.push(`r.created_at < $${params.length}`); }
+  // Jumlah per status untuk chip filter (Semua/Darurat/Diproses/Selesai): filter lain tetap, status diabaikan.
+  // Hanya di halaman pertama; halaman berikut (before=…) tidak perlu.
+  const countWhere = where.filter((_, i) => !(f.status && i === statusAt));
+  const countParams = [...params];
   params.push(f.limit + 1);
-  const rows = await withPlatform((c) => c.query(
-    `SELECT ${PK_COLUMNS} ${PK_FROM} ${PK_LAST_RESPONSE}
-     WHERE ${where.join(' AND ')} ORDER BY r.created_at DESC LIMIT $${params.length}`, params).then((r) => r.rows));
+  const { rows, counts } = await withPlatform(async (c) => ({
+    rows: (await c.query(
+      `SELECT ${PK_COLUMNS} ${PK_FROM} ${PK_LAST_RESPONSE}
+       WHERE ${where.join(' AND ')} ORDER BY r.created_at DESC LIMIT $${params.length}`, params)).rows,
+    counts: f.before ? null : (await c.query(
+      `SELECT count(*)::int AS semua, count(*) FILTER (WHERE r.status = 'open')::int AS baru,
+              count(*) FILTER (WHERE r.status IN ('acknowledged','in_progress'))::int AS diproses,
+              count(*) FILTER (WHERE r.status = 'resolved')::int AS selesai
+       ${PK_FROM} WHERE ${countWhere.join(' AND ')}`, countParams)).rows[0],
+  }));
   const more = rows.length > f.limit;
   // Gambar mini kartu = foto bukti pertama (presigned GET 15 mnt; ditandatangani lokal, tanpa panggilan ke storage).
-  const items = await Promise.all(rows.slice(0, f.limit).map(async (r) => ({
-    ...serializePk(r, pk),
-    thumb_url: r.thumb_key && mediaEnabled() ? await presignGet(r.thumb_key).catch(() => null) : null,
-  })));
-  res.set('Cache-Control', 'no-store').json({ items, next_before: more ? items[items.length - 1]!.created_at : null });
+  // thumb_urls: sampai 3 foto untuk deretan gambar mini di kartu (video/suara tampil sebagai ubin + durasi).
+  const sign = (k: string) => (mediaEnabled() ? presignGet(k).catch(() => null) : Promise.resolve(null));
+  const items = await Promise.all(rows.slice(0, f.limit).map(async (r) => {
+    const thumbs = (await Promise.all(((r.thumb_keys as string[] | null) ?? []).map(sign))).filter((u): u is string => !!u);
+    return { ...serializePk(r, pk), thumb_url: thumbs[0] ?? null, thumb_urls: thumbs };
+  }));
+  res.set('Cache-Control', 'no-store').json({ items, counts, next_before: more ? items[items.length - 1]!.created_at : null });
 }
 
 polmasRouter.get('/reports', (req, res) => listReports(req, res));
@@ -584,9 +676,15 @@ polmasRouter.get('/inbox', async (_req, res) => {
        WHERE ${PK_BASE} AND r.created_at > (SELECT notif_seen_at FROM pk_users WHERE id = $2)
          AND r.created_at > now() - interval '14 days' AND ${visibleWhere({ phone: 1, scope: 3, user: 2 })}`,
       [pk.phone, pk.userId, scope])).rows[0].n;
-    return { calls, unread };
+    // Badge tab Laporan: laporan yang belum ditanggapi siapa pun (90 hari, cakupan sama dengan daftar).
+    const open = (await c.query(
+      `SELECT count(*)::int AS n ${PK_FROM} WHERE ${PK_BASE} AND ${SCOPE} AND r.status = 'open' AND r.created_at > now() - interval '90 days'`,
+      scopeParams(pk))).rows[0].n;
+    return { calls, unread, open };
   });
-  res.set('Cache-Control', 'no-store').json({ calls: out.calls.map((r) => serializePk(r, pk)), unread: out.unread, server_time: new Date().toISOString() });
+  res.set('Cache-Control', 'no-store').json({
+    calls: out.calls.map((r) => serializePk(r, pk)), unread: out.unread, open_reports: out.open, server_time: new Date().toISOString(),
+  });
 });
 
 polmasRouter.post('/reports/:id/call', async (req, res) => {
@@ -683,20 +781,54 @@ function periodRange(q: unknown) {
 const RANGE = (a: number, b: number) =>
   `r.created_at >= ($${a}::date)::timestamp AT TIME ZONE 'Asia/Jakarta' AND r.created_at < ($${b}::date + 1)::timestamp AT TIME ZONE 'Asia/Jakarta'`;
 
+const sourceSchema = z.object({ source: z.enum(['warga', 'kantor', 'umkm', 'sekolah', 'komunitas']).optional() });
+
+/** Median detik dari laporan masuk sampai pertama ditanggapi (acknowledged_at). */
+const MEDIAN_RESPONSE = `round(percentile_cont(0.5) WITHIN GROUP (ORDER BY extract(epoch FROM r.acknowledged_at - r.created_at))
+  FILTER (WHERE r.acknowledged_at IS NOT NULL))::int`;
+
+const DOW_NAME = ['', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu', 'Minggu'];
+
+/**
+ * Saran patroli (tab Waktu & Wilayah): jendela 3 jam teramai, hari teramai (akhir pekan bila rata-rata per harinya
+ * ≥ 1,2× hari kerja), dan 2 kelurahan teratas. Null bila data terlalu sedikit (< 10 laporan).
+ */
+function patrolHint(heat: { dow: number; hour: number; n: number }[], byHour: number[], kel: { name: string; code: string | null }[]) {
+  const total = byHour.reduce((a, b) => a + b, 0);
+  if (total < 10) return null;
+  let best = 0;
+  for (let h = 1; h <= 21; h++) if (byHour[h]! + byHour[h + 1]! + byHour[h + 2]! > byHour[best]! + byHour[best + 1]! + byHour[best + 2]!) best = h;
+  const perDow = Array.from({ length: 8 }, (_, d) => heat.filter((x) => x.dow === d).reduce((s, x) => s + x.n, 0));
+  const weekend = (perDow[6]! + perDow[7]!) / 2;
+  const weekday = (perDow[1]! + perDow[2]! + perDow[3]! + perDow[4]! + perDow[5]!) / 5;
+  const topDow = perDow.indexOf(Math.max(...perDow.slice(1)));
+  return {
+    days: weekend >= weekday * 1.2 ? 'Sabtu–Minggu' : DOW_NAME[topDow]!,
+    from_hour: best,
+    to_hour: best + 3,
+    kelurahan: kel.filter((k) => k.code).slice(0, 2).map((k) => k.name),
+  };
+}
+
 polmasRouter.get('/analytics/summary', async (req, res) => {
   const pk = pkOf(res);
   const p = periodRange(req.query);
-  const base = `${PK_FROM} WHERE ${PK_BASE} AND ${SCOPE} AND ${RANGE(4, 5)}`;
-  const args = [...scopeParams(pk), p.from, p.to];
+  const { source } = parse(sourceSchema, req.query);
+  // $1–$3 cakupan, $4–$5 rentang, $6 ekosistem (opsional).
+  const src = source ? ` AND a.polmas_source = $6` : '';
+  const base = `${PK_FROM} WHERE ${PK_BASE} AND ${SCOPE} AND ${RANGE(4, 5)}${src}`;
+  const args = [...scopeParams(pk), p.from, p.to, ...(source ? [source] : [])];
+  const prevArgs = [...scopeParams(pk), p.prevFrom, p.prevTo, ...(source ? [source] : [])];
   const out = await withPlatform(async (c) => {
     const totalsSql =
       `SELECT count(*)::int AS total, count(*) FILTER (WHERE r.kind = 'sos')::int AS sos, count(*) FILTER (WHERE r.kind = 'pengaduan')::int AS laporan,
               count(*) FILTER (WHERE r.status = 'resolved')::int AS selesai, count(*) FILTER (WHERE r.status IN ('acknowledged','in_progress'))::int AS diproses,
-              count(*) FILTER (WHERE r.status = 'open')::int AS baru, count(*) FILTER (WHERE r.status IN ('false_alarm','cancelled'))::int AS lainnya
+              count(*) FILTER (WHERE r.status = 'open')::int AS baru, count(*) FILTER (WHERE r.status IN ('false_alarm','cancelled'))::int AS lainnya,
+              ${MEDIAN_RESPONSE} AS median_response_s
        ${base}`;
     const totals = (await c.query(totalsSql, args)).rows[0];
     // Periode sebelumnya dengan panjang sama → persen naik/turun di kartu ringkasan.
-    const previous = (await c.query(totalsSql, [...scopeParams(pk), p.prevFrom, p.prevTo])).rows[0];
+    const previous = (await c.query(totalsSql, prevArgs)).rows[0];
     const trend = (await c.query(
       `SELECT d::date AS day,
               count(r.id) FILTER (WHERE r.kind = 'sos')::int AS sos,
@@ -704,37 +836,76 @@ polmasRouter.get('/analytics/summary', async (req, res) => {
        FROM generate_series($4::date, $5::date, interval '1 day') d
        LEFT JOIN (SELECT r.id, r.kind, r.created_at ${base}) r ON (r.created_at AT TIME ZONE 'Asia/Jakarta')::date = d::date
        GROUP BY d ORDER BY d`, args)).rows;
-    const byKelurahan = (await c.query(
-      `SELECT coalesce(wl.nama, 'Belum diketahui') AS name, r.kelurahan_code AS code, count(*)::int AS n ${base} GROUP BY 1, 2 ORDER BY n DESC LIMIT 12`, args)).rows;
+    const kelSql = `SELECT coalesce(wl.nama, 'Belum diketahui') AS name, r.kelurahan_code AS code, count(*)::int AS n ${base} GROUP BY 1, 2 ORDER BY n DESC LIMIT 12`;
+    const byKelurahan = (await c.query(kelSql, args)).rows;
+    const kelPrev = (await c.query(kelSql, prevArgs)).rows;
     const byCategory = (await c.query(
       `SELECT r.category AS name, count(*)::int AS n ${base} GROUP BY 1 ORDER BY n DESC LIMIT 8`, args)).rows;
     const bySource = (await c.query(
       `SELECT a.polmas_source AS source, count(*)::int AS n ${base} GROUP BY 1 ORDER BY n DESC`, args)).rows;
+    const byEcosystem = (await c.query(
+      `SELECT a.polmas_source AS source, a.name AS app_name, count(*)::int AS n, ${MEDIAN_RESPONSE} AS median_response_s
+       ${base} GROUP BY 1, 2 ORDER BY n DESC`, args)).rows;
+    const matrix = (await c.query(
+      `SELECT a.polmas_source AS source, r.category, count(*)::int AS n ${base} GROUP BY 1, 2`, args)).rows;
+    const funnel = (await c.query(
+      `SELECT count(*) FILTER (WHERE r.status <> 'cancelled')::int AS masuk,
+              count(*) FILTER (WHERE r.acknowledged_at IS NOT NULL OR r.status IN ('acknowledged','in_progress','resolved'))::int AS diterima,
+              count(*) FILTER (WHERE r.verified_at IS NOT NULL OR r.status IN ('in_progress','resolved'))::int AS diverifikasi,
+              count(*) FILTER (WHERE r.status IN ('in_progress','resolved'))::int AS ditangani,
+              count(*) FILTER (WHERE r.status = 'resolved')::int AS selesai,
+              count(*) FILTER (WHERE r.status = 'false_alarm')::int AS tidak_valid
+       ${base}`, args)).rows[0];
+    // Per petugas: tanggapan pertama tiap petugas per laporan → jumlah ditangani, selesai, median respons.
+    const officers = (await c.query(
+      `SELECT f.user_id, max(f.officer) AS officer, bool_or(f.user_id = $2) AS is_me, count(*)::int AS ditangani,
+              count(*) FILTER (WHERE f.done)::int AS selesai,
+              round(percentile_cont(0.5) WITHIN GROUP (ORDER BY extract(epoch FROM f.first_at - f.created_at)))::int AS median_response_s
+       FROM (SELECT x.user_id, x.report_id, max(x.officer) AS officer, min(x.created_at) AS first_at,
+                    bool_or(x.action = 'selesai') AS done, min(r.created_at) AS created_at
+             ${base.replace(' WHERE ', ' JOIN pk_responses x ON x.report_id = r.id WHERE x.user_id IS NOT NULL AND ')}
+             GROUP BY 1, 2) f
+       GROUP BY f.user_id ORDER BY selesai DESC, ditangani DESC LIMIT 10`, args)).rows;
     const heat = (await c.query(
       `SELECT extract(isodow FROM r.created_at AT TIME ZONE 'Asia/Jakarta')::int AS dow,
               extract(hour FROM r.created_at AT TIME ZONE 'Asia/Jakarta')::int AS hour, count(*)::int AS n
        ${base} GROUP BY 1, 2`, args)).rows;
     const weekly = (await c.query(
-      `SELECT to_char(date_trunc('week', r.created_at AT TIME ZONE 'Asia/Jakarta'), 'YYYY-MM-DD') AS week, count(*)::int AS n
-       ${PK_FROM} WHERE ${PK_BASE} AND ${SCOPE} AND r.created_at > now() - interval '8 weeks' GROUP BY 1 ORDER BY 1`, scopeParams(pk))).rows;
-    return { totals, previous, trend, byKelurahan, byCategory, bySource, heat, weekly };
+      `SELECT to_char(date_trunc('week', r.created_at AT TIME ZONE 'Asia/Jakarta'), 'YYYY-MM-DD') AS week, count(*)::int AS n,
+              ${MEDIAN_RESPONSE} AS median_response_s
+       ${PK_FROM} WHERE ${PK_BASE} AND ${SCOPE} AND r.created_at > now() - interval '8 weeks'${source ? ' AND a.polmas_source = $4' : ''}
+       GROUP BY 1 ORDER BY 1`, [...scopeParams(pk), ...(source ? [source] : [])])).rows;
+    return { totals, previous, trend, byKelurahan, kelPrev, byCategory, bySource, byEcosystem, matrix, funnel, officers, heat, weekly };
   });
   const byHour = Array.from({ length: 24 }, (_, h) => out.heat.filter((x) => x.hour === h).reduce((s, x) => s + x.n, 0));
+  const prevKel = new Map(out.kelPrev.map((k) => [k.code ?? '', k.n as number]));
+  const total = out.totals.total as number;
   res.set('Cache-Control', 'no-store').json({
     period: { key: p.period, from: p.from, to: p.to, days: p.days },
+    source: source ?? null,
     totals: out.totals,
     previous_totals: out.previous,
     trend: out.trend.map((t) => ({ day: (t.day as Date).toISOString().slice(0, 10), sos: t.sos, laporan: t.laporan })),
-    by_kelurahan: out.byKelurahan,
+    by_kelurahan: out.byKelurahan.map((k) => ({ ...k, prev_n: prevKel.get(k.code ?? '') ?? 0 })),
     by_category: out.byCategory,
     by_source: out.bySource.map((s) => ({ ...s, label: SOURCE_LABEL[s.source] ?? s.source })),
+    // Ekosistem = pilar + nama app sumber (mis. "UMKM · commerceOS"), dengan persen dari total dan median respons.
+    by_ecosystem: out.byEcosystem.map((e) => ({
+      ...e, label: SOURCE_LABEL[e.source] ?? e.source, pct: total ? Math.round((e.n / total) * 100) : 0,
+      top_categories: out.matrix.filter((m) => m.source === e.source).sort((a, b) => b.n - a.n).slice(0, 2).map((m) => m.category),
+    })),
+    matrix: out.matrix.map((m) => ({ ...m, label: SOURCE_LABEL[m.source] ?? m.source })),
+    funnel: out.funnel,
+    officers: out.officers.map((o) => ({ ...o, user_id: undefined })),
     heatmap: out.heat, // dow 1 = Senin … 7 = Minggu
     by_hour: byHour,
     weekly: out.weekly,
+    patrol_hint: patrolHint(out.heat, byHour, out.byKelurahan),
+    sla_min: SLA_MIN,
   });
 });
 
-async function evalMetrics(c: Db, pk: PkContext, from: string, to: string) {
+async function evalMetrics(c: Db, pk: PkContext, from: string, to: string, source?: string) {
   return (await c.query(
     `SELECT count(*) FILTER (WHERE r.status <> 'cancelled')::int AS total,
             count(*) FILTER (WHERE r.status = 'resolved')::int AS selesai,
@@ -742,21 +913,25 @@ async function evalMetrics(c: Db, pk: PkContext, from: string, to: string) {
             count(*) FILTER (WHERE r.status = 'open')::int AS belum_ditanggapi,
             round(avg(extract(epoch FROM r.acknowledged_at - r.created_at)) FILTER (WHERE r.acknowledged_at IS NOT NULL))::int AS avg_response_s,
             round(avg(extract(epoch FROM r.acknowledged_at - r.created_at)) FILTER (WHERE r.acknowledged_at IS NOT NULL AND r.kind = 'sos'))::int AS avg_response_sos_s,
+            ${MEDIAN_RESPONSE} AS median_response_s,
             round(avg(extract(epoch FROM r.resolved_at - r.created_at)) FILTER (WHERE r.status = 'resolved'))::int AS avg_resolve_s,
             count(*) FILTER (WHERE r.acknowledged_at IS NOT NULL)::int AS ditanggapi
-     ${PK_FROM} WHERE ${PK_BASE} AND ${SCOPE} AND ${RANGE(4, 5)}`, [...scopeParams(pk), from, to])).rows[0];
+     ${PK_FROM} WHERE ${PK_BASE} AND ${SCOPE} AND ${RANGE(4, 5)}${source ? ' AND a.polmas_source = $6' : ''}`,
+    [...scopeParams(pk), from, to, ...(source ? [source] : [])])).rows[0];
 }
 
 polmasRouter.get('/analytics/evaluation', async (req, res) => {
   const pk = pkOf(res);
   const p = periodRange(req.query);
+  const { source } = parse(sourceSchema, req.query);
   const out = await withPlatform(async (c) => {
-    const cur = await evalMetrics(c, pk, p.from, p.to);
-    const prev = await evalMetrics(c, pk, p.prevFrom, p.prevTo);
+    const cur = await evalMetrics(c, pk, p.from, p.to, source);
+    const prev = await evalMetrics(c, pk, p.prevFrom, p.prevTo, source);
     // Daftar belum ditanggapi hanya untuk yang bisa menanggapi (dan hanya laporan yang boleh dia tanggapi).
     const pending = canRespondAny(pk) ? (await c.query(
       `SELECT ${PK_COLUMNS} ${PK_FROM} ${PK_LAST_RESPONSE}
-       WHERE ${PK_BASE} AND ${SCOPE} AND r.status = 'open' ORDER BY (r.kind = 'sos') DESC, r.created_at LIMIT 40`, scopeParams(pk))).rows
+       WHERE ${PK_BASE} AND ${SCOPE} AND r.status = 'open'${source ? ' AND a.polmas_source = $4' : ''}
+       ORDER BY (r.kind = 'sos') DESC, r.created_at LIMIT 40`, [...scopeParams(pk), ...(source ? [source] : [])])).rows
       .filter((r) => canRespondTo(pk, r)).slice(0, 20) : [];
     return { cur, prev, pending };
   });

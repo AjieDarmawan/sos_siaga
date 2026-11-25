@@ -47,6 +47,12 @@ class Me {
   Region? get scope => Region.from(raw['scope']);
   bool get needsArea => raw['needs_area'] == true;
 
+  /// Ekosistem yang dilayani (Profil): pilar + nama app, dari Nomor Darurat (+ app di kecamatan untuk Bhabinkamtibmas).
+  List<({String source, String label, String app})> get ecosystems => ((raw['ecosystems'] as List?) ?? const [])
+      .cast<Map>()
+      .map((e) => (source: e['source'] as String, label: e['label'] as String, app: e['app_name'] as String))
+      .toList();
+
   /// Siapa penerima ini menurut Nomor Darurat, mis. "Satpam · Toko Roti Sinar Jaya (UMKM)" atau
   /// "Bhabinkamtibmas · Kec. Bogor Tengah". Bukan dari GPS.
   String get identity {
@@ -147,6 +153,20 @@ class Report {
 
   /// Foto bukti pertama (URL baca 15 menit) untuk gambar mini kartu; null bila tidak ada foto.
   String? get thumbUrl => raw['thumb_url'] as String?;
+
+  /// Sampai 3 foto untuk deretan gambar mini kartu (hanya di daftar).
+  List<String> get thumbUrls => ((raw['thumb_urls'] as List?) ?? [?thumbUrl]).cast<String>();
+  int get audioCount => ((raw['media'] as Map?)?['audio'] as num?)?.toInt() ?? 0;
+  num? get videoSeconds => raw['video_s'] as num?;
+  num? get audioSeconds => raw['audio_s'] as num?;
+
+  /// Nomor tiket pendek, mis. "SOS-2511-3F9A".
+  String get code => raw['code'] as String? ?? id.substring(0, 8).toUpperCase();
+  String? get appName => raw['app_name'] as String?;
+
+  /// Kolom Ekosistem: pilar (UMKM, Lingkungan, …) + nama app sumber (commerceOS, tata-warga, …).
+  String get ecosystemLabel => sourceLabel;
+  String? get ecosystemApp => appName == sourceLabel ? null : appName;
 
   /// Jarak dari titik pengguna (lokasi saat konfirmasi wilayah), mis. "± 350 m".
   String? distanceFrom(({double lat, double lng})? me) {

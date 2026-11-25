@@ -4,12 +4,11 @@ import '../core/app_state.dart';
 import '../theme/tokens.dart';
 import 'analytics_screen.dart';
 import 'dashboard_screen.dart';
-import 'history_screen.dart';
-import 'notifications_screen.dart';
 import 'profile_screen.dart';
 import 'reports_screen.dart';
 
-/// Navigasi bawah 5 item: Beranda, Laporan, Riwayat, Analisa, Profil. Notifikasi lewat lonceng di header.
+/// Navigasi bawah 4 tab (mockup): Beranda, Laporan, Analitik, Profil. Tanpa tombol SOS: petugas menerima SOS,
+/// tidak mengirim. Badge Laporan = laporan belum ditanggapi (dari /inbox).
 class HomeShell extends StatefulWidget {
   const HomeShell({super.key});
   @override
@@ -23,15 +22,22 @@ class _HomeShellState extends State<HomeShell> {
   @override
   void initState() {
     super.initState();
-    // Lokasi HP hanya untuk jarak ke SOS; tidak menentukan wilayah.
+    // Lokasi HP hanya untuk jarak ke lokasi laporan; tidak menentukan wilayah.
     WidgetsBinding.instance.addPostFrameCallback((_) => AppScope.read(context).refreshPosition());
+  }
+
+  void _go(int i) => setState(() => _visited.add(_i = i));
+
+  /// Dari Beranda: buka tab Laporan, opsional dengan filter status (mis. "baru" dari lonceng).
+  void _openReports([String? status]) {
+    AppScope.read(context).pendingReportStatus = status;
+    _go(1);
   }
 
   static const _items = [
     (Icons.home_outlined, Icons.home_rounded, 'Beranda'),
-    (Icons.assignment_outlined, Icons.assignment_rounded, 'Laporan'),
-    (Icons.history_rounded, Icons.history_rounded, 'Riwayat'),
-    (Icons.insights_outlined, Icons.insights_rounded, 'Analisa'),
+    (Icons.assignment_turned_in_outlined, Icons.assignment_turned_in_rounded, 'Laporan'),
+    (Icons.bar_chart_rounded, Icons.bar_chart_rounded, 'Analitik'),
     (Icons.person_outline_rounded, Icons.person_rounded, 'Profil'),
   ];
 
@@ -39,52 +45,97 @@ class _HomeShellState extends State<HomeShell> {
   Widget build(BuildContext context) {
     final state = AppScope.of(context);
     final pages = [
-      DashboardScreen(onOpenTab: (i) => setState(() => _visited.add(_i = i))),
-      const ReportsScreen(),
-      const HistoryScreen(),
+      DashboardScreen(onOpenReports: _openReports),
+      ReportsScreen(active: _i == 1),
       const AnalyticsScreen(),
       const ProfileScreen(),
     ];
     return Scaffold(
+      backgroundColor: context.pageBg,
       body: Column(
         children: [
           if (!state.online) const _OfflineBanner(),
           Expanded(
             child: IndexedStack(
               index: _i,
-              children: [
-                // Layar dibuat saat pertama dibuka supaya tidak memuat semua data sekaligus.
-                for (final (i, p) in pages.indexed) _visited.contains(i) ? p : const SizedBox.shrink(),
-              ],
+              children: [for (final (i, p) in pages.indexed) _visited.contains(i) ? p : const SizedBox.shrink()],
             ),
           ),
         ],
       ),
-      // Item aktif merah (ikon terisi + label tebal), tanpa pil indikator.
-      bottomNavigationBar: NavigationBarTheme(
-        data: NavigationBarThemeData(
-          labelTextStyle: WidgetStateProperty.resolveWith(
-            (s) => TextStyle(
-              fontSize: 13,
-              fontWeight: s.contains(WidgetState.selected) ? FontWeight.w700 : FontWeight.w500,
-              color: s.contains(WidgetState.selected) ? context.danger : context.ink2,
+      bottomNavigationBar: DecoratedBox(
+        decoration: BoxDecoration(
+          color: context.surface,
+          border: Border(top: BorderSide(color: context.hairline)),
+        ),
+        child: SafeArea(
+          top: false,
+          child: SizedBox(
+            height: 64,
+            child: Row(
+              children: [
+                for (final (i, (off, on, label)) in _items.indexed)
+                  Expanded(
+                    child: _NavItem(
+                      icon: _i == i ? on : off,
+                      label: label,
+                      selected: _i == i,
+                      badge: i == 1 ? state.openReports : 0,
+                      onTap: () => _go(i),
+                    ),
+                  ),
+              ],
             ),
           ),
-          iconTheme: WidgetStateProperty.resolveWith((s) => IconThemeData(size: 26, color: s.contains(WidgetState.selected) ? context.danger : context.ink2)),
         ),
-        child: DecoratedBox(
-          decoration: BoxDecoration(
-            border: Border(top: BorderSide(color: context.hairline)),
-          ),
-          child: NavigationBar(
-            selectedIndex: _i,
-            height: 68,
-            backgroundColor: context.surface,
-            indicatorColor: Colors.transparent,
-            labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
-            onDestinationSelected: (i) => setState(() => _visited.add(_i = i)),
-            destinations: [for (final (o, s, l) in _items) NavigationDestination(icon: Icon(o), selectedIcon: Icon(s), label: l)],
-          ),
+      ),
+    );
+  }
+}
+
+class _NavItem extends StatelessWidget {
+  const _NavItem({required this.icon, required this.label, required this.selected, required this.onTap, this.badge = 0});
+  final IconData icon;
+  final String label;
+  final bool selected;
+  final int badge;
+  final VoidCallback onTap;
+  @override
+  Widget build(BuildContext context) {
+    final color = selected ? context.brand : const Color(0xFF94A3B8);
+    return Semantics(
+      button: true,
+      selected: selected,
+      label: badge > 0 ? '$label, $badge belum ditanggapi' : label,
+      excludeSemantics: true,
+      child: InkWell(
+        onTap: onTap,
+        child: Stack(
+          alignment: Alignment.topCenter,
+          children: [
+            if (selected)
+              Container(
+                width: 28,
+                height: 3,
+                decoration: const BoxDecoration(color: PK.gold, borderRadius: BorderRadius.vertical(bottom: Radius.circular(3))),
+              ),
+            Padding(
+              padding: const EdgeInsets.only(top: 10),
+              child: Column(
+                children: [
+                  Badge(
+                    isLabelVisible: badge > 0,
+                    backgroundColor: PK.red,
+                    offset: const Offset(10, -4),
+                    label: Text(badge > 99 ? '99+' : '$badge', style: const TextStyle(fontSize: 9.5, fontWeight: FontWeight.w800)),
+                    child: Icon(icon, size: 22, color: color),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(label, style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w700, color: color)),
+                ],
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -114,31 +165,4 @@ class _OfflineBanner extends StatelessWidget {
       ),
     ),
   );
-}
-
-/// Lonceng notifikasi dengan tanda belum dibaca.
-class NotifBell extends StatelessWidget {
-  const NotifBell({super.key, this.light = false});
-  final bool light;
-  @override
-  Widget build(BuildContext context) {
-    final n = AppScope.of(context).unread;
-    return Semantics(
-      button: true,
-      label: n > 0 ? 'Notifikasi, $n belum dibaca' : 'Notifikasi',
-      excludeSemantics: true,
-      child: IconButton(
-        constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
-        onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const NotificationsScreen())),
-        icon: Badge(
-          isLabelVisible: n > 0,
-          backgroundColor: PK.red,
-          // Di header navy cukup titik merah (gaya mockup); di tempat lain angka.
-          label: light ? null : Text(n > 99 ? '99+' : '$n'),
-          smallSize: 10,
-          child: Icon(Icons.notifications_rounded, size: light ? 28 : 24, color: light ? Colors.white : context.ink),
-        ),
-      ),
-    );
-  }
 }
