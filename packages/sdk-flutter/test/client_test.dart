@@ -14,12 +14,13 @@ class FakeServer {
   final requests = <http.Request>[];
   int failNext = 0; // jumlah POST /reports berikutnya yang dibuat gagal jaringan
   String status = 'open';
+  String buttonText = 'SOS'; // nilai bawaan server bila "Teks tombol" portal kosong
   List<Map<String, dynamic>> serverContacts = [];
   late final client = MockClient((req) async {
     requests.add(req);
     final p = req.url.path;
     if (p == '/v1/sdk/config') {
-      return http.Response(jsonEncode({'app_name': 'Demo', 'mode': 'test', 'categories': ['general'], 'button_text': 'SOS', 'hold_seconds': 1,
+      return http.Response(jsonEncode({'app_name': 'Demo', 'mode': 'test', 'categories': ['general'], 'button_text': buttonText, 'hold_seconds': 1,
         'recipient_text': 'Ke satpam', 'fallback_phone': '110', 'live_location_interval_s': 15}), 200);
     }
     if (p == '/v1/sdk/reports' && req.method == 'POST') {

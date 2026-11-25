@@ -522,7 +522,9 @@ internal class Layer(private val activity: Activity, private val c: SOSFloatingB
             out += pill(firstLabel, o.callColors ?: intArrayOf(0xFF818CF8.toInt(), 0xFF6366F1.toInt(), 0xFF4F46E5.toInt()),
                 ChipDrawable(context, R.drawable.siagasos_police, null)) { c.call(activity, first) }
         }
-        val label = o.sosLabel ?: c.cfg?.buttonText?.takeIf { it.isNotBlank() }?.let { "Kirim $it" } ?: "Emergency"
+        // Server selalu mengirim button_text ('SOS' bila portal kosong): 'SOS' = bawaan → "Emergency".
+        val label = o.sosLabel ?: c.cfg?.buttonText?.trim()
+            ?.takeIf { it.isNotBlank() && !it.equals("SOS", ignoreCase = true) }?.let { "Kirim $it" } ?: "Emergency"
         out += HoldToSend(activity, c, label, o.sosColors ?: intArrayOf(lighten(o.color, 0.12f), darken(o.color, 0.3f)))
         return out
     }

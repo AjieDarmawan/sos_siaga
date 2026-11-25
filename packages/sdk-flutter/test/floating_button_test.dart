@@ -258,6 +258,37 @@ void main() {
     await tester.pumpWidget(const SizedBox());
   });
 
+  test('defaultSosMenuLabel: bawaan server "SOS"/kosong → Emergency, teks portal lain dipakai', () {
+    expect(defaultSosMenuLabel(null), 'Emergency');
+    expect(defaultSosMenuLabel(''), 'Emergency');
+    expect(defaultSosMenuLabel('SOS'), 'Emergency');
+    expect(defaultSosMenuLabel(' sos '), 'Emergency');
+    expect(defaultSosMenuLabel('Darurat'), 'Kirim Darurat');
+  });
+
+  for (final (buttonText, expected) in [('SOS', 'Emergency'), ('Darurat', 'Kirim Darurat')]) {
+    testWidgets('SOSFloatingButton: tanpa sosLabel, button_text "$buttonText" → "$expected"', (tester) async {
+      tester.view.physicalSize = const Size(400, 800);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      final s = FakeServer()..buttonText = buttonText;
+      final sos = make(s);
+      await tester.pumpWidget(MaterialApp(
+        home: const SizedBox(),
+        builder: (context, child) => SOSFloatingButton(client: sos, onCall: (_) {}, child: child!),
+      ));
+      // Config server dimuat lewat HTTP (MockClient) di initState → beri waktu nyata agar selesai.
+      await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 50)));
+      await tester.pump();
+      await tester.tap(find.byKey(const ValueKey('siagasos-fab')));
+      await pumpFrames(tester, 8);
+      expect(find.text(expected), findsOneWidget);
+      expect(find.text('Kirim SOS'), findsNothing);
+      sos.dispose();
+      await tester.pumpWidget(const SizedBox());
+    });
+  }
+
   testWidgets('SOSFloatingButton: label & warna EWS, teks tanpa gaya darurat Flutter', (tester) async {
     tester.view.physicalSize = const Size(400, 800);
     tester.view.devicePixelRatio = 1;

@@ -34,9 +34,20 @@ abstract class SosSiren {
   void stop();
 }
 
+/// Label bawaan tombol kirim SOS di menu bila host tidak mengisi `sosLabel`.
+///
+/// Server selalu mengirim `button_text` ('SOS' bila "Teks tombol" di portal kosong), jadi
+/// nilai bawaan 'SOS' diperlakukan sama dengan kosong → 'Emergency'. Teks lain dari portal
+/// tetap dipakai sebagai `Kirim {teks}`.
+String defaultSosMenuLabel(String? buttonText) {
+  final t = buttonText?.trim() ?? '';
+  if (t.isEmpty || t.toUpperCase() == 'SOS') return 'Emergency';
+  return 'Kirim $t';
+}
+
 /// Tombol SOS kecil yang melayang di atas semua halaman.
 ///
-/// Ketuk → 4 aksi bertumpuk (gaya `DraggableSosMenu` tata-warga): **Kirim SOS** (tahan N detik, atau sekali
+/// Ketuk → 4 aksi bertumpuk (gaya `DraggableSosMenu` tata-warga): **Emergency** (tahan N detik, atau sekali
 /// ketuk; `holdSeconds: N` untuk tahan N detik), **Telepon 110**, **Telepon 112**, dan **Laporan** → sub-menu Pengaduan
 /// ([SiagaSOS.complain]) / Riwayat laporan ([SiagaSOS.history]).
 ///
@@ -142,7 +153,8 @@ class SOSFloatingButton extends StatefulWidget {
   /// Jenis lampiran yang ditawarkan setelah SOS terkirim (mis. tanpa [MediaKind.audio] bila app tidak punya perekam).
   final List<MediaKind> captureKinds;
 
-  /// Label tombol kirim SOS di menu (mis. 'EWS Alert'). Null = "Kirim `button_text` portal".
+  /// Label tombol kirim SOS di menu (mis. 'EWS Alert'). Null = [defaultSosMenuLabel]:
+  /// 'Emergency', atau "Kirim `button_text`" bila "Teks tombol" di portal diisi selain 'SOS'.
   final String? sosLabel;
 
   /// Gradien tombol kirim SOS di menu (mis. kuning EWS). Null = turunan [color].
@@ -700,10 +712,7 @@ class _SOSFloatingButtonState extends State<SOSFloatingButton>
         sending: _sending,
         compact: widget.compact,
         onTap: _fire,
-        label: widget.sosLabel ??
-            (cfg?.buttonText.isNotEmpty == true
-                ? 'Kirim ${cfg!.buttonText}'
-                : 'Emergency'),
+        label: widget.sosLabel ?? defaultSosMenuLabel(cfg?.buttonText),
       ),
     ];
     // Hanya pesan penting: status SOS aktif cukup ditandai titik di tombol bulat.
