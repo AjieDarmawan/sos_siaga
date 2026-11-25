@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "615433397075",
+    "project_id": "siagasos-a61e9",
+    "storage_bucket": "siagasos-a61e9.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:615433397075:android:dbd920765005028a5cf7a6",
+        "android_client_info": {
+          "package_name": "id.polmas.polmas_keamanan"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyA_pImIzzw76LRElua2CucPT3aY3ubYCDs"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

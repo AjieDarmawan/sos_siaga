@@ -23,6 +23,10 @@ const phoneSchema = z.string().max(32).transform((p, ctx) => {
 const MAX_STORED = 10;
 const MAX_ACTIVE = 5;
 
+const regionSchema = z.object({ code: z.string().regex(/^[0-9]{2}(\.[0-9]{2}(\.[0-9]{2}(\.[0-9]{4})?)?)?$/), name: z.string().trim().min(1).max(100) }).nullish();
+/** Wilayah tugas kontak (mis. Bhabinkamtibmas). Kode dari GET /v1/sdk/regions. */
+const areaSchema = z.object({ province: regionSchema, regency: regionSchema, district: regionSchema, village: regionSchema }).nullish();
+
 const contactsSchema = z.object({
   reporter: z.object({ ref: z.string().min(1).max(128), name: z.string().max(120).optional() }),
   source_key: z.string().min(1).max(64).optional(),
@@ -31,6 +35,7 @@ const contactsSchema = z.object({
     role: z.string().trim().max(40).nullish(),
     phone: phoneSchema,
     active: z.boolean().default(true),
+    area: areaSchema,
   })).max(MAX_STORED),
 }).superRefine((b, ctx) => {
   if (b.contacts.filter((c) => c.active).length > MAX_ACTIVE) ctx.addIssue({ code: z.ZodIssueCode.custom, message: `Maksimal ${MAX_ACTIVE} nomor aktif` });
@@ -49,7 +54,7 @@ contactsRouter.get('/', async (req, res) => {
   const ref = String(req.query.reporter_ref ?? '');
   if (!ref || ref.length > 128) throw new ApiError(422, 'reporter_ref_required', 'reporter_ref wajib');
   const rows = await withTenant(k.accountId, (c) => c.query(
-    `SELECT name, role, phone, active FROM emergency_contacts WHERE app_id = $1 AND reporter_ref = $2 ORDER BY active DESC, name`,
+    `SELECT name, role, phone, active, area FROM emergency_contacts WHERE app_id = $1 AND reporter_ref = $2 ORDER BY active DESC, name`,
     [k.appId, ref],
   ).then((r) => r.rows));
   res.set('Cache-Control', 'no-store').json({ contacts: rows });

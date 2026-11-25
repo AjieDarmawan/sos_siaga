@@ -17,6 +17,8 @@ export interface KeyContext {
   allowedOrigins: string[];
   allowedBundleIds: string[];
   sdkConfig: Record<string, unknown>;
+  /** Pilar app (apps.polmas_source): umkm | warga | kantor | sekolah | komunitas, null = belum dipilih. */
+  pillar: string | null;
   autoCreateSources: boolean;
   appDisabled: boolean;
   revoked: boolean;
@@ -37,7 +39,7 @@ async function lookup(hash: string, kind: KeyKind): Promise<KeyContext | null> {
   if (hit && Date.now() - hit.at < config.keyCacheTtlMs) return hit.ctx;
   const { rows } = await q(
     `SELECT k.id, k.kind, k.mode, (k.revoked_at IS NOT NULL OR (k.expires_at IS NOT NULL AND k.expires_at < now())) AS revoked,
-            a.id AS app_id, a.name AS app_name, a.account_id, a.allowed_origins, a.allowed_bundle_ids, a.sdk_config,
+            a.id AS app_id, a.name AS app_name, a.account_id, a.allowed_origins, a.allowed_bundle_ids, a.sdk_config, a.polmas_source,
             a.auto_create_sources, a.disabled_at IS NOT NULL AS app_disabled, acc.status AS account_status
      FROM api_keys k JOIN apps a ON a.id = k.app_id JOIN accounts acc ON acc.id = a.account_id
      WHERE k.key_hash = $1 AND k.kind = $2`,
@@ -48,7 +50,7 @@ async function lookup(hash: string, kind: KeyKind): Promise<KeyContext | null> {
     ? {
         keyId: r.id, kind: r.kind, mode: r.mode, appId: r.app_id, appName: r.app_name, accountId: r.account_id,
         accountStatus: r.account_status, allowedOrigins: r.allowed_origins, allowedBundleIds: r.allowed_bundle_ids,
-        sdkConfig: r.sdk_config ?? {}, autoCreateSources: r.auto_create_sources, appDisabled: r.app_disabled, revoked: r.revoked,
+        sdkConfig: r.sdk_config ?? {}, pillar: r.polmas_source ?? null, autoCreateSources: r.auto_create_sources, appDisabled: r.app_disabled, revoked: r.revoked,
       }
     : null;
   cache.set(hash, { at: Date.now(), ctx });

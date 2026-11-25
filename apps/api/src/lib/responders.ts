@@ -43,14 +43,14 @@ export async function replaceContacts(
   k: { appId: string; accountId: string },
   reporter: { ref: string; name?: string | null },
   sourceId: string | null,
-  contacts: { name: string; role?: string | null; phone: string; active: boolean }[],
+  contacts: { name: string; role?: string | null; phone: string; active: boolean; area?: unknown }[],
 ) {
   await c.query(`DELETE FROM emergency_contacts WHERE app_id = $1 AND reporter_ref = $2`, [k.appId, reporter.ref]);
   for (const ct of contacts) {
     await c.query(
-      `INSERT INTO emergency_contacts (account_id, app_id, reporter_ref, reporter_name, source_id, name, role, phone, active)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
-      [k.accountId, k.appId, reporter.ref, reporter.name ?? null, sourceId, ct.name, ct.role ?? null, ct.phone, ct.active],
+      `INSERT INTO emergency_contacts (account_id, app_id, reporter_ref, reporter_name, source_id, name, role, phone, active, area)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
+      [k.accountId, k.appId, reporter.ref, reporter.name ?? null, sourceId, ct.name, ct.role ?? null, ct.phone, ct.active, ct.area ? JSON.stringify(ct.area) : null],
     );
   }
 }

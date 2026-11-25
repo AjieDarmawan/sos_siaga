@@ -108,34 +108,133 @@ class ActiveReport {
   String toString() => 'ActiveReport($localId, id=$id, $status)';
 }
 
+/// Satu wilayah administratif (kode Kemendagri bertitik, mis. `32.73.02`). Dari [SiagaSOS.regions].
+class Region {
+  const Region(this.code, this.name);
+  final String code;
+  final String name;
+
+  Map<String, dynamic> toJson() => {'code': code, 'name': name};
+  static Region? fromJson(Object? j) {
+    if (j is! Map) return null;
+    final code = j['code'], name = j['name'];
+    return code is String && name is String ? Region(code, name) : null;
+  }
+
+  @override
+  bool operator ==(Object other) =>
+      other is Region && other.code == code && other.name == name;
+  @override
+  int get hashCode => Object.hash(code, name);
+  @override
+  String toString() => '$code $name';
+}
+
+/// Wilayah tugas kontak (provinsi → kabupaten/kota → kecamatan → desa/kelurahan), mis. untuk Bhabinkamtibmas.
+/// Level yang belum dipilih = null.
+class RegionArea {
+  const RegionArea({this.province, this.regency, this.district, this.village});
+  final Region? province;
+  final Region? regency;
+  final Region? district;
+  final Region? village;
+
+  bool get isEmpty =>
+      province == null && regency == null && district == null && village == null;
+
+  /// Ringkasan untuk daftar, dari yang paling spesifik: "Desa, Kecamatan, Kab/Kota".
+  String get label => [village, district, regency, if (regency == null) province]
+      .whereType<Region>()
+      .map((r) => r.name)
+      .join(', ');
+
+  Map<String, dynamic> toJson() => {
+        'province': province?.toJson(),
+        'regency': regency?.toJson(),
+        'district': district?.toJson(),
+        'village': village?.toJson(),
+      };
+
+  static RegionArea? fromJson(Object? j) {
+    if (j is! Map) return null;
+    final a = RegionArea(
+      province: Region.fromJson(j['province']),
+      regency: Region.fromJson(j['regency']),
+      district: Region.fromJson(j['district']),
+      village: Region.fromJson(j['village']),
+    );
+    return a.isEmpty ? null : a;
+  }
+
+  @override
+  bool operator ==(Object other) =>
+      other is RegionArea &&
+      other.province == province &&
+      other.regency == regency &&
+      other.district == district &&
+      other.village == village;
+  @override
+  int get hashCode => Object.hash(province, regency, district, village);
+}
+
+/// Pilihan status/jabatan bawaan di "Input Nomor" (Polmas Lingkungan, Kantor, UMKM, Sekolah, Komunitas).
+/// App host bisa menggantinya lewat `SOSFloatingButton(contactRoles: ...)`.
+const defaultEmergencyContactRoles = <String>[
+  'RT',
+  'RW',
+  'Satpam',
+  'Bhabinkamtibmas',
+  'Polsek',
+  'Koordinator/Pimpinan',
+  'Owner',
+  'Guru',
+  'Orang Tua',
+  'Petugas Keamanan',
+  'Security',
+  'Keluarga',
+];
+
+/// Jabatan yang wajib memiliki wilayah tugas (provinsi s.d. desa).
+const defaultAreaContactRoles = <String>{'Bhabinkamtibmas'};
+
 /// Kontak darurat pribadi pelapor (gaya "Nomor Darurat" tata-warga): yang [active] dikabari WhatsApp oleh server
 /// setiap SOS (maks. [maxActiveEmergencyContacts] aktif). Disimpan di perangkat per pengguna
 /// ([SiagaSOS.setEmergencyContacts]); app host bisa membuat halaman CRUD sendiri di atas API ini.
 class EmergencyContact {
   const EmergencyContact(
-      {required this.name, required this.phone, this.role, this.active = true});
+      {required this.name,
+      required this.phone,
+      this.role,
+      this.active = true,
+      this.area});
   final String name;
 
   /// Nomor WhatsApp ternormalisasi 62xxxxxxxxxx.
   final String phone;
 
-  /// Jabatan / hubungan, opsional (mis. Satpam, Pemilik toko, Keluarga).
+  /// Status / jabatan, opsional (mis. RT, Satpam, Bhabinkamtibmas, Keluarga).
   final String? role;
 
   /// Hanya kontak aktif yang menerima SOS.
   final bool active;
+
+  /// Wilayah tugas (mis. Bhabinkamtibmas). Ikut disinkronkan ke server.
+  final RegionArea? area;
 
   EmergencyContact copyWith(
           {String? name,
           String? phone,
           String? role,
           bool? active,
-          bool clearRole = false}) =>
+          RegionArea? area,
+          bool clearRole = false,
+          bool clearArea = false}) =>
       EmergencyContact(
         name: name ?? this.name,
         phone: phone ?? this.phone,
         role: clearRole ? null : (role ?? this.role),
         active: active ?? this.active,
+        area: clearArea ? null : (area ?? this.area),
       );
 
   /// Bentuk yang disimpan di perangkat.
@@ -143,7 +242,8 @@ class EmergencyContact {
         'name': name,
         'phone': phone,
         if (role != null) 'role': role,
-        'active': active
+        'active': active,
+        if (area != null && !area!.isEmpty) 'area': area!.toJson(),
       };
 
   /// Bentuk yang dikirim ke server bersama SOS (`emergency_contacts[]`).
@@ -159,6 +259,7 @@ class EmergencyContact {
             ? null
             : (j['role'] as String).trim(),
         active: j['active'] as bool? ?? true,
+        area: RegionArea.fromJson(j['area']),
       );
 
   @override
@@ -167,9 +268,10 @@ class EmergencyContact {
       other.name == name &&
       other.phone == phone &&
       other.role == role &&
-      other.active == active;
+      other.active == active &&
+      other.area == area;
   @override
-  int get hashCode => Object.hash(name, phone, role, active);
+  int get hashCode => Object.hash(name, phone, role, active, area);
 }
 
 /// Maks. kontak aktif yang dikabari per SOS (sama dengan batas server & tata-warga).
@@ -399,8 +501,18 @@ class SdkConfig {
     required this.recipientText,
     required this.fallbackPhone,
     required this.liveLocationIntervalS,
+    this.pillar,
+    this.pillarLabel,
+    this.contactRoles = const [],
   });
   final String appName;
+
+  /// Pilar app yang dipilih di portal: umkm | warga (Lingkungan) | kantor | sekolah | komunitas; null = belum dipilih.
+  final String? pillar;
+  final String? pillarLabel;
+
+  /// Pilihan jabatan Nomor Darurat sesuai pilar (dari server). Kosong = pakai [defaultEmergencyContactRoles].
+  final List<String> contactRoles;
   final List<String> categories;
   final List<String> complaintCategories;
   final String buttonText;
@@ -429,6 +541,9 @@ class SdkConfig {
         fallbackPhone: j['fallback_phone'] as String? ?? '110',
         liveLocationIntervalS:
             (j['live_location_interval_s'] as num? ?? 15).toInt(),
+        pillar: j['pillar'] as String?,
+        pillarLabel: j['pillar_label'] as String?,
+        contactRoles: (j['contact_roles'] as List?)?.cast<String>() ?? const [],
       );
 }
 

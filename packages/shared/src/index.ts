@@ -20,6 +20,36 @@ export const REVIEW_DECISIONS = ['approved', 'needs_revision', 'rejected', 'susp
 
 export const DEFAULT_CATEGORIES = ['general', 'kriminal', 'medis', 'kebakaran', 'bencana', 'kecelakaan'] as const;
 /** sos = darurat; pengaduan = laporan non-darurat (tanpa notifikasi darurat & lokasi live). */
+/**
+ * 5 pilar klien SiagaSOS (dipilih saat membuat app di portal, disimpan di apps.polmas_source). Kode lama
+ * `warga`/`kantor`/`sekolah` dipertahankan supaya data yang sudah ada tidak perlu dimigrasi.
+ */
+export const PILLARS = ['umkm', 'warga', 'kantor', 'sekolah', 'komunitas'] as const;
+export type Pillar = (typeof PILLARS)[number];
+export const PILLAR_LABELS: Record<Pillar, string> = {
+  umkm: 'UMKM',
+  warga: 'Lingkungan',
+  kantor: 'Perkantoran',
+  sekolah: 'Pendidikan',
+  komunitas: 'Komunitas',
+};
+/** Contoh per pilar untuk teks bantuan di portal. */
+export const PILLAR_EXAMPLES: Record<Pillar, string> = {
+  umkm: 'toko, kios, warung, POS (mis. commerceOS)',
+  warga: 'perumahan, RT/RW, aplikasi warga (mis. tata-warga)',
+  kantor: 'gedung kantor, kawasan bisnis',
+  sekolah: 'sekolah, kampus, pesantren',
+  komunitas: 'komunitas, ojol, organisasi',
+};
+/** Jabatan Nomor Darurat per pilar (dropdown di SDK). Bhabinkamtibmas berwilayah (isian wilayah tugas). */
+export const PILLAR_CONTACT_ROLES: Record<Pillar, readonly string[]> = {
+  umkm: ['Pemilik toko', 'Karyawan', 'Satpam', 'Bhabinkamtibmas'],
+  warga: ['Ketua RT', 'Ketua RW', 'Satpam', 'Bhabinkamtibmas', 'Keluarga'],
+  kantor: ['Pimpinan', 'Koordinator keamanan', 'Satpam', 'Polsek'],
+  sekolah: ['Orang tua', 'Guru', 'Satpam', 'Kepala sekolah'],
+  komunitas: ['Bhabinkamtibmas', 'Keamanan', 'Security', 'Ketua komunitas'],
+};
+
 export const REPORT_KINDS = ['sos', 'pengaduan'] as const;
 export type ReportKind = (typeof REPORT_KINDS)[number];
 export const DEFAULT_COMPLAINT_CATEGORIES = ['ketertiban', 'kebisingan', 'parkir_liar', 'pungli', 'kehilangan', 'patroli', 'lainnya'] as const;
@@ -128,6 +158,11 @@ export interface SdkConfig {
   recipient_text: string;
   fallback_phone: string;
   live_location_interval_s: number;
+  /** Pilar app (lihat PILLARS); null = belum dipilih di portal. */
+  pillar: Pillar | null;
+  pillar_label: string | null;
+  /** Pilihan jabatan menu Nomor Darurat sesuai pilar (dropdown di SDK). */
+  contact_roles: string[];
 }
 
 // ---------- Portal / server payloads ----------

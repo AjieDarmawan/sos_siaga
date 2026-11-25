@@ -123,6 +123,7 @@ class SOSFloatingButton private constructor(private val app: Application, val cl
         var complaint: Boolean = true
         var history: Boolean = true
         var emergencyContacts: Boolean = true
+        @Deprecated("Sirene lokal tidak dibunyikan lagi; penerima mendapat push + sirene di app Polmas Keamanan.")
         var siren: SosSiren? = null
         /** Ajakan "Rekam kondisi TKP?" setelah SOS terkirim (butuh [onCapture]). */
         var tkpPrompt: Boolean = true
@@ -247,7 +248,8 @@ class SOSFloatingButton private constructor(private val app: Application, val cl
     internal fun fire(view: View) {
         if (sending) return
         view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
-        options.siren?.start() // alarm panik tanpa menunggu server
+        // Sirene lokal di HP pelapor dimatikan sejak Polmas Keamanan (docs/POLMAS_KEAMANAN.md §9): yang berbunyi adalah
+        // HP penerima lewat push FCM. Options.siren tetap diterima supaya app host lama tetap terkompilasi.
         sending = true
         render()
         client.trigger(options.category, options.message) { res ->
@@ -522,7 +524,9 @@ internal class Layer(private val activity: Activity, private val c: SOSFloatingB
             out += pill(firstLabel, o.callColors ?: intArrayOf(0xFF818CF8.toInt(), 0xFF6366F1.toInt(), 0xFF4F46E5.toInt()),
                 ChipDrawable(context, R.drawable.siagasos_police, null)) { c.call(activity, first) }
         }
-        val label = o.sosLabel ?: c.cfg?.buttonText?.takeIf { it.isNotBlank() }?.let { "Kirim $it" } ?: "Emergency"
+        // Server selalu mengirim button_text ('SOS' bila portal kosong): 'SOS' = bawaan → "Emergency".
+        val label = o.sosLabel ?: c.cfg?.buttonText?.trim()
+            ?.takeIf { it.isNotBlank() && !it.equals("SOS", ignoreCase = true) }?.let { "Kirim $it" } ?: "Emergency"
         out += HoldToSend(activity, c, label, o.sosColors ?: intArrayOf(lighten(o.color, 0.12f), darken(o.color, 0.3f)))
         return out
     }

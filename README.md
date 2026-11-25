@@ -16,6 +16,7 @@ Platform tombol darurat siap pasang. Perusahaan mendaftar, diverifikasi admin (1
 | `apps/portal` | Landing page (`/`), dokumentasi (`/docs`), portal klien, dashboard responder (Vite + React) | ✅ |
 | `apps/admin` | Panel admin platform: review pendaftaran, keputusan, app (Vite + React, :5175) | ✅ |
 | `packages/sdk-android` | Kotlin, Maven Central | belum (M4) |
+| `apps/polmas-keamanan` | **Polmas Keamanan** (Flutter): app penerima untuk pemilik Nomor Darurat (pemilik toko, satpam, RT/RW, Bhabinkamtibmas). Konsep: [`docs/POLMAS_KEAMANAN.md`](docs/POLMAS_KEAMANAN.md) | 🟡 fase 1 |
 
 Pemetaan F-ID ke kode, dan apa yang belum dikerjakan, ada di [`docs/STATUS.md`](docs/STATUS.md).
 
@@ -66,6 +67,7 @@ Halaman: registrasi 3 langkah, verifikasi email, status verifikasi + unggah doku
 | `/v1/sdk` | `X-SOS-Key: pk_...` + cek `Origin` / `X-SOS-Bundle` | SDK web & mobile |
 | `/v1` | `Authorization: Bearer sk_...` | Backend klien |
 | `/portal`, `/admin` | JWT login (admin: password + TOTP) | Portal, dashboard, panel admin |
+| `/v1/pk` | `Authorization: Bearer pks_...` (nomor HP + password, 12 jam) | App Polmas Keamanan |
 
 ### SDK
 | Method | Path | |
@@ -77,7 +79,9 @@ Halaman: registrasi 3 langkah, verifikasi email, status verifikasi + unggah doku
 | POST | `/v1/sdk/reports/:id/cancel` | batal, hanya selama `open` |
 | GET | `/v1/sdk/reports/:id/detail` | detail untuk riwayat di perangkat: uraian, lokasi, timeline (catatan petugas, ringkasan WA), media + URL baca 15 menit; tanpa data pribadi pelapor / nomor penerima |
 | POST | `/v1/sdk/reports/:id/notes` | catatan pelapor `{note}` (mis. keterangan rekaman TKP) → timeline `note`; 409 bila laporan sudah ditutup |
-| GET/PUT | `/v1/sdk/contacts` | Nomor Darurat pelapor (`?reporter_ref=` / `{reporter, source_key?, contacts[]}`, ganti total). Nomor di sini yang boleh login sebagai satpam |
+| GET/PUT | `/v1/sdk/contacts` | Nomor Darurat pelapor (`?reporter_ref=` / `{reporter, source_key?, contacts[]}`, tiap kontak boleh membawa `area` wilayah tugas `{province, regency, district, village}`, ganti total). Nomor di sini yang boleh login sebagai satpam |
+| GET | `/v1/sdk/regions` | Wilayah Kemendagri: tanpa `parent` = provinsi; `?parent=32` → kab/kota, `32.73` → kecamatan, `32.73.02` → desa/kelurahan. `{parent, regions:[{code,name}]}` |
+| GET | `/v1/sdk/regions/reverse` | `?lat&lng` → `{province, regency, district, village}` (level yang tak terbaca `null`) untuk isi otomatis. Geocoder Nominatim (`GEOCODER_URL`, kosong = nonaktif → 503 `geocoder_unavailable`), koordinat dibulatkan ±100 m, 20 req/10 mnt |
 | POST | `/v1/sdk/responder/otp` | `{phone}` → OTP WhatsApp (template `METADEV_OTP_TEMPLATE_NAME`). 404 `responder_not_registered` bila nomor tidak ada di Nomor Darurat. Kunci test / server dev: `dev_code` |
 | POST | `/v1/sdk/responder/verify` | `{phone, code, device:{platform, fcm_token}}` → `{token: rsp_..., responder}` |
 | GET | `/v1/sdk/responder/me` · `/reports` · `/reports/:id` | header `X-SOS-Responder`. SOS 7 hari terakhir yang mencantumkan nomor satpam |
@@ -89,6 +93,10 @@ Halaman: registrasi 3 langkah, verifikasi email, status verifikasi + unggah doku
 ### Server klien
 `GET /v1/reports` (`?kind=sos|pengaduan`), `GET|PATCH /v1/reports/:id`, `POST /v1/webhooks/test`, `DELETE /v1/reporters/:ref` (hapus permanen semua laporan + Nomor Darurat satu pengguna akhir, UU PDP; → `{deleted:{reports,media,emergency_contacts}}`, 30/jam per app). Kunci test hanya melihat/menghapus data test.
 
+Pilar app: `POST|PATCH /portal/apps {pillar: umkm|warga|kantor|sekolah|komunitas}` (dropdown "Aplikasi ini untuk apa?" di portal; UMKM, Lingkungan, Perkantoran, Pendidikan, Komunitas). `/v1/sdk/config` mengembalikan `pillar`, `pillar_label`, `contact_roles` (jabatan Nomor Darurat per pilar).
+
+Emergency tidak lagi mengirim WhatsApp (set `SOS_WHATSAPP=true` hanya untuk rollback); penerima mendapat push FCM + sirene di app Polmas Keamanan.
+
 Retensi: `PATCH /portal/apps/:id {retention_days: 30..3650 | null}`. Job pembersihan menghapus laporan live yang sudah ditutup lebih lama dari itu, dan laporan test 30 hari setelah ditutup.
 
 ### Portal
@@ -97,6 +105,17 @@ Retensi: `PATCH /portal/apps/:id {retention_days: 30..3650 | null}`. Job pembers
 - App & kunci: `/portal/apps` (CRUD), `/portal/apps/:id/keys` (buat, `/:keyId/rotate`, `/:keyId/revoke`), `/portal/apps/:id/sources`, `/portal/apps/:id/recipients` (Penerima SOS WhatsApp: GET/POST, `PATCH|DELETE /:recipientId`; `source_id` null = semua source), `/portal/apps/:id/webhooks`
 - Laporan: `GET /portal/reports` (+ `media_count`), `GET|PATCH /portal/reports/:id` (+ `media[]` dengan URL baca 15 menit), `POST /portal/reports/:id/media` + `/:mediaId/complete` (lampiran petugas), `GET /portal/reports/export.csv`, `GET /portal/reports/stream` (SSE, `?access_token=`)
 - Tim: `GET /portal/team`, `POST /portal/team/invites`, `PATCH /portal/team/:userId`
+
+### Polmas Keamanan (`/v1/pk`)
+Login dengan nomor yang ada di Nomor Darurat app sumber mana pun (atau akun `pnpm pk:user`). Data lintas tenant lewat `withPlatform()`, dibatasi ke: SOS/laporan yang memanggil nomor pengguna, laporan pengguna sendiri, yang pernah ditanggapinya, dan laporan di kecamatannya dari app bertanda `apps.polmas_source`.
+- Auth: `POST /auth/check {phone}` → `{has_password, name, contacts[]}` (404 `phone_not_registered`), `POST /auth/setup {phone,password≥8}` (login pertama dari Nomor Darurat, 409 bila sudah punya password), `POST /auth/login`, `POST /auth/logout`. Salah 5× → kunci 15 menit (423).
+- Perangkat: `POST /me/device {fcm_token, platform}` (push SOS via FCM project Polmas Keamanan, env `PK_FCM_SERVICE_ACCOUNT`), `POST /me/device/remove {fcm_token}` (logout).
+- Profil: `GET /me` (peran, wilayah, `can_respond`), `PATCH /me {name}`, `POST /me/role {role_id}`, `GET /me/area?lat&lng` (usulan wilayah dari GPS), `PUT /me/area`, `GET /regions?parent=`
+- Data: `GET /dashboard`, `GET /reports` & `GET /history` (`scope=kecamatan|me`, `kind=sos|laporan`, `status=baru|diproses|…`, `kelurahan`, `q`, `from`, `to`, `before`, `limit`), `GET /reports/:id` (media URL 15 mnt, timeline, `actions`), `GET /map?days&kind`, `GET /videos`, `GET /news`
+- Tanggapan: `POST /reports/:id/responses {action: terima|hubungi|verifikasi|tangani|selesai|tidak_valid|catatan, note}`: penerima untuk laporan yang memanggil nomornya, Bhabinkamtibmas untuk kecamatannya. Lewat `changeReport` → timeline, realtime, webhook, `status_message` di SDK pelapor.
+- Panggilan: `GET /inbox` (SOS terbuka ≤ 30 mnt untuk saya + jumlah belum dibaca, dipolling app tiap 4 dtk), `POST /reports/:id/call {accepted|ignored}`, `GET /notifications`, `POST /notifications/read-all`
+- Analisa: `GET /analytics/summary?period=7d|30d|90d|custom&from&to`, `GET /analytics/evaluation?period=…` (waktu respons, % selesai, tertunda, periode sebelumnya, daftar belum ditanggapi)
+- Demo: `POST /demo/sos {source}` (akun `is_demo` saja). Data demo: `pnpm seed:pk`; akun manual: `PK_PASSWORD=… pnpm pk:user <nomor> "<nama>" <peran> [kecamatan] ["unit"]`.
 
 ### Admin
 `POST /admin/auth/login`, `GET /admin/accounts?status=pending_review|all|…&search=` (+ `counts` per status, `drafting` = belum mengajukan), `GET /admin/accounts/:id`, `GET /admin/documents/:id/url` (signed URL 5 menit), `PATCH /admin/documents/:id`, `POST /admin/accounts/:id/decision`, `POST /admin/apps/:id/{disable,enable}`, `GET /admin/stats`.

@@ -16,6 +16,7 @@ import { appsRouter } from './routes/portal/apps.js';
 import { reportsRouter } from './routes/portal/reports.js';
 import { teamRouter } from './routes/portal/team.js';
 import { adminRouter } from './routes/admin.js';
+import { polmasRouter } from './routes/polmas.js';
 
 export function createApp() {
   const app = express();
@@ -43,6 +44,8 @@ export function createApp() {
 
   // CORS: SDK memakai CORS dinamis per app (di sdkRouter). Portal/admin hanya dari origin yang dikonfigurasi.
   app.use('/v1/sdk', sdkRouter);
+  // Aplikasi Polmas Keamanan (token pks_…); dipasang sebelum /v1 supaya tidak lewat auth secret key.
+  app.use('/v1/pk', cors({ origin: false }), polmasRouter);
   app.use('/v1', cors({ origin: false }), serverRouter);
 
   const portalCors = cors({ origin: config.portalOrigins, credentials: false, maxAge: 600 });

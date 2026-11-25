@@ -192,7 +192,9 @@ void main() {
     expect(complaintBody['title'], 'Motor parkir liar');
     expect(complaintBody['location_text'], 'Gang Mawar, Blok C');
     expect(complaintBody['witness'], 'Pak RT 08123456789');
-    expect(complaintBody.containsKey('occurred_at'), isFalse); // tidak diisi → saat dikirim
+    // Sejak 05cc770 waktu kejadian terisi default "sekarang" (bisa diubah lewat date picker).
+    final occurred = DateTime.parse(complaintBody['occurred_at'] as String);
+    expect(DateTime.now().difference(occurred).inMinutes.abs() < 5, isTrue);
     expect(complaint?.kind, ReportKind.pengaduan);
     expect(s.requests.any((q) => q.url.path == '/v1/sdk/reports/rep-1/media/m-1/complete'), isTrue);
     await pumpFrames(tester, 4);
@@ -258,6 +260,37 @@ void main() {
     await tester.pumpWidget(const SizedBox());
   });
 
+  test('defaultSosMenuLabel: bawaan server "SOS"/kosong → Emergency, teks portal lain dipakai', () {
+    expect(defaultSosMenuLabel(null), 'Emergency');
+    expect(defaultSosMenuLabel(''), 'Emergency');
+    expect(defaultSosMenuLabel('SOS'), 'Emergency');
+    expect(defaultSosMenuLabel(' sos '), 'Emergency');
+    expect(defaultSosMenuLabel('Darurat'), 'Kirim Darurat');
+  });
+
+  for (final (buttonText, expected) in [('SOS', 'Emergency'), ('Darurat', 'Kirim Darurat')]) {
+    testWidgets('SOSFloatingButton: tanpa sosLabel, button_text "$buttonText" → "$expected"', (tester) async {
+      tester.view.physicalSize = const Size(400, 800);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      final s = FakeServer()..buttonText = buttonText;
+      final sos = make(s);
+      await tester.pumpWidget(MaterialApp(
+        home: const SizedBox(),
+        builder: (context, child) => SOSFloatingButton(client: sos, onCall: (_) {}, child: child!),
+      ));
+      // Config server dimuat lewat HTTP (MockClient) di initState → beri waktu nyata agar selesai.
+      await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 50)));
+      await tester.pump();
+      await tester.tap(find.byKey(const ValueKey('siagasos-fab')));
+      await pumpFrames(tester, 8);
+      expect(find.text(expected), findsOneWidget);
+      expect(find.text('Kirim SOS'), findsNothing);
+      sos.dispose();
+      await tester.pumpWidget(const SizedBox());
+    });
+  }
+
   testWidgets('SOSFloatingButton: label & warna EWS, teks tanpa gaya darurat Flutter', (tester) async {
     tester.view.physicalSize = const Size(400, 800);
     tester.view.devicePixelRatio = 1;
@@ -302,7 +335,7 @@ void main() {
     await tester.pumpWidget(const SizedBox());
   });
 
-  testWidgets('SOSFloatingButton: alur EWS tata-warga — sekali ketuk, sirene/SENYAP, rekam TKP + catatan', (tester) async {
+  testWidgets('SOSFloatingButton: alur EWS tata-warga — sekali ketuk, tanpa sirene lokal, rekam TKP + catatan', (tester) async {
     tester.view.physicalSize = const Size(400, 800);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
@@ -317,6 +350,7 @@ void main() {
         client: sos,
         holdSeconds: 0,
         sosLabel: 'EWS Alert',
+        // ignore: deprecated_member_use_from_same_package
         siren: siren,
         onCall: (_) {},
         onCapture: (context, kind, source) async {
@@ -333,21 +367,19 @@ void main() {
     await pumpFrames(tester, 8);
     expect(find.textContaining('tahan'), findsNothing); // tanpa tahan N detik
 
-    // Sekali ketuk → SOS terkirim, sirene mulai, ajakan rekam TKP muncul.
+    // Sekali ketuk → SOS terkirim, ajakan rekam TKP muncul. Sirene lokal TIDAK berbunyi lagi (penerima dapat push +
+    // sirene di app Polmas Keamanan, docs/POLMAS_KEAMANAN.md §9) walau app host masih mengoper `siren`.
     await tester.tap(find.text('EWS Alert'));
     await pumpFrames(tester, 8);
-    expect(siren.starts, 1);
+    expect(siren.starts, 0);
     expect(s.requests.where((q) => q.url.path == '/v1/sdk/reports').length, 1);
     expect(find.text('SOS terkirim'), findsOneWidget);
     expect(find.text('Rekam kondisi TKP?'), findsOneWidget);
     expect(find.text('Maks. 5 detik'), findsOneWidget);
 
-    // Tombol bulat menjadi SENYAP selama sirene berbunyi; "Matikan sirene" di popup juga mematikan.
-    expect(find.text('SENYAP'), findsOneWidget);
-    await tester.tap(find.byKey(const ValueKey('siagasos-tkp-mute')));
-    await tester.pump();
-    expect(siren.active.value, isFalse);
+    // Tanpa sirene: tidak ada tombol SENYAP maupun "Matikan sirene".
     expect(find.text('SENYAP'), findsNothing);
+    expect(find.byKey(const ValueKey('siagasos-tkp-mute')), findsNothing);
 
     // Rekam → catatan → kirim: video diunggah + catatan ke /notes.
     await tester.tap(find.byKey(const ValueKey('siagasos-tkp-record')));
@@ -413,13 +445,22 @@ void main() {
     await tester.pump();
     await tester.tap(find.byKey(const ValueKey('siagasos-contact-add')));
     await tester.pump();
-    expect(find.textContaining('Nomor WhatsApp tidak valid'), findsOneWidget);
+    expect(find.textContaining('Nomor HP tidak valid'), findsOneWidget);
     await tester.enterText(find.byKey(const ValueKey('siagasos-contact-name')), 'Istri');
     await tester.enterText(find.byKey(const ValueKey('siagasos-contact-phone')), '0813-3333-4444');
     await tester.pump();
+    // Status wajib dipilih dari dropdown.
+    await tester.tap(find.byKey(const ValueKey('siagasos-contact-add')));
+    await tester.pump();
+    expect(find.text('Pilih jabatan kontak.'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('siagasos-contact-role')));
+    await pumpFrames(tester, 8);
+    await tester.tap(find.text('Keluarga').last);
+    await pumpFrames(tester, 8);
+    expect(find.byKey(const ValueKey('siagasos-contact-area-0')), findsNothing, reason: 'Keluarga tanpa wilayah');
     await tester.tap(find.byKey(const ValueKey('siagasos-contact-add')));
     await pumpFrames(tester, 4);
-    expect(find.text('Istri'), findsOneWidget);
+    expect(find.text('Istri · Keluarga'), findsOneWidget);
     expect(find.text('+6281333334444'), findsOneWidget);
     expect((await sos.emergencyContacts()).map((c) => c.phone), ['6281333334444']);
     await tester.tap(find.byTooltip('Tutup'));
@@ -432,11 +473,89 @@ void main() {
     await pumpFrames(tester, 8);
     final post = s.requests.firstWhere((q) => q.url.path == '/v1/sdk/reports');
     expect((jsonDecode(post.body) as Map)['emergency_contacts'], [
-      {'name': 'Istri', 'phone': '6281333334444'}
+      {'name': 'Istri (Keluarga)', 'phone': '6281333334444'}
     ]);
     await sos.complain(category: 'parkir_liar', message: 'Parkir liar di depan toko');
     final complaint = s.requests.lastWhere((q) => q.url.path == '/v1/sdk/reports');
     expect((jsonDecode(complaint.body) as Map).containsKey('emergency_contacts'), isFalse);
+
+    sos.dispose();
+    await tester.pumpWidget(const SizedBox());
+  });
+
+  testWidgets('Input Nomor: Bhabinkamtibmas — wilayah terisi dari lokasi, bisa dipilih ulang, ikut tersimpan', (tester) async {
+    tester.view.physicalSize = const Size(400, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final s = FakeServer();
+    final sos = make(s);
+    await tester.pumpWidget(MaterialApp(
+      home: const SizedBox(),
+      builder: (context, child) => SOSFloatingButton(client: sos, holdSeconds: 0, onCall: (_) {}, child: child!),
+    ));
+    await tester.pump();
+    await tester.tap(find.byKey(const ValueKey('siagasos-fab')));
+    await pumpFrames(tester, 8);
+    await tester.tap(find.byKey(const ValueKey('siagasos-report')));
+    await pumpFrames(tester, 8);
+    await tester.tap(find.byKey(const ValueKey('siagasos-contacts')));
+    await pumpFrames(tester, 8);
+
+    // Dropdown berisi status Polmas + "Lainnya".
+    await tester.tap(find.byKey(const ValueKey('siagasos-contact-role')));
+    await pumpFrames(tester, 8);
+    for (final r in ['RT', 'RW', 'Satpam', 'Bhabinkamtibmas', 'Guru', 'Lainnya']) {
+      expect(find.text(r), findsWidgets, reason: r);
+    }
+    await tester.tap(find.text('Bhabinkamtibmas').last);
+    await pumpFrames(tester, 10);
+
+    // Otomatis terisi dari lokasi (reverse geocode).
+    expect(s.requests.any((q) => q.url.path == '/v1/sdk/regions/reverse' && q.url.queryParameters['lat'] == '-6.2'), isTrue);
+    expect(find.text('Jawa Barat'), findsOneWidget);
+    expect(find.text('Kota Bandung'), findsOneWidget);
+    expect(find.text('Coblong'), findsOneWidget);
+    expect(find.text('Lebak Siliwangi'), findsOneWidget);
+    expect(find.byKey(const ValueKey('siagasos-contact-area-note')), findsOneWidget);
+
+    // Ganti kecamatan → desa dikosongkan, wajib dipilih ulang.
+    await tester.ensureVisible(find.byKey(const ValueKey('siagasos-contact-area-2')));
+    await tester.tap(find.byKey(const ValueKey('siagasos-contact-area-2')));
+    await pumpFrames(tester, 8);
+    expect(find.text('Pilih Kecamatan'), findsOneWidget);
+    await tester.enterText(find.byKey(const ValueKey('siagasos-region-search')), 'suka');
+    await tester.pump();
+    expect(find.byKey(const ValueKey('siagasos-region-32.73.02')), findsNothing);
+    await tester.tap(find.byKey(const ValueKey('siagasos-region-32.73.01')));
+    await pumpFrames(tester, 8);
+    expect(find.text('Sukasari'), findsOneWidget);
+    expect(find.text('Lebak Siliwangi'), findsNothing);
+
+    await tester.enterText(find.byKey(const ValueKey('siagasos-contact-name')), 'Aiptu Budi');
+    await tester.enterText(find.byKey(const ValueKey('siagasos-contact-phone')), '0812 1111 2222');
+    await tester.pump();
+    await tester.ensureVisible(find.byKey(const ValueKey('siagasos-contact-add')));
+    await tester.tap(find.byKey(const ValueKey('siagasos-contact-add')));
+    await tester.pump();
+    expect(find.textContaining('Lengkapi wilayah tugas Bhabinkamtibmas'), findsOneWidget);
+
+    await tester.ensureVisible(find.byKey(const ValueKey('siagasos-contact-area-3')));
+    await tester.tap(find.byKey(const ValueKey('siagasos-contact-area-3')));
+    await pumpFrames(tester, 8);
+    await tester.tap(find.byKey(const ValueKey('siagasos-region-32.73.01.1002')));
+    await pumpFrames(tester, 8);
+    await tester.ensureVisible(find.byKey(const ValueKey('siagasos-contact-add')));
+    await tester.tap(find.byKey(const ValueKey('siagasos-contact-add')));
+    await pumpFrames(tester, 6);
+
+    expect(find.text('Aiptu Budi · Bhabinkamtibmas'), findsOneWidget);
+    expect(find.text('Gegerkalong, Sukasari, Kota Bandung'), findsOneWidget);
+    final saved = (await sos.emergencyContacts()).single;
+    expect(saved.role, 'Bhabinkamtibmas');
+    expect(saved.area?.village, const Region('32.73.01.1002', 'Gegerkalong'));
+    expect(saved.area?.province?.code, '32');
+    // Tersinkron ke server bersama wilayahnya.
+    expect(s.serverContacts.single['area']['district'], {'code': '32.73.01', 'name': 'Sukasari'});
 
     sos.dispose();
     await tester.pumpWidget(const SizedBox());

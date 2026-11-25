@@ -353,7 +353,8 @@ class SiagaSOS {
           name: c.name.trim(),
           phone: n,
           role: role == null || role.isEmpty ? null : role,
-          active: c.active));
+          active: c.active,
+          area: c.area == null || c.area!.isEmpty ? null : c.area));
     }
     await _contacts.save(out.map((c) => c.toJson()).toList());
     try {
@@ -385,7 +386,8 @@ class SiagaSOS {
                   'name': c.name,
                   if (c.role != null) 'role': c.role,
                   'phone': c.phone,
-                  'active': c.active
+                  'active': c.active,
+                  if (c.area != null) 'area': c.area!.toJson(),
                 })
             .toList(),
       });
@@ -405,6 +407,44 @@ class SiagaSOS {
       {'state': 'synced'}
     ]);
     return true;
+  }
+
+  // ------------------------------------------------------------------ wilayah
+  final _regionCache = <String, Future<List<Region>>>{};
+
+  /// Anak langsung dari kode wilayah [parent] (null = daftar provinsi), urut nama. Di-cache selama klien hidup;
+  /// gagal (offline) tidak di-cache supaya bisa dicoba lagi.
+  Future<List<Region>> regions([String? parent]) {
+    final key = parent ?? '';
+    final hit = _regionCache[key];
+    if (hit != null) return hit;
+    final f = _request('GET',
+            '/v1/sdk/regions${parent == null ? '' : '?parent=${Uri.encodeQueryComponent(parent)}'}')
+        .then((d) => ((d['regions'] as List?) ?? const [])
+            .map(Region.fromJson)
+            .whereType<Region>()
+            .toList());
+    _regionCache[key] = f;
+    f.then((_) {}, onError: (Object _) {
+      _regionCache.remove(key);
+    });
+    return f;
+  }
+
+  /// Wilayah dari lokasi perangkat sekarang ([locationProvider]) untuk isi otomatis; hasilnya tetap bisa diubah
+  /// pengguna. Level yang tidak terbaca = null. null bila lokasi / geocoder tidak tersedia.
+  Future<RegionArea?> regionFromLocation() async {
+    final provider = locationProvider;
+    if (provider == null) return null;
+    try {
+      final loc = await provider().timeout(locationTimeout);
+      if (loc == null) return null;
+      final d = await _request('GET',
+          '/v1/sdk/regions/reverse?lat=${loc.lat}&lng=${loc.lng}');
+      return RegionArea.fromJson(d);
+    } catch (_) {
+      return null;
+    }
   }
 
   // ------------------------------------------------------------------ riwayat

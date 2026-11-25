@@ -1,0 +1,48 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "polmas-keamanan",
+            "cwd": "apps/polmas-keamanan",
+            "request": "launch",
+            "type": "dart"
+        },
+        {
+            "name": "polmas-keamanan (profile mode)",
+            "cwd": "apps/polmas-keamanan",
+            "request": "launch",
+            "type": "dart",
+            "flutterMode": "profile"
+        },
+        {
+            "name": "polmas-keamanan (release mode)",
+            "cwd": "apps/polmas-keamanan",
+            "request": "launch",
+            "type": "dart",
+            "flutterMode": "release"
+        },
+        {
+            "name": "sdk-flutter",
+            "cwd": "packages/sdk-flutter",
+            "request": "launch",
+            "type": "dart"
+        },
+        {
+            "name": "sdk-flutter (profile mode)",
+            "cwd": "packages/sdk-flutter",
+            "request": "launch",
+            "type": "dart",
+            "flutterMode": "profile"
+        },
+        {
+            "name": "sdk-flutter (release mode)",
+            "cwd": "packages/sdk-flutter",
+            "request": "launch",
+            "type": "dart",
+            "flutterMode": "release"
+        }
+    ]
+}

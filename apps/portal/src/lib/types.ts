@@ -1,4 +1,4 @@
-import type { AccountStatus, DocType, ReportStatus } from '@siagasos/shared';
+import type { AccountStatus, DocType, Pillar, ReportStatus } from '@siagasos/shared';
 export type { AccountStatus, DocType, ReportStatus };
 
 export type Role = 'owner' | 'admin' | 'responder';
@@ -23,6 +23,8 @@ export interface App {
   auto_create_sources: boolean; sdk_config: SdkConfig; disabled: boolean; disabled_reason: string | null;
   /** Hari penyimpanan laporan live setelah ditutup; null = tanpa batas. */
   retention_days: number | null;
+  /** Pilar aplikasi: umkm | warga (Lingkungan) | kantor | sekolah | komunitas; null = belum dipilih. */
+  pillar: Pillar | null;
   created_at: string; keys: ApiKey[];
 }
 
