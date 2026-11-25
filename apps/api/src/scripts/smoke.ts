@@ -368,6 +368,9 @@ async function main() {
   ok(pkLogin.status === 201, 'PK: login nomor + password');
   const pkT = pkLogin.data.token as string;
   ok(typeof pkLogin.data.me.server_push === 'boolean', 'PK: /me memberi tahu apakah server bisa mengirim push SOS');
+  const pkStatus = await call('GET', '/v1/pk/status');
+  ok(pkStatus.status === 200 && pkStatus.data.fcm_channel === 'polmas_sos_v2' && !JSON.stringify(pkStatus.data).includes('private_key'),
+    'PK: /status publik (push siap, project Firebase) tanpa rahasia');
   const pkAnon = await call('GET', '/v1/pk/me');
   ok(pkAnon.status === 401, 'PK: tanpa token ditolak');
   const pkDev = await call('POST', '/v1/pk/me/device', { token: pkT, body: { fcm_token: `smoke-pk-fcm-${pkPhone}`, platform: 'android' } });

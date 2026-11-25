@@ -45,6 +45,9 @@ function loadAccount(profile: FcmProfile = POS_FCM, env = process.env): ServiceA
 
 export const fcmConfigured = (profile: FcmProfile = POS_FCM) => loadAccount(profile) !== null;
 
+/** project_id Firebase yang dipakai server (bukan rahasia): dicocokkan dengan google-services.json app saat build rilis. */
+export const fcmProject = (profile: FcmProfile = POS_FCM) => loadAccount(profile)?.project_id ?? null;
+
 async function accessToken(sa: ServiceAccount): Promise<string> {
   const cached = tokens.get(sa.client_email);
   if (cached && cached.exp - 60_000 > Date.now()) return cached.token;

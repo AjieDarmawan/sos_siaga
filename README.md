@@ -108,6 +108,7 @@ Retensi: `PATCH /portal/apps/:id {retention_days: 30..3650 | null}`. Job pembers
 
 ### Polmas Keamanan (`/v1/pk`)
 Login dengan nomor yang ada di Nomor Darurat app sumber mana pun (atau akun `pnpm pk:user`). Data lintas tenant lewat `withPlatform()`, dibatasi ke: SOS/laporan yang memanggil nomor pengguna, laporan pengguna sendiri, yang pernah ditanggapinya, dan laporan di kecamatannya dari app bertanda `apps.polmas_source`.
+- Status publik: `GET /status` → `{server_push, fcm_project, fcm_channel}` (tanpa login; dipakai skrip build rilis untuk memastikan push SOS aktif).
 - Auth: `POST /auth/check {phone}` → `{has_password, name, contacts[]}` (404 `phone_not_registered`), `POST /auth/setup {phone,password≥8}` (login pertama dari Nomor Darurat, 409 bila sudah punya password), `POST /auth/login`, `POST /auth/logout`. Salah 5× → kunci 15 menit (423).
 - Perangkat: `POST /me/device {fcm_token, platform, device_name?}` (push SOS via FCM project Polmas Keamanan, env `PK_FCM_SERVICE_ACCOUNT`), `POST /me/device/remove {fcm_token}` (logout), `GET /me/devices` (nama HP + `token_tail`, token tidak dikirim), `POST /me/devices/:id/remove`.
 - Profil: `GET /me` (peran, wilayah, `ecosystems[]`, `can_respond`), `PATCH /me {name}`, `GET /me/stats?days=30` (ditangani, selesai, median respons saya), `POST /me/password {current_password, new_password≥8}` (sesi lain dicabut), `POST /me/role {role_id}`, `GET /me/area?lat&lng` (usulan wilayah dari GPS), `PUT /me/area`, `GET /regions?parent=`
@@ -143,3 +144,9 @@ Ganti `pk_test_` ke `pk_live_` setelah perusahaan disetujui. Kode lain tidak per
 ## Webhook
 
 Event: `report.created`, `report.status_changed`, `report.cancelled`. Header `X-SOS-Signature: t=<unix>,v1=<hex>`, dengan `v1 = HMAC_SHA256(webhook_secret, "<t>.<raw body>")`. Retry eksponensial (30 dtk → maks 6 jam per jeda) hingga 24 jam.
+
+## Build rilis app mobile (pasti tersambung ke produksi)
+
+- **Polmas Digital** (penerima SOS): `apps/polmas-keamanan/scripts/build_release.sh aab|apk`. Build rilis selalu ke `https://sos.tip2.co`, HTTP biasa dimatikan, tanda tangan dari `android/key.properties`. Skrip menolak build bila server produksi belum bisa mengirim push (`/v1/pk/status`), project Firebase server ≠ `google-services.json`, atau (untuk `aab`) kunci unggah belum ada.
+- **tata-warga** (pelapor SOS, repo `polmas-tatawarga-mobile`): `scripts/build_release_siagasos.sh aab|apk`. Memakai `env/siagasos.prod.json` (tidak ikut git) dan mengecek kunci `pk_live_` diterima produksi untuk bundle `com.tip.rtku`, pilar Polmas terisi, dan push ke Polmas Digital aktif.
+- Server produksi wajib punya `PK_FCM_SERVICE_ACCOUNT` (path file atau isi JSON service account Firebase `siagasos-a61e9`), lalu restart API.

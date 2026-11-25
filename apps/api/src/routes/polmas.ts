@@ -10,7 +10,7 @@ import { changeReport, onReportCreated } from '../lib/reports.js';
 import { listReadyMedia } from '../lib/media.js';
 import { mediaEnabled, presignGet } from '../lib/objectStorage.js';
 import { config } from '../config.js';
-import { PK_FCM, fcmConfigured } from '../lib/fcm.js';
+import { PK_FCM, fcmConfigured, fcmProject } from '../lib/fcm.js';
 import {
   PK_BASE, PK_COLUMNS, PK_FROM, PK_LAST_RESPONSE, ROLE_LABEL, SESSION_TTL_H, SLA_MIN, SOURCE_LABEL, STATUS_SQL,
   audit, canRespondAny, canRespondTo, contactRows, hashToken, isOfficer, mineWhere, newSessionToken, normPhone, scopeOf,
@@ -138,6 +138,14 @@ polmasRouter.post('/auth/login', async (req, res) => {
   if (!out) throw new ApiError(401, 'invalid_password', 'Password salah. Periksa lagi lalu coba ulang.');
   const ctx = await loadContext(out.sessionId);
   res.status(201).json({ token: out.token, expires_at: out.expires_at, me: await mePayload(ctx!) });
+});
+
+/**
+ * Status publik (tanpa login) untuk skrip build rilis & pemantauan: apakah server bisa mengirim push SOS dan ke project
+ * Firebase mana. Tidak memuat rahasia.
+ */
+polmasRouter.get('/status', (_req, res) => {
+  res.set('Cache-Control', 'no-store').json({ server_push: fcmConfigured(PK_FCM), fcm_project: fcmProject(PK_FCM), fcm_channel: PK_FCM.channel });
 });
 
 // ---------------------------------------------------------------- middleware sesi

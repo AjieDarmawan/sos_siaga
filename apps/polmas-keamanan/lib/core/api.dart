@@ -2,11 +2,12 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:flutter/foundation.dart' show kReleaseMode;
 import 'package:http/http.dart' as http;
 
-/// Alamat API SiagaSOS (DB sama). Ganti saat build: `flutter run --dart-define=API_URL=https://sos.tip2.co`.
-/// Default `http://localhost:4000` dipakai dengan `adb reverse tcp:4000 tcp:4000` di HP/emulator.
-const apiUrl = String.fromEnvironment('API_URL', defaultValue: 'http://localhost:4000');
+/// Alamat API SiagaSOS. Build rilis (APK/AAB Play Store) selalu ke produksi `https://sos.tip2.co`; build debug ke
+/// `http://localhost:4000` (pakai `adb reverse tcp:4000 tcp:4000`). Bisa ditimpa: `--dart-define=API_URL=...`.
+const apiUrl = String.fromEnvironment('API_URL', defaultValue: kReleaseMode ? 'https://sos.tip2.co' : 'http://localhost:4000');
 
 class ApiException implements Exception {
   ApiException(this.status, this.code, this.message);

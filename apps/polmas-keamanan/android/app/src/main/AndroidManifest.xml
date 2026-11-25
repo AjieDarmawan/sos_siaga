@@ -10,7 +10,7 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <application
         android:label="Polmas Digital"
-        android:usesCleartextTraffic="true"
+        android:usesCleartextTraffic="${usesCleartextTraffic}"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <!-- Push SOS dari server memakai kanal ini (dibuat MainActivity dengan suara res/raw/sos_siren, sama dengan commerceOS). -->
