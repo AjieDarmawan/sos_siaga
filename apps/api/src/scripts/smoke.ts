@@ -269,15 +269,10 @@ async function main() {
   const liveRep = await call('POST', '/v1/sdk/reports', { headers: sdkH(pkLive, { 'Idempotency-Key': uuid() }), body: { ...payload, reporter: { ref: 'user_999' },
     emergency_contacts: [{ name: 'Istri', phone: '0800 3333 4444' }, { name: 'Dobel', phone: '6280011112222' }] } });
   ok(liveRep.status === 201 && liveRep.data.mode === 'live', 'laporan live 201');
-  // WA dikirim setelah respons (tidak ditunggu jalur SOS). Nomor 0800 = nomor uji: tercatat, tidak pernah dikirimi WA sungguhan.
-  let wa: string[] = [];
-  for (let i = 0; i < 20 && wa.length < 2; i++) {
-    await new Promise((r) => setTimeout(r, 100));
-    const d = await call('GET', `/portal/reports/${liveRep.data.id}`, { token: A.token });
-    wa = d.data.timeline.filter((e: any) => e.type === 'whatsapp').map((e: any) => e.note as string);
-  }
-  ok(wa.length === 2 && wa.some((n) => n.includes('Pos Satpam (6280011112222)')) && wa.some((n) => n.includes('Istri (6280033334444, kontak pelapor)')) && wa.every((n) => n.includes('nomor uji 0800')),
-    'SOS live → WhatsApp ke penerima SOS + kontak darurat (nomor ganda sekali), tercatat di timeline');
+  // Sejak Polmas Keamanan (docs/POLMAS_KEAMANAN.md §9) Emergency tidak lagi mengirim WA (kecuali SOS_WHATSAPP=true).
+  await new Promise((r) => setTimeout(r, 800));
+  const noWa = await call('GET', `/portal/reports/${liveRep.data.id}`, { token: A.token });
+  ok(!noWa.data.timeline.some((e: any) => e.type === 'whatsapp'), 'SOS live tidak lagi mengirim WhatsApp (diganti push Polmas Keamanan)');
   // Detail untuk "Riwayat laporan" di perangkat: timeline + ringkasan WA, tanpa nomor HP pelapor / penerima.
   const det = await call('GET', `/v1/sdk/reports/${liveRep.data.id}/detail`, { headers: sdkH(pkLive) });
   const detText = JSON.stringify(det.data);
@@ -374,9 +369,19 @@ async function main() {
   const pkT = pkLogin.data.token as string;
   const pkAnon = await call('GET', '/v1/pk/me');
   ok(pkAnon.status === 401, 'PK: tanpa token ditolak');
+  const pkDev = await call('POST', '/v1/pk/me/device', { token: pkT, body: { fcm_token: `smoke-pk-fcm-${pkPhone}`, platform: 'android' } });
+  ok(pkDev.status === 204, 'PK: token FCM perangkat terdaftar');
   const pkSos = await call('POST', '/v1/sdk/reports', { headers: sdkH(pkLive, { 'Idempotency-Key': uuid() }),
     body: { ...payload, reporter: { ref: 'kasir_pk', name: 'Kasir PK', phone: '0800 7777 8888' }, emergency_contacts: [{ name: 'Pak Joko (Satpam)', phone: pkPhone }] } });
   ok(pkSos.status === 201, 'PK: kios mengirim SOS yang memanggil nomor satpam');
+  let pkPush: string[] = [];
+  for (let i = 0; i < 20 && !pkPush.length; i++) {
+    await new Promise((r) => setTimeout(r, 100));
+    const d = await call('GET', `/portal/reports/${pkSos.data.id}`, { token: A.token });
+    pkPush = d.data.timeline.filter((e: any) => e.type === 'push' && /Polmas Keamanan/.test(e.note ?? '')).map((e: any) => e.note as string);
+  }
+  // Token smoke palsu: tanpa PK_FCM_SERVICE_ACCOUNT tercatat stub (1 terkirim), dengan kredensial asli FCM menolaknya (0).
+  ok(pkPush.length === 1 && /push SOS ke [01] dari 1 penerima/.test(pkPush[0]!), 'PK: SOS → push FCM ke HP penerima Polmas Keamanan, tercatat di timeline');
   const inbox = await call('GET', '/v1/pk/inbox', { token: pkT });
   ok(inbox.status === 200 && inbox.data.calls.some((c: any) => c.id === pkSos.data.id), 'PK: SOS muncul sebagai panggilan masuk (app sumber tanpa polmas_source)');
   const pkOther = await call('GET', `/v1/pk/reports/${liveRep.data.id}`, { token: pkT });

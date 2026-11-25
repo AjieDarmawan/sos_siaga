@@ -107,7 +107,7 @@ class SOSFloatingButton extends StatefulWidget {
     this.contactsLabel = 'Input Nomor',
     this.reportLabel = 'Laporan Kejadian',
     this.history = true,
-    this.siren,
+    @Deprecated('Sirene lokal tidak dibunyikan lagi; penerima mendapat push + sirene di app Polmas Keamanan.') this.siren,
     this.tkpPrompt = true,
     this.tkpSeconds = 5,
     this.emergencyContacts = true,
@@ -236,6 +236,17 @@ class _SOSFloatingButtonState extends State<SOSFloatingButton>
   bool _reportMenu = false;
   bool _sending = false;
   SdkConfig? _cfg;
+
+  /// Sirene lokal di HP pelapor DIMATIKAN sejak Polmas Keamanan (docs/POLMAS_KEAMANAN.md §9): yang berbunyi adalah HP
+  /// penerima (push FCM). Parameter `siren` tetap diterima supaya app host lama tetap terkompilasi, tapi diabaikan.
+  SosSiren? get _siren => null;
+
+  /// Jabatan Nomor Darurat: daftar dari app host bila diberikan, selain itu daftar per pilar dari server.
+  List<String> get _contactRoles {
+    final server = _cfg?.contactRoles ?? const <String>[];
+    if (!identical(widget.contactRoles, defaultEmergencyContactRoles) || server.isEmpty) return widget.contactRoles;
+    return server;
+  }
   ActiveReport? _report;
   StreamSubscription<ActiveReport>? _sub;
   String? _notice;
@@ -321,7 +332,7 @@ class _SOSFloatingButtonState extends State<SOSFloatingButton>
     if (_sending) return;
     HapticFeedback.mediumImpact();
     // Alarm panik dimulai tanpa menunggu server (jeda/durasi diatur app host).
-    widget.siren?.start();
+    _siren?.start();
     setState(() => _sending = true);
     try {
       final r = await widget.client
@@ -331,7 +342,7 @@ class _SOSFloatingButtonState extends State<SOSFloatingButton>
       if (r.id != null) widget.onSent?.call(r);
       if (mounted && _tkp) _openTkp(r);
     } on SiagaSOSError catch (e) {
-      widget.siren?.stop(); // SOS tidak terkirim: sirene menyesatkan
+      _siren?.stop(); // SOS tidak terkirim: sirene menyesatkan
       if (mounted) setState(() => _notice = e.message);
       widget.onError?.call(e);
     } finally {
@@ -399,7 +410,7 @@ class _SOSFloatingButtonState extends State<SOSFloatingButton>
         client: widget.client,
         report: r,
         recipientText: _cfg?.recipientText,
-        siren: widget.siren,
+        siren: _siren,
         onCapture: widget.onCapture!,
         maxSeconds: widget.tkpSeconds,
         color: widget.color,
@@ -417,7 +428,7 @@ class _SOSFloatingButtonState extends State<SOSFloatingButton>
   void _openContacts() => _openSheet(() => _ContactsSheet(
       client: widget.client,
       title: widget.contactsLabel,
-      roles: widget.contactRoles,
+      roles: _contactRoles,
       areaRoles: widget.areaContactRoles,
       onClose: _closeSheet));
 
@@ -506,10 +517,10 @@ class _SOSFloatingButtonState extends State<SOSFloatingButton>
                       });
                       _savePosition();
                     },
-                    child: widget.siren == null
+                    child: _siren == null
                         ? _fab(false)
                         : ValueListenableBuilder<bool>(
-                            valueListenable: widget.siren!.active,
+                            valueListenable: _siren!.active,
                             builder: (_, on, __) => _fab(on)),
                   ),
                 ),
@@ -573,7 +584,7 @@ class _SOSFloatingButtonState extends State<SOSFloatingButton>
                 onTap: sirenOn
                     ? () {
                         HapticFeedback.selectionClick();
-                        widget.siren!.stop();
+                        _siren!.stop();
                       }
                     : _toggle,
                 child: Center(

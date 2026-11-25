@@ -27,6 +27,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
     final me = AppScope.of(context).me!;
     return Scaffold(
       body: SafeArea(
+        top: false,
         bottom: false,
         child: Column(
           children: [

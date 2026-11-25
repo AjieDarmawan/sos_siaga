@@ -110,7 +110,7 @@ class _SosCallScreenState extends State<SosCallScreen> with SingleTickerProvider
   Widget build(BuildContext context) {
     final r = widget.report;
     final reduce = context.reduceMotion;
-    final dist = r.distanceFrom(AppScope.of(context).me?.areaLocation);
+    final dist = r.distanceFrom(AppScope.of(context).here);
     const white = Colors.white;
     return PopScope(
       canPop: false,

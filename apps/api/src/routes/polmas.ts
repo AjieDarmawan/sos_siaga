@@ -223,6 +223,31 @@ polmasRouter.patch('/me', async (req, res) => {
   res.json(await mePayload((await loadContext(pk.sessionId))!));
 });
 
+const deviceBody = z.object({
+  fcm_token: z.string().min(10).max(4096),
+  platform: z.enum(['android', 'ios', 'web', 'other']).optional(),
+});
+
+/** Daftarkan token FCM perangkat ini (dipanggil app setelah login & saat token berganti). Token pindah pemilik bila HP dipakai nomor lain. */
+polmasRouter.post('/me/device', async (req, res) => {
+  const pk = pkOf(res);
+  const b = parse(deviceBody, req.body);
+  await enforce(`pk-device:${pk.userId}`, 30, 3600);
+  await withPlatform((c) => c.query(
+    `INSERT INTO pk_devices (user_id, fcm_token, platform) VALUES ($1,$2,$3)
+     ON CONFLICT (fcm_token) DO UPDATE SET user_id = EXCLUDED.user_id, platform = EXCLUDED.platform, updated_at = now()`,
+    [pk.userId, b.fcm_token, b.platform ?? null]));
+  res.status(204).end();
+});
+
+/** Lepas token perangkat (logout / Lupakan perangkat): HP ini tidak lagi menerima SOS untuk nomor ini. */
+polmasRouter.post('/me/device/remove', async (req, res) => {
+  const pk = pkOf(res);
+  const { fcm_token } = parse(deviceBody.pick({ fcm_token: true }), req.body);
+  await withPlatform((c) => c.query(`DELETE FROM pk_devices WHERE user_id = $1 AND fcm_token = $2`, [pk.userId, fcm_token]));
+  res.status(204).end();
+});
+
 polmasRouter.post('/me/role', async (req, res) => {
   const pk = pkOf(res);
   const { role_id } = parse(z.object({ role_id: z.string().uuid() }), req.body);

@@ -7,8 +7,7 @@ import '../core/models.dart';
 import '../theme/tokens.dart';
 import '../widgets/common.dart';
 import '../widgets/dialogs.dart';
-import 'area_screen.dart';
-import 'home_shell.dart';
+import '../widgets/search_filter.dart';
 
 /// Profil: avatar inisial di atas pita gelombang merah, nama, nomor, peran (ketuk untuk beralih, FR-12), wilayah,
 /// pengaturan (Notifikasi, Mode gelap, Kurangi gerakan), Bantuan, Tentang, dan Keluar.
@@ -162,35 +161,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final state = AppScope.of(context);
     final me = state.me!;
     final t = Theme.of(context).textTheme;
-    final area = me.area;
-    final place = [if (area.district != null) 'Kec. ${area.district!.name}', if (area.village != null) 'Kel. ${area.village!.name}'].join(' - ');
     return Scaffold(
       body: SafeArea(
+        top: false,
         bottom: false,
         child: ListView(
           padding: const EdgeInsets.only(bottom: 32),
           children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 12, 8, 0),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Semantics(
-                      header: true,
-                      child: Text('Profil', style: t.headlineSmall?.copyWith(fontSize: 32, fontWeight: FontWeight.w800)),
-                    ),
-                  ),
-                  const NotifBell(),
-                ],
-              ),
-            ),
+            const PageHeader(title: 'Profil'),
             // pita gelombang merah di belakang avatar
             SizedBox(
               height: 128,
               child: Stack(
                 alignment: Alignment.topCenter,
                 children: [
-                  Positioned(top: 8, left: 0, right: 0, height: 64, child: CustomPaint(painter: _BandPainter())),
                   Positioned(
                     top: 18,
                     child: Semantics(
@@ -292,11 +276,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ],
             const SizedBox(height: 6),
             Center(
-              child: TextButton.icon(
-                onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AreaScreen())),
-                style: TextButton.styleFrom(foregroundColor: context.ink, minimumSize: const Size(48, 44)),
-                icon: Icon(Icons.location_on_outlined, color: context.ink2),
-                label: Text(place.isEmpty ? 'Atur wilayah' : place, style: t.bodyLarge?.copyWith(fontSize: 16)),
+              // Wilayah & jabatan dari Nomor Darurat yang didaftarkan app klien (tidak diubah di sini).
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 24),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.badge_outlined, color: context.ink2, size: 20),
+                    const SizedBox(width: 6),
+                    Flexible(
+                      child: Text(me.identity, textAlign: TextAlign.center, style: t.bodyLarge?.copyWith(fontSize: 15)),
+                    ),
+                  ],
+                ),
               ),
             ),
             const SizedBox(height: 12),
@@ -380,24 +372,6 @@ IconData _roleIcon(String role) => switch (role) {
   'komunitas' => Icons.diversity_3_rounded,
   _ => Icons.person_rounded,
 };
-
-/// Pita gelombang merah melintang di belakang avatar.
-class _BandPainter extends CustomPainter {
-  @override
-  void paint(Canvas canvas, Size s) {
-    final w = s.width, h = s.height;
-    final band = Path()
-      ..moveTo(0, h * 0.25)
-      ..cubicTo(w * 0.3, h * 0.05, w * 0.55, h * 0.5, w, h * 0.0)
-      ..lineTo(w, h * 0.45)
-      ..cubicTo(w * 0.6, h * 0.95, w * 0.3, h * 0.55, 0, h * 0.95)
-      ..close();
-    canvas.drawPath(band, Paint()..shader = const LinearGradient(colors: [PK.redDark, PK.red, Color(0xFFE53935)]).createShader(Offset.zero & s));
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
-}
 
 class _Group extends StatelessWidget {
   const _Group({required this.children});

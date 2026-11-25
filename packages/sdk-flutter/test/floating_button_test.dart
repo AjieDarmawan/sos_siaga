@@ -192,7 +192,9 @@ void main() {
     expect(complaintBody['title'], 'Motor parkir liar');
     expect(complaintBody['location_text'], 'Gang Mawar, Blok C');
     expect(complaintBody['witness'], 'Pak RT 08123456789');
-    expect(complaintBody.containsKey('occurred_at'), isFalse); // tidak diisi → saat dikirim
+    // Sejak 05cc770 waktu kejadian terisi default "sekarang" (bisa diubah lewat date picker).
+    final occurred = DateTime.parse(complaintBody['occurred_at'] as String);
+    expect(DateTime.now().difference(occurred).inMinutes.abs() < 5, isTrue);
     expect(complaint?.kind, ReportKind.pengaduan);
     expect(s.requests.any((q) => q.url.path == '/v1/sdk/reports/rep-1/media/m-1/complete'), isTrue);
     await pumpFrames(tester, 4);
@@ -333,7 +335,7 @@ void main() {
     await tester.pumpWidget(const SizedBox());
   });
 
-  testWidgets('SOSFloatingButton: alur EWS tata-warga — sekali ketuk, sirene/SENYAP, rekam TKP + catatan', (tester) async {
+  testWidgets('SOSFloatingButton: alur EWS tata-warga — sekali ketuk, tanpa sirene lokal, rekam TKP + catatan', (tester) async {
     tester.view.physicalSize = const Size(400, 800);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
@@ -348,6 +350,7 @@ void main() {
         client: sos,
         holdSeconds: 0,
         sosLabel: 'EWS Alert',
+        // ignore: deprecated_member_use_from_same_package
         siren: siren,
         onCall: (_) {},
         onCapture: (context, kind, source) async {
@@ -364,21 +367,19 @@ void main() {
     await pumpFrames(tester, 8);
     expect(find.textContaining('tahan'), findsNothing); // tanpa tahan N detik
 
-    // Sekali ketuk → SOS terkirim, sirene mulai, ajakan rekam TKP muncul.
+    // Sekali ketuk → SOS terkirim, ajakan rekam TKP muncul. Sirene lokal TIDAK berbunyi lagi (penerima dapat push +
+    // sirene di app Polmas Keamanan, docs/POLMAS_KEAMANAN.md §9) walau app host masih mengoper `siren`.
     await tester.tap(find.text('EWS Alert'));
     await pumpFrames(tester, 8);
-    expect(siren.starts, 1);
+    expect(siren.starts, 0);
     expect(s.requests.where((q) => q.url.path == '/v1/sdk/reports').length, 1);
     expect(find.text('SOS terkirim'), findsOneWidget);
     expect(find.text('Rekam kondisi TKP?'), findsOneWidget);
     expect(find.text('Maks. 5 detik'), findsOneWidget);
 
-    // Tombol bulat menjadi SENYAP selama sirene berbunyi; "Matikan sirene" di popup juga mematikan.
-    expect(find.text('SENYAP'), findsOneWidget);
-    await tester.tap(find.byKey(const ValueKey('siagasos-tkp-mute')));
-    await tester.pump();
-    expect(siren.active.value, isFalse);
+    // Tanpa sirene: tidak ada tombol SENYAP maupun "Matikan sirene".
     expect(find.text('SENYAP'), findsNothing);
+    expect(find.byKey(const ValueKey('siagasos-tkp-mute')), findsNothing);
 
     // Rekam → catatan → kirim: video diunggah + catatan ke /notes.
     await tester.tap(find.byKey(const ValueKey('siagasos-tkp-record')));

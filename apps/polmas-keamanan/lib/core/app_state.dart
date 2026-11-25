@@ -3,9 +3,11 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'api.dart';
+import 'push.dart';
 import 'models.dart';
 
 /// State global: sesi, profil, tema, polling SOS masuk & notifikasi.
@@ -41,6 +43,26 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
   bool _resumed = true;
 
   bool get loggedIn => me != null && api.token != null;
+
+  /// Posisi HP penerima (hanya untuk jarak "± 350 m" ke lokasi SOS). Wilayah/peran TIDAK dari GPS, tapi dari Nomor Darurat.
+  ({double lat, double lng})? devicePos;
+  ({double lat, double lng})? get here => devicePos ?? me?.areaLocation;
+
+  /// Baca lokasi sekali bila izin sudah/diberikan; gagal = jarak tidak ditampilkan.
+  Future<void> refreshPosition() async {
+    try {
+      var perm = await Geolocator.checkPermission();
+      if (perm == LocationPermission.denied) perm = await Geolocator.requestPermission();
+      if (perm == LocationPermission.denied || perm == LocationPermission.deniedForever) return;
+      final p =
+          await Geolocator.getLastKnownPosition() ??
+          await Geolocator.getCurrentPosition(
+            locationSettings: const LocationSettings(accuracy: LocationAccuracy.medium, timeLimit: Duration(seconds: 10)),
+          );
+      devicePos = (lat: p.latitude, lng: p.longitude);
+      notifyListeners();
+    } catch (_) {}
+  }
 
   Future<void> init() async {
     final prefs = await SharedPreferences.getInstance();
@@ -104,6 +126,7 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
     savedPhone = phone;
     hasSavedPassword = true;
     _startPolling();
+    unawaited(_registerDevice());
     notifyListeners();
   }
 
@@ -115,6 +138,7 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
       final r = await api.post('/auth/login', {'phone': phone, 'password': pw}) as Map;
       api.token = r['token'] as String;
       me = Me(r['me'] as Map);
+      unawaited(_registerDevice());
       return true;
     } catch (_) {
       return _expire();
@@ -154,7 +178,27 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
     bump();
   }
 
+  String? _fcmToken;
+  StreamSubscription<String>? _tokenSub;
+
+  /// Daftarkan token FCM HP ini ke server supaya SOS yang memanggil nomor ini berbunyi walau app ditutup.
+  Future<void> _registerDevice([String? token]) async {
+    final t = token ?? await Push.token();
+    if (t == null || !loggedIn) return;
+    _fcmToken = t;
+    _tokenSub ??= Push.tokenChanges.listen(_registerDevice);
+    try {
+      await api.post('/me/device', {'fcm_token': t, 'platform': defaultTargetPlatform == TargetPlatform.iOS ? 'ios' : 'android'});
+    } catch (_) {}
+  }
+
   Future<void> logout() async {
+    // HP ini berhenti menerima SOS untuk nomor ini.
+    if (_fcmToken != null) {
+      try {
+        await api.post('/me/device/remove', {'fcm_token': _fcmToken});
+      } catch (_) {}
+    }
     try {
       await api.post('/auth/logout');
     } catch (_) {}
@@ -198,7 +242,7 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
   }
 
   Future<void> pollNow() async {
-    if (!loggedIn || !_resumed || me!.needsArea) return;
+    if (!loggedIn || !_resumed) return;
     try {
       final r = await api.get('/inbox') as Map;
       final wasOffline = !online;

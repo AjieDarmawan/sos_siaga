@@ -15,27 +15,38 @@ import { logger } from '../logger.js';
 const TIMEOUT_MS = 8000;
 export const SOS_CHANNEL_ID = 'siagasos_sos';
 
+/**
+ * Dua project Firebase: `pos` = app klien (satpam di POS, env FCM_SERVICE_ACCOUNT), `pk` = app Polmas Keamanan
+ * (project baru, env PK_FCM_SERVICE_ACCOUNT, channel `polmas_sos` + suara `siren`).
+ */
+export interface FcmProfile { env: string; channel: string; sound: string }
+export const POS_FCM: FcmProfile = { env: 'FCM_SERVICE_ACCOUNT', channel: SOS_CHANNEL_ID, sound: 'sos_siren' };
+export const PK_FCM: FcmProfile = { env: 'PK_FCM_SERVICE_ACCOUNT', channel: 'polmas_sos', sound: 'siren' };
+
 interface ServiceAccount { project_id: string; client_email: string; private_key: string; token_uri?: string }
 
-let account: ServiceAccount | null | undefined;
-let cached: { token: string; exp: number } | null = null;
+const accounts = new Map<string, ServiceAccount | null>();
+const tokens = new Map<string, { token: string; exp: number }>();
 
-function loadAccount(env = process.env): ServiceAccount | null {
-  if (account !== undefined) return account;
-  const raw = (env.FCM_SERVICE_ACCOUNT ?? '').trim();
+function loadAccount(profile: FcmProfile = POS_FCM, env = process.env): ServiceAccount | null {
+  if (accounts.has(profile.env)) return accounts.get(profile.env)!;
+  const raw = (env[profile.env] ?? '').trim();
+  let account: ServiceAccount | null;
   try {
     account = raw ? (JSON.parse(raw.startsWith('{') ? raw : readFileSync(raw, 'utf8')) as ServiceAccount) : null;
     if (account && !(account.project_id && account.client_email && account.private_key)) throw new Error('field service account tidak lengkap');
   } catch (err) {
-    logger.error({ err: (err as Error).message }, 'FCM_SERVICE_ACCOUNT tidak bisa dibaca, push SOS nonaktif');
+    logger.error({ err: (err as Error).message, env: profile.env }, 'service account FCM tidak bisa dibaca, push SOS nonaktif');
     account = null;
   }
+  accounts.set(profile.env, account);
   return account;
 }
 
-export const fcmConfigured = () => loadAccount() !== null;
+export const fcmConfigured = (profile: FcmProfile = POS_FCM) => loadAccount(profile) !== null;
 
 async function accessToken(sa: ServiceAccount): Promise<string> {
+  const cached = tokens.get(sa.client_email);
   if (cached && cached.exp - 60_000 > Date.now()) return cached.token;
   const tokenUri = sa.token_uri || 'https://oauth2.googleapis.com/token';
   const now = Math.floor(Date.now() / 1000);
@@ -52,8 +63,8 @@ async function accessToken(sa: ServiceAccount): Promise<string> {
   });
   if (!res.ok) throw new Error(`OAuth HTTP ${res.status}: ${(await res.text().catch(() => '')).slice(0, 200)}`);
   const body = (await res.json()) as { access_token: string; expires_in: number };
-  cached = { token: body.access_token, exp: Date.now() + body.expires_in * 1000 };
-  return cached.token;
+  tokens.set(sa.client_email, { token: body.access_token, exp: Date.now() + body.expires_in * 1000 });
+  return body.access_token;
 }
 
 export type PushResult = 'sent' | 'stub' | 'unregistered' | 'failed';
@@ -66,10 +77,10 @@ export interface SosPush {
 }
 
 /** Kirim satu push SOS ke satu token FCM. 'unregistered' = token mati, pemanggil sebaiknya menghapusnya. */
-export async function sendSosPush(token: string, msg: SosPush): Promise<PushResult> {
-  const sa = loadAccount();
+export async function sendSosPush(token: string, msg: SosPush, profile: FcmProfile = POS_FCM): Promise<PushResult> {
+  const sa = loadAccount(profile);
   if (!sa) {
-    logger.info({ title: msg.title, data: msg.data }, 'Push SOS (stub, FCM_SERVICE_ACCOUNT kosong)');
+    logger.info({ title: msg.title, data: msg.data, env: profile.env }, 'Push SOS (stub, service account FCM kosong)');
     return 'stub';
   }
   try {
@@ -85,8 +96,8 @@ export async function sendSosPush(token: string, msg: SosPush): Promise<PushResu
             priority: 'HIGH',
             ttl: '600s',
             notification: {
-              channel_id: SOS_CHANNEL_ID,
-              sound: 'sos_siren',
+              channel_id: profile.channel,
+              sound: profile.sound,
               notification_priority: 'PRIORITY_MAX',
               visibility: 'PUBLIC',
               default_vibrate_timings: true,

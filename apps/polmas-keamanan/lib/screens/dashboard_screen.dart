@@ -6,6 +6,7 @@ import '../core/app_state.dart';
 import '../core/format.dart';
 import '../core/models.dart';
 import '../theme/tokens.dart';
+import '../widgets/brand.dart';
 import '../widgets/charts.dart';
 import '../widgets/common.dart';
 import '../widgets/incident_map.dart';
@@ -61,15 +62,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
     return NestedScrollView(
       headerSliverBuilder: (context, _) => [
         SliverToBoxAdapter(
-          child: _Header(
-            firstName: _firstName(me.name),
-            place: [
-              if (me.area.district != null) 'Kec. ${me.area.district!.name}' else if (me.scope != null) 'Kec. ${me.scope!.name}',
-              if (me.area.village != null) 'Kel. ${me.area.village!.name}',
-            ].join(' - '),
-            role: me.roleLabel,
-            demo: me.isDemo,
-          ),
+          child: _Header(firstName: _firstName(me.name), place: me.identity, role: me.roleLabel, demo: me.isDemo),
         ),
         SliverToBoxAdapter(
           child: Transform.translate(
@@ -118,7 +111,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
           const _NewsTab(),
           const _ReportsTab(),
           const _VideoTab(),
-          _MapTab(center: me.areaLocation == null ? null : LatLng(me.areaLocation!.lat, me.areaLocation!.lng)),
+          _MapTab(center: AppScope.of(context).here == null ? null : LatLng(AppScope.of(context).here!.lat, AppScope.of(context).here!.lng)),
           const _TimeTab(),
         ],
       ),
@@ -141,9 +134,9 @@ class _Header extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final top = MediaQuery.of(context).padding.top;
-    final navy = context.isDark ? const Color(0xFF0A1C47) : PK.navy;
+    final navy = navyHeader(context);
     return CustomPaint(
-      painter: _HeaderWavePainter(navy: navy, bg: context.pageBg),
+      painter: NavyWavePainter(navy: navy, bg: context.pageBg),
       child: Padding(
         padding: EdgeInsets.fromLTRB(20, top + 14, 8, 44),
         child: Row(
@@ -168,15 +161,15 @@ class _Header extends StatelessWidget {
                   ),
                   const SizedBox(height: 6),
                   Semantics(
-                    label: 'Wilayah: ${place.isEmpty ? 'belum dikonfirmasi' : place}. Peran: $role',
+                    label: 'Anda sebagai: $place',
                     excludeSemantics: true,
                     child: Row(
                       children: [
-                        const Icon(Icons.location_on_rounded, color: Colors.white, size: 16),
+                        const Icon(Icons.badge_rounded, color: Colors.white, size: 16),
                         const SizedBox(width: 4),
                         Flexible(
                           child: Text(
-                            place.isEmpty ? 'Wilayah belum dikonfirmasi' : place,
+                            place,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w600),
@@ -194,34 +187,6 @@ class _Header extends StatelessWidget {
       ),
     );
   }
-}
-
-/// Latar header: navy, lalu pita gelombang merah melengkung di tepi bawah, di bawahnya warna halaman.
-class _HeaderWavePainter extends CustomPainter {
-  _HeaderWavePainter({required this.navy, required this.bg});
-  final Color navy, bg;
-  @override
-  void paint(Canvas canvas, Size s) {
-    final w = s.width, h = s.height;
-    canvas.drawRect(Offset.zero & s, Paint()..color = navy);
-    // tepi atas pita merah (naik ke kanan) dan tepi bawahnya (batas dengan halaman)
-    Path wave(double y0, double y1, double lift) => Path()
-      ..moveTo(0, y0)
-      ..cubicTo(w * 0.35, y0 + lift, w * 0.65, y1 - lift * 0.4, w, y1);
-    final red = wave(h - 30, h - 42, 10)
-      ..lineTo(w, h)
-      ..lineTo(0, h)
-      ..close();
-    canvas.drawPath(red, Paint()..shader = const LinearGradient(colors: [PK.redDark, PK.red, Color(0xFFE53935)]).createShader(Offset.zero & s));
-    final page = wave(h - 14, h - 24, 12)
-      ..lineTo(w, h + 1)
-      ..lineTo(0, h + 1)
-      ..close();
-    canvas.drawPath(page, Paint()..color = bg);
-  }
-
-  @override
-  bool shouldRepaint(_HeaderWavePainter old) => old.navy != navy || old.bg != bg;
 }
 
 class _ActiveSosBanner extends StatelessWidget {

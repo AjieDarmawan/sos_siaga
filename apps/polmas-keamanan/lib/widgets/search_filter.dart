@@ -4,9 +4,11 @@ import 'package:flutter/material.dart';
 
 import '../screens/home_shell.dart';
 import '../theme/tokens.dart';
+import 'brand.dart';
 import 'report_filters.dart';
 
-/// Judul layar besar (gaya mockup): "Riwayat", "Laporan", … + subjudul opsional + aksi kanan + lonceng.
+/// Header layar utama, seragam dengan Beranda: navy + pita gelombang merah, judul putih, subjudul, aksi, lonceng.
+/// Menjorok ke bawah status bar (jangan dibungkus SafeArea atas).
 class PageHeader extends StatelessWidget {
   const PageHeader({super.key, required this.title, this.subtitle, this.actions = const []});
   final String title;
@@ -14,26 +16,41 @@ class PageHeader extends StatelessWidget {
   final List<Widget> actions;
   @override
   Widget build(BuildContext context) {
-    final t = Theme.of(context).textTheme;
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 12, 8, 8),
-      child: Row(
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Semantics(
-                  header: true,
-                  child: Text(title, style: t.headlineSmall?.copyWith(fontSize: 30, fontWeight: FontWeight.w800)),
+    final top = MediaQuery.of(context).padding.top;
+    return CustomPaint(
+      painter: NavyWavePainter(navy: navyHeader(context), bg: context.pageBg),
+      child: Padding(
+        padding: EdgeInsets.fromLTRB(20, top + 10, 8, 40),
+        child: IconTheme(
+          data: const IconThemeData(color: Colors.white),
+          child: Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Semantics(
+                      header: true,
+                      child: Text(
+                        title,
+                        style: const TextStyle(color: Colors.white, fontSize: 26, fontWeight: FontWeight.w800),
+                      ),
+                    ),
+                    if (subtitle != null)
+                      Text(
+                        subtitle!,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(color: Colors.white70, fontSize: 13, fontWeight: FontWeight.w500),
+                      ),
+                  ],
                 ),
-                if (subtitle != null) Text(subtitle!, maxLines: 1, overflow: TextOverflow.ellipsis, style: t.bodySmall),
-              ],
-            ),
+              ),
+              ...actions,
+              const NotifBell(light: true),
+            ],
           ),
-          ...actions,
-          const NotifBell(),
-        ],
+        ),
       ),
     );
   }

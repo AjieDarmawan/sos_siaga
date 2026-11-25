@@ -20,6 +20,13 @@ class _HomeShellState extends State<HomeShell> {
   int _i = 0;
   final _visited = <int>{0};
 
+  @override
+  void initState() {
+    super.initState();
+    // Lokasi HP hanya untuk jarak ke SOS; tidak menentukan wilayah.
+    WidgetsBinding.instance.addPostFrameCallback((_) => AppScope.read(context).refreshPosition());
+  }
+
   static const _items = [
     (Icons.home_outlined, Icons.home_rounded, 'Beranda'),
     (Icons.assignment_outlined, Icons.assignment_rounded, 'Laporan'),

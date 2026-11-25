@@ -27,6 +27,11 @@ export const config = {
   maintenanceWorker: (process.env.MAINTENANCE_WORKER ?? 'true') === 'true',
   /** Worker Polmas Keamanan: isi kecamatan/kelurahan laporan dari GPS (reverse geocode, async). */
   polmasWorker: (process.env.POLMAS_WORKER ?? 'true') === 'true',
+  /**
+   * WhatsApp ke Penerima SOS + Nomor Darurat saat Emergency. Dimatikan sejak Polmas Keamanan (keputusan user
+   * 2026-11-25): kanal SOS = push FCM + sirene di app Polmas Keamanan. Set SOS_WHATSAPP=true hanya untuk rollback.
+   */
+  sosWhatsApp: (process.env.SOS_WHATSAPP ?? 'false') === 'true',
 
   /** Object storage S3-compatible (MinIO) untuk media laporan. Kosong = fitur media nonaktif (503 media_disabled). */
   s3: {

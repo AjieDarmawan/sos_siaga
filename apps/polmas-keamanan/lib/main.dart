@@ -1,7 +1,10 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:intl/date_symbol_data_local.dart';
 
 import 'core/app_state.dart';
+import 'core/push.dart';
 import 'core/models.dart';
 import 'screens/login_screen.dart';
 import 'screens/sos_call_screen.dart';
@@ -13,6 +16,8 @@ Future<void> main() async {
   await initializeDateFormatting('id');
   final state = AppState();
   await state.init();
+  // FCM: push SOS → cek inbox → layar panggilan. Tidak ditunggu supaya splash tidak tertahan.
+  unawaited(Push.init(onSos: state.pollNow));
   runApp(PolmasApp(state: state));
 }
 

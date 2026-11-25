@@ -5,7 +5,8 @@ import { api, ApiError } from '../lib/api';
 import { fmtDate } from '../lib/format';
 import type { ApiKey, App } from '../lib/types';
 import { TestModeNotice } from '../components/Layout';
-import { Alert, Badge, Button, Empty, KeyBox, Modal, Spinner, TextField, useLoad } from '../components/ui';
+import { PILLARS, PILLAR_EXAMPLES, PILLAR_LABELS, type Pillar } from '@siagasos/shared';
+import { Alert, Badge, Button, Empty, Field, KeyBox, Modal, Spinner, TextField, useLoad } from '../components/ui';
 
 export interface NewKeys { publishable: ApiKey; secret: ApiKey }
 
@@ -82,6 +83,7 @@ export function AppsPage() {
 function CreateAppModal({ onClose, onCreated }: { onClose: () => void; onCreated: (r: { app: App; keys: Record<string, NewKeys> }) => void }) {
   const [name, setName] = useState('');
   const [origin, setOrigin] = useState('');
+  const [pillar, setPillar] = useState<Pillar | ''>('');
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
@@ -91,7 +93,7 @@ function CreateAppModal({ onClose, onCreated }: { onClose: () => void; onCreated
     setErr(null);
     try {
       const r = await api<{ app: App; keys: Record<string, NewKeys> }>('/portal/apps', {
-        body: { name: name.trim(), allowed_origins: origin.trim() ? [origin.trim()] : [] },
+        body: { name: name.trim(), allowed_origins: origin.trim() ? [origin.trim()] : [], pillar: pillar || null },
       });
       onCreated(r);
     } catch (e) {
@@ -106,13 +108,30 @@ function CreateAppModal({ onClose, onCreated }: { onClose: () => void; onCreated
       <form className="stack" onSubmit={submit} id="create-app">
         {err && <Alert tone="error">{err}</Alert>}
         <TextField label="Nama app" placeholder="mis. Aplikasi Karyawan" required minLength={2} value={name} onChange={(e) => setName(e.target.value)} />
+        <PillarSelect value={pillar} onChange={setPillar} required />
         <TextField label="Origin web" hint="Domain tempat SDK web dipasang, mis. https://app.perusahaan.co.id. Bisa ditambah nanti." placeholder="https://" value={origin} onChange={(e) => setOrigin(e.target.value)} />
         <div className="row" style={{ justifyContent: 'flex-end' }}>
           <Button type="button" onClick={onClose}>Batal</Button>
-          <Button variant="primary" type="submit" loading={busy} disabled={name.trim().length < 2}>Buat app</Button>
+          <Button variant="primary" type="submit" loading={busy} disabled={name.trim().length < 2 || !pillar}>Buat app</Button>
         </div>
       </form>
     </Modal>
+  );
+}
+
+/**
+ * "Aplikasi ini untuk apa?": 5 pilar SiagaSOS. Menentukan ekosistem laporan di Polmas Keamanan, pilihan jabatan
+ * Nomor Darurat di SDK, dan analitik per pilar.
+ */
+export function PillarSelect({ value, onChange, required }: { value: Pillar | ''; onChange: (p: Pillar | '') => void; required?: boolean }) {
+  return (
+    <Field label="Aplikasi ini untuk apa?" htmlFor="pillar"
+      hint={value ? `Contoh: ${PILLAR_EXAMPLES[value]}. Menentukan jabatan Nomor Darurat di SDK dan ekosistem laporan di Polmas Keamanan.` : 'Pilih satu dari 5 pilar. Dipakai untuk analitik per ekosistem dan pilihan jabatan Nomor Darurat.'}>
+      <select id="pillar" className="select" value={value} required={required} onChange={(e) => onChange(e.target.value as Pillar | '')}>
+        <option value="">Pilih pilar…</option>
+        {PILLARS.map((p) => <option key={p} value={p}>{PILLAR_LABELS[p]}: {PILLAR_EXAMPLES[p]}</option>)}
+      </select>
+    </Field>
   );
 }
 

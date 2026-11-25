@@ -1,14 +1,14 @@
 import { useState, type FormEvent, type KeyboardEvent } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { ArrowLeft, ArrowsClockwise, Key, Plus, Prohibit, Trash, WhatsappLogo, X } from '@phosphor-icons/react';
-import { DEFAULT_CATEGORIES, DEFAULT_COMPLAINT_CATEGORIES } from '@siagasos/shared';
+import { DEFAULT_CATEGORIES, DEFAULT_COMPLAINT_CATEGORIES, type Pillar } from '@siagasos/shared';
 import { api, ApiError } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { catLabel, fmtAgo, fmtDate } from '../lib/format';
 import type { ApiKey, App, SdkConfig } from '../lib/types';
 import { TestModeNotice } from '../components/Layout';
 import { Alert, Badge, Button, CopyButton, Empty, Field, KeyBox, Modal, Spinner, TextField, useLoad, useToast } from '../components/ui';
-import { NewKeysModal, type NewKeys } from './Apps';
+import { NewKeysModal, PillarSelect, type NewKeys } from './Apps';
 
 type Tab = 'keys' | 'settings' | 'recipients' | 'sources' | 'webhooks';
 const TABS: [Tab, string][] = [['keys', 'Kunci API'], ['settings', 'Pengaturan'], ['recipients', 'Penerima SOS'], ['sources', 'Source'], ['webhooks', 'Log webhook']];
@@ -230,6 +230,7 @@ function SettingsTab({ app, onSaved }: { app: App; onSaved: (a: App) => void }) 
   const [f, setF] = useState({
     name: app.name, allowed_origins: app.allowed_origins, allowed_bundle_ids: app.allowed_bundle_ids,
     webhook_url: app.webhook_url ?? '', auto_create_sources: app.auto_create_sources, retention_days: app.retention_days ?? null,
+    pillar: (app.pillar ?? '') as Pillar | '',
   });
   const cfg0: SdkConfig = app.sdk_config ?? {};
   const [cfg, setCfg] = useState({
@@ -252,7 +253,7 @@ function SettingsTab({ app, onSaved }: { app: App; onSaved: (a: App) => void }) 
       if (cfg.fallback_phone) sdk_config.fallback_phone = cfg.fallback_phone;
       const a = await api<App>(`/portal/apps/${app.id}`, {
         method: 'PATCH',
-        body: { ...f, name: f.name.trim(), webhook_url: f.webhook_url.trim() || null, sdk_config },
+        body: { ...f, pillar: f.pillar || null, name: f.name.trim(), webhook_url: f.webhook_url.trim() || null, sdk_config },
       });
       onSaved(a);
       toast('Pengaturan disimpan');
@@ -300,6 +301,13 @@ function SettingsTab({ app, onSaved }: { app: App; onSaved: (a: App) => void }) 
                   }}><Key size={14} />Tampilkan webhook secret</Button>}
             </div>
             <p className="small muted">Verifikasi header <code>X-SOS-Signature: t=&lt;unix&gt;,v1=&lt;hex&gt;</code> dengan HMAC-SHA256(secret, "&lt;t&gt;.&lt;raw body&gt;").</p>
+          </div>
+        </div>
+
+        <div className="card">
+          <div className="card-head"><div><h2>Pilar aplikasi</h2><p>Ekosistem laporan di Polmas Keamanan, pilihan jabatan Nomor Darurat di SDK, dan analitik per pilar.</p></div></div>
+          <div className="card-body">
+            <PillarSelect value={f.pillar} onChange={(p) => setF({ ...f, pillar: p })} />
           </div>
         </div>
 

@@ -23,21 +23,24 @@ class _HistoryScreenState extends State<HistoryScreen> {
     final scope = AppScope.of(context).me!.scope;
     return Scaffold(
       body: SafeArea(
+        top: false,
         bottom: false,
         child: Column(
           children: [
             const PageHeader(title: 'Riwayat'),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: _Segmented(labels: ['Saya', scope != null ? 'Kecamatan' : 'Wilayah'], index: _seg, onChanged: (i) => setState(() => _seg = i)),
-            ),
+            // Tab Kecamatan hanya untuk yang punya wilayah tugas (Bhabinkamtibmas dari Nomor Darurat).
+            if (scope != null)
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: _Segmented(labels: ['Saya', 'Kec. ${scope.name}'], index: _seg, onChanged: (i) => setState(() => _seg = i)),
+              ),
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
               child: SearchFilterRow(value: _f, onChanged: (f) => setState(() => _f = f)),
             ),
             Expanded(
               child: IndexedStack(
-                index: _seg,
+                index: scope == null ? 0 : _seg,
                 children: [
                   ReportList(
                     endpoint: '/history',

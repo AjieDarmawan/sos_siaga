@@ -13,7 +13,7 @@ import '../core/models.dart';
 import '../theme/tokens.dart';
 import '../widgets/charts.dart';
 import '../widgets/common.dart';
-import 'home_shell.dart';
+import '../widgets/search_filter.dart';
 import 'incident_screen.dart';
 
 /// Analisa & Evaluasi (FR-19, FR-20, FR-21): pilihan periode, kartu ringkasan, tren harian, per kelurahan, jenis
@@ -91,61 +91,58 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
     final me = AppScope.of(context).me!;
     final t = Theme.of(context).textTheme;
     return Scaffold(
-      body: SafeArea(
-        bottom: false,
-        child: RefreshIndicator(
-          onRefresh: _load,
-          child: ListView(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
-            children: [
-              Row(
-                children: [
-                  Expanded(
-                    child: Semantics(
-                      header: true,
-                      child: Text('Analisa', style: t.headlineSmall?.copyWith(fontSize: 30, fontWeight: FontWeight.w800)),
-                    ),
-                  ),
-                  IconButton(tooltip: 'Bagikan ringkasan (PDF)', icon: const Icon(Icons.ios_share_rounded), onPressed: _sum == null ? null : () => _share(me)),
-                  const NotifBell(),
-                ],
-              ),
-              const SizedBox(height: 8),
-              Row(
-                children: [
-                  Expanded(
-                    child: _PeriodSegment(value: _period, onChanged: _pickPeriod),
-                  ),
-                  const SizedBox(width: 8),
-                  Material(
-                    color: _period == 'custom' ? PK.red : (context.isDark ? PK.darkSurface : const Color(0xFFF1F3F6)),
-                    borderRadius: BorderRadius.circular(12),
-                    child: IconButton(
-                      tooltip: 'Periode kustom',
-                      onPressed: () => _pickPeriod('custom'),
-                      icon: Icon(Icons.date_range_rounded, color: _period == 'custom' ? Colors.white : context.ink),
-                    ),
-                  ),
-                ],
-              ),
-              if (_period == 'custom')
-                Padding(
-                  padding: const EdgeInsets.only(top: 6),
-                  child: Text(_periodLabel, style: t.bodySmall),
-                ),
-              const SizedBox(height: 12),
-              if (_loading && _sum == null)
-                const Padding(
-                  padding: EdgeInsets.all(48),
-                  child: Center(child: CircularProgressIndicator()),
-                )
-              else if (_error != null && _sum == null)
-                ErrorState(message: _error!, onRetry: _load)
-              else
-                AnimatedOpacity(opacity: _loading ? 0.5 : 1, duration: const Duration(milliseconds: 150), child: _content(me)),
+      body: Column(
+        children: [
+          PageHeader(
+            title: 'Analisa',
+            subtitle: me.scope != null ? 'SOS untuk Anda + Kec. ${me.scope!.name}' : 'SOS yang memanggil nomor Anda',
+            actions: [
+              IconButton(tooltip: 'Bagikan ringkasan (PDF)', icon: const Icon(Icons.ios_share_rounded), onPressed: _sum == null ? null : () => _share(me)),
             ],
           ),
-        ),
+          Expanded(
+            child: RefreshIndicator(
+              onRefresh: _load,
+              child: ListView(
+                padding: const EdgeInsets.fromLTRB(16, 4, 16, 32),
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _PeriodSegment(value: _period, onChanged: _pickPeriod),
+                      ),
+                      const SizedBox(width: 8),
+                      Material(
+                        color: _period == 'custom' ? PK.red : (context.isDark ? PK.darkSurface : const Color(0xFFF1F3F6)),
+                        borderRadius: BorderRadius.circular(12),
+                        child: IconButton(
+                          tooltip: 'Periode kustom',
+                          onPressed: () => _pickPeriod('custom'),
+                          icon: Icon(Icons.date_range_rounded, color: _period == 'custom' ? Colors.white : context.ink),
+                        ),
+                      ),
+                    ],
+                  ),
+                  if (_period == 'custom')
+                    Padding(
+                      padding: const EdgeInsets.only(top: 6),
+                      child: Text(_periodLabel, style: t.bodySmall),
+                    ),
+                  const SizedBox(height: 12),
+                  if (_loading && _sum == null)
+                    const Padding(
+                      padding: EdgeInsets.all(48),
+                      child: Center(child: CircularProgressIndicator()),
+                    )
+                  else if (_error != null && _sum == null)
+                    ErrorState(message: _error!, onRetry: _load)
+                  else
+                    AnimatedOpacity(opacity: _loading ? 0.5 : 1, duration: const Duration(milliseconds: 150), child: _content(me)),
+                ],
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

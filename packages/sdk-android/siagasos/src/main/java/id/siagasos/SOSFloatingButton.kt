@@ -123,6 +123,7 @@ class SOSFloatingButton private constructor(private val app: Application, val cl
         var complaint: Boolean = true
         var history: Boolean = true
         var emergencyContacts: Boolean = true
+        @Deprecated("Sirene lokal tidak dibunyikan lagi; penerima mendapat push + sirene di app Polmas Keamanan.")
         var siren: SosSiren? = null
         /** Ajakan "Rekam kondisi TKP?" setelah SOS terkirim (butuh [onCapture]). */
         var tkpPrompt: Boolean = true
@@ -247,7 +248,8 @@ class SOSFloatingButton private constructor(private val app: Application, val cl
     internal fun fire(view: View) {
         if (sending) return
         view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
-        options.siren?.start() // alarm panik tanpa menunggu server
+        // Sirene lokal di HP pelapor dimatikan sejak Polmas Keamanan (docs/POLMAS_KEAMANAN.md §9): yang berbunyi adalah
+        // HP penerima lewat push FCM. Options.siren tetap diterima supaya app host lama tetap terkompilasi.
         sending = true
         render()
         client.trigger(options.category, options.message) { res ->

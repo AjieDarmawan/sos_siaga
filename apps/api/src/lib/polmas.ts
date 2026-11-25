@@ -1,7 +1,9 @@
 import { createHash, randomBytes } from 'node:crypto';
+import { PILLAR_LABELS } from '@siagasos/shared';
 import { withPlatform, type Db } from '../db.js';
 import { logger } from '../logger.js';
 import { reverseRegion } from './regions.js';
+import { PK_FCM, sendSosPush } from './fcm.js';
 
 /**
  * Polmas Keamanan: aplikasi penerima SOS & laporan dari aplikasi sumber Polmas Digital (apps.polmas_source).
@@ -10,9 +12,8 @@ import { reverseRegion } from './regions.js';
 
 export const PK_ROLES = ['penerima', 'warga', 'kantor', 'umkm', 'sekolah', 'komunitas', 'bhabinkamtibmas'] as const;
 export type PkRole = (typeof PK_ROLES)[number];
-export const SOURCE_LABEL: Record<string, string> = {
-  warga: 'Polmas Warga', kantor: 'Polmas Kantor', umkm: 'Polmas UMKM', sekolah: 'Polmas Sekolah', komunitas: 'Polmas Komunitas',
-};
+/** Nama pilar untuk kolom Ekosistem (UMKM, Lingkungan, Perkantoran, Pendidikan, Komunitas). */
+export const SOURCE_LABEL: Record<string, string> = PILLAR_LABELS;
 export const ROLE_LABEL: Record<PkRole, string> = {
   penerima: 'Penerima darurat', warga: 'Warga', kantor: 'Kantor', umkm: 'UMKM', sekolah: 'Sekolah', komunitas: 'Komunitas', bhabinkamtibmas: 'Bhabinkamtibmas',
 };
@@ -188,12 +189,13 @@ export async function audit(c: Db, userId: string | null, action: string, report
 
 export interface ContactRow {
   name: string; role: string | null; area: PkArea | null; app_name: string; source_label: string | null; reporter_name: string | null;
+  polmas_source: string | null;
 }
 
 /** Semua baris Nomor Darurat aktif untuk nomor ini, lintas app (commerceOS, tata-warga, …). */
 export async function contactRows(c: Db, phone: string): Promise<ContactRow[]> {
   return (await c.query<ContactRow>(
-    `SELECT e.name, e.role, e.area, a.name AS app_name, s.label AS source_label, e.reporter_name
+    `SELECT e.name, e.role, e.area, a.name AS app_name, a.polmas_source, s.label AS source_label, e.reporter_name
      FROM emergency_contacts e JOIN apps a ON a.id = e.app_id LEFT JOIN sources s ON s.id = e.source_id
      WHERE e.phone = $1 AND e.active AND a.disabled_at IS NULL ORDER BY e.updated_at DESC`, [phone])).rows;
 }
@@ -209,7 +211,12 @@ export async function syncContactRoles(c: Db, userId: string, phone: string) {
   const rows = await contactRows(c, phone);
   const want: { role: PkRole; kec: string | null; unit: string }[] = [];
   if (rows.length) {
-    const labels = [...new Set(rows.map((r) => [r.role, r.source_label ?? r.reporter_name ?? r.app_name].filter(Boolean).join(' · ')))];
+    // Mis. "Satpam · Toko Roti Sinar Jaya (UMKM)": jabatan · tempat (pilar). Tampil di header Beranda & Profil.
+    const labels = [...new Set(rows.map((r) => {
+      const base = [r.role, r.source_label ?? r.reporter_name ?? r.app_name].filter(Boolean).join(' · ');
+      const pillar = r.polmas_source ? PILLAR_LABELS[r.polmas_source as keyof typeof PILLAR_LABELS] : null;
+      return pillar ? `${base} (${pillar})` : base;
+    }))];
     const unit = labels.length > 2 ? `${labels.slice(0, 2).join(', ')} +${labels.length - 2}` : labels.join(', ');
     want.push({ role: 'penerima', kec: null, unit: unit.slice(0, 120) });
   }
@@ -241,6 +248,69 @@ export async function syncContactRoles(c: Db, userId: string, phone: string) {
   return rows;
 }
 
+// ---------------------------------------------------------------- push SOS ke app Polmas Keamanan
+
+/**
+ * Push FCM + sirene ke app Polmas Keamanan untuk SOS live: pemilik Nomor Darurat yang dipanggil (snapshot
+ * reports.emergency_contacts) dan Bhabinkamtibmas kecamatan kejadian (bila sudah diketahui). Satu pengguna sekali per
+ * SOS (pk_push_log). Dipanggil setelah respons SOS dan lagi setelah worker mengisi kecamatan. Tidak pernah melempar.
+ */
+export async function dispatchPkPush(report: { id: string }, appName?: string): Promise<void> {
+  try {
+    const plan = await withPlatform(async (c) => {
+      const r = (await c.query(
+        `SELECT r.id, r.account_id, r.kind, r.mode, r.status, r.reporter_name, r.emergency_contacts, r.kecamatan_code, r.created_at,
+                a.name AS app_name, a.polmas_source, s.label AS source_label, wl.nama AS kelurahan_name
+         FROM reports r JOIN apps a ON a.id = r.app_id LEFT JOIN sources s ON s.id = r.source_id LEFT JOIN wilayah wl ON wl.kode = r.kelurahan_code
+         WHERE r.id = $1`, [report.id])).rows[0];
+      if (!r || r.kind !== 'sos' || r.mode !== 'live' || r.status !== 'open') return null;
+      if (Date.now() - new Date(r.created_at).getTime() > 30 * 60_000) return null;
+      const phones = Array.isArray(r.emergency_contacts) ? r.emergency_contacts.map((x: any) => x?.phone).filter(Boolean) : [];
+      const users = (await c.query(
+        `SELECT u.id, 'contact' AS reason FROM pk_users u WHERE u.phone = ANY($1::text[]) AND u.disabled_at IS NULL
+         UNION
+         SELECT ro.user_id, 'kecamatan' FROM pk_user_roles ro JOIN pk_users u ON u.id = ro.user_id
+         WHERE $2::text IS NOT NULL AND $3::boolean AND ro.role = 'bhabinkamtibmas' AND ro.kecamatan_code = $2 AND u.disabled_at IS NULL`,
+        [phones, r.kecamatan_code, r.polmas_source != null])).rows as { id: string; reason: 'contact' | 'kecamatan' }[];
+      const done = new Set((await c.query(`SELECT user_id FROM pk_push_log WHERE report_id = $1`, [r.id])).rows.map((x) => x.user_id));
+      const todo = new Map<string, 'contact' | 'kecamatan'>();
+      for (const u of users) if (!done.has(u.id) && !todo.has(u.id)) todo.set(u.id, u.reason);
+      if (!todo.size) return null;
+      const devices = (await c.query(`SELECT user_id, fcm_token FROM pk_devices WHERE user_id = ANY($1::uuid[])`, [[...todo.keys()]])).rows;
+      return { r, todo, devices };
+    });
+    if (!plan) return;
+    const { r, todo, devices } = plan;
+    const msg = {
+      title: `SOS dari ${r.reporter_name ?? 'Warga'}`,
+      body: [SOURCE_LABEL[r.polmas_source] ?? appName ?? r.app_name, r.source_label, r.kelurahan_name ? `Kel. ${r.kelurahan_name}` : null].filter(Boolean).join(' · '),
+      data: { type: 'sos', report_id: r.id },
+    };
+    const results = new Map<string, string>();
+    const dead: string[] = [];
+    for (const d of devices) {
+      const res = await sendSosPush(d.fcm_token, msg, PK_FCM);
+      if (res === 'unregistered') dead.push(d.fcm_token);
+      // Satu HP berhasil sudah cukup untuk pengguna itu.
+      if (results.get(d.user_id) !== 'sent') results.set(d.user_id, res);
+    }
+    await withPlatform(async (c) => {
+      if (dead.length) await c.query(`DELETE FROM pk_devices WHERE fcm_token = ANY($1::text[])`, [dead]);
+      for (const [userId, reason] of todo) {
+        await c.query(
+          `INSERT INTO pk_push_log (report_id, user_id, reason, result) VALUES ($1,$2,$3,$4) ON CONFLICT (report_id, user_id) DO NOTHING`,
+          [r.id, userId, reason, results.get(userId) ?? 'no_device']);
+      }
+      const sent = [...results.values()].filter((x) => x === 'sent' || x === 'stub').length;
+      await c.query(
+        `INSERT INTO report_events (report_id, account_id, actor_kind, type, note) VALUES ($1,$2,'system','push',$3)`,
+        [r.id, r.account_id, `Polmas Keamanan: push SOS ke ${sent} dari ${todo.size} penerima${todo.size - results.size ? ` (${todo.size - results.size} belum memasang app)` : ''}`]);
+    });
+  } catch (err) {
+    logger.error({ err, reportId: report.id }, 'dispatchPkPush gagal');
+  }
+}
+
 // ---------------------------------------------------------------- worker wilayah
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -264,7 +334,11 @@ export async function fillReportAreas(limit = 5): Promise<number> {
       `UPDATE reports SET area_checked_at = now(), kecamatan_code = $2, kelurahan_code = $3, area_source = CASE WHEN $2::text IS NULL THEN NULL ELSE 'gps' END
        WHERE id = $1 AND kecamatan_code IS NULL`,
       [r.id, m?.district?.code ?? null, m?.village?.code ?? null]));
-    if (m?.district) filled++;
+    if (m?.district) {
+      filled++;
+      // SOS yang masih terbuka: Bhabinkamtibmas kecamatan ini ikut dikirimi push (kontak darurat sudah lebih dulu).
+      void dispatchPkPush({ id: r.id });
+    }
   }
   return filled;
 }

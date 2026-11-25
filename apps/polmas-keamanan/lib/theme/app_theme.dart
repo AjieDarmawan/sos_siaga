@@ -1,4 +1,5 @@
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
@@ -38,13 +39,17 @@ ThemeData buildTheme(Brightness b) {
     textTheme: text,
     dividerColor: dark ? PK.darkLine : PK.line,
     dividerTheme: DividerThemeData(color: dark ? PK.darkLine : PK.line, thickness: 1, space: 1),
+    // App bar seragam dengan header Beranda: navy, teks & ikon putih.
     appBarTheme: AppBarTheme(
-      backgroundColor: dark ? PK.darkBg : PK.bg,
-      foregroundColor: ink,
+      backgroundColor: dark ? const Color(0xFF0A1C47) : PK.navy,
+      foregroundColor: Colors.white,
+      iconTheme: const IconThemeData(color: Colors.white),
+      actionsIconTheme: const IconThemeData(color: Colors.white),
       elevation: 0,
       scrolledUnderElevation: 0,
-      centerTitle: false,
-      titleTextStyle: text.titleLarge,
+      centerTitle: true,
+      systemOverlayStyle: SystemUiOverlayStyle.light,
+      titleTextStyle: text.titleLarge?.copyWith(color: Colors.white, fontWeight: FontWeight.w800),
     ),
     inputDecorationTheme: InputDecorationTheme(
       filled: true,

@@ -315,3 +315,32 @@ class _SkylinePainter extends CustomPainter {
   @override
   bool shouldRepaint(_SkylinePainter old) => old.dark != dark || old.grey != grey;
 }
+
+/// Latar header navy dengan pita gelombang merah di tepi bawah (Beranda & semua layar utama).
+class NavyWavePainter extends CustomPainter {
+  NavyWavePainter({required this.navy, required this.bg});
+  final Color navy, bg;
+  @override
+  void paint(Canvas canvas, Size s) {
+    final w = s.width, h = s.height;
+    canvas.drawRect(Offset.zero & s, Paint()..color = navy);
+    Path wave(double y0, double y1, double lift) => Path()
+      ..moveTo(0, y0)
+      ..cubicTo(w * 0.35, y0 + lift, w * 0.65, y1 - lift * 0.4, w, y1);
+    final red = wave(h - 30, h - 42, 10)
+      ..lineTo(w, h)
+      ..lineTo(0, h)
+      ..close();
+    canvas.drawPath(red, Paint()..shader = const LinearGradient(colors: [PK.redDark, PK.red, Color(0xFFE53935)]).createShader(Offset.zero & s));
+    final page = wave(h - 14, h - 24, 12)
+      ..lineTo(w, h + 1)
+      ..lineTo(0, h + 1)
+      ..close();
+    canvas.drawPath(page, Paint()..color = bg);
+  }
+
+  @override
+  bool shouldRepaint(NavyWavePainter old) => old.navy != navy || old.bg != bg;
+}
+
+Color navyHeader(BuildContext context) => context.isDark ? const Color(0xFF0A1C47) : PK.navy;

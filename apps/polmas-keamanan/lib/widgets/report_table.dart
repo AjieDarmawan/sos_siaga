@@ -13,7 +13,7 @@ enum ReportField {
   noHp('No HP', Icons.phone_outlined),
   ekosistem('Ekosistem', Icons.layers_outlined),
   dariSiapa('Dari Siapa', Icons.person_outline_rounded),
-  video('Video', Icons.smart_display_outlined),
+  media('Foto/Video', Icons.perm_media_outlined),
   lokasi('Lokasi', Icons.location_on_outlined),
   waktu('Waktu', Icons.calendar_today_outlined),
   status('Status', Icons.check_circle_outline_rounded),
@@ -164,15 +164,19 @@ class ReportFieldsCard extends StatelessWidget {
                             [if (r.placeLine.isNotEmpty) r.placeLine else 'Belum diketahui', ?dist].join(' · '),
                             onTap: r.location != null ? () => _openMap(r) : null,
                           ),
-                          cell(
-                            ReportField.video,
-                            r.videoCount > 0 ? '${r.videoCount} video' : (r.imageCount > 0 ? 'Tidak ada (${r.imageCount} foto)' : 'Tidak ada'),
-                            color: r.videoCount > 0 ? context.danger : null,
-                            muted: r.videoCount == 0,
-                          ),
                         ],
                       );
                     },
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Icon(ReportField.media.icon, size: 16, color: context.ink2),
+                      const SizedBox(width: 6),
+                      Text(ReportField.media.label, style: t.labelSmall?.copyWith(color: context.ink2, fontSize: 12)),
+                      const SizedBox(width: 10),
+                      Expanded(child: MediaThumbs(report: r, size: 48)),
+                    ],
                   ),
                   const SizedBox(height: 10),
                   // Tindak Lanjut
@@ -276,10 +280,10 @@ class ReportTable extends StatelessWidget {
     ReportField.noHp: 140.0,
     ReportField.ekosistem: 170.0,
     ReportField.dariSiapa: 150.0,
-    ReportField.video: 110.0,
+    ReportField.media: 150.0,
     ReportField.lokasi: 190.0,
     ReportField.waktu: 150.0,
-    ReportField.status: 130.0,
+    ReportField.status: 150.0,
     ReportField.tindakLanjut: 220.0,
   };
 
@@ -352,18 +356,7 @@ class ReportTable extends StatelessWidget {
                   ),
                   cellBox(ReportField.ekosistem, txt(_ecosystem(r))),
                   cellBox(ReportField.dariSiapa, txt(r.isMine ? '${r.reporterName} (Anda)' : r.reporterName, w: FontWeight.w600)),
-                  cellBox(
-                    ReportField.video,
-                    r.videoCount > 0
-                        ? Row(
-                            children: [
-                              Icon(Icons.play_circle_fill_rounded, size: 18, color: context.danger),
-                              const SizedBox(width: 4),
-                              txt('${r.videoCount} video', w: FontWeight.w700),
-                            ],
-                          )
-                        : txt('–', c: context.ink2),
-                  ),
+                  cellBox(ReportField.media, MediaThumbs(report: r, size: 40)),
                   cellBox(
                     ReportField.lokasi,
                     InkWell(
@@ -447,6 +440,63 @@ class ReportTable extends StatelessWidget {
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// Gambar mini bukti: foto pertama (bila ada) + ringkasan "2 foto · 1 video"; tanpa bukti = "Belum ada".
+class MediaThumbs extends StatelessWidget {
+  const MediaThumbs({super.key, required this.report, this.size = 44});
+  final Report report;
+  final double size;
+  @override
+  Widget build(BuildContext context) {
+    final r = report;
+    final parts = [if (r.imageCount > 0) '${r.imageCount} foto', if (r.videoCount > 0) '${r.videoCount} video'];
+    if (parts.isEmpty) {
+      return Text('Belum ada', style: Theme.of(context).textTheme.bodySmall?.copyWith(color: context.ink2, fontSize: 13));
+    }
+    final tile = ClipRRect(
+      borderRadius: BorderRadius.circular(8),
+      child: SizedBox(
+        width: size,
+        height: size,
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            if (r.thumbUrl != null)
+              Image.network(
+                r.thumbUrl!,
+                fit: BoxFit.cover,
+                errorBuilder: (_, _, _) => const ColoredBox(color: Color(0xFF1F2937)),
+              )
+            else
+              const ColoredBox(color: Color(0xFF1F2937)),
+            if (r.thumbUrl == null || r.videoCount > 0)
+              Center(
+                child: Icon(r.videoCount > 0 ? Icons.play_circle_fill_rounded : Icons.photo_rounded, color: Colors.white, size: size * 0.5),
+              ),
+          ],
+        ),
+      ),
+    );
+    return Semantics(
+      label: 'Bukti: ${parts.join(', ')}',
+      excludeSemantics: true,
+      child: Row(
+        children: [
+          tile,
+          const SizedBox(width: 8),
+          Flexible(
+            child: Text(
+              parts.join(' · '),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(fontSize: 13, fontWeight: FontWeight.w700, color: context.ink),
+            ),
+          ),
+        ],
       ),
     );
   }

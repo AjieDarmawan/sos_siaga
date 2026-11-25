@@ -1,16 +1,22 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <!-- API, peta OSM, bukti foto/video -->
     <uses-permission android:name="android.permission.INTERNET" />
-    <!-- Konfirmasi wilayah dari GPS (FR-03) -->
+    <!-- Jarak ke lokasi SOS (wilayah tidak dari GPS, tapi dari Nomor Darurat) -->
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <!-- Getar saat panggilan SOS masuk (FR-04) -->
     <uses-permission android:name="android.permission.VIBRATE" />
+    <!-- Notifikasi push SOS (Android 13+) -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <application
         android:label="Polmas Keamanan"
         android:usesCleartextTraffic="true"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
+        <!-- Push SOS dari server memakai kanal ini (dibuat MainActivity dengan suara res/raw/siren). -->
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_channel_id"
+            android:value="polmas_sos" />
         <activity
             android:name=".MainActivity"
             android:exported="true"

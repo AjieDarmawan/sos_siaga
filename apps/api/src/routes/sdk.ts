@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import cors from 'cors';
-import { createReportSchema, locationUpdateSchema, DEFAULT_CATEGORIES, DEFAULT_COMPLAINT_CATEGORIES, TERMINAL_STATUSES, type SdkConfig } from '@siagasos/shared';
+import { createReportSchema, locationUpdateSchema, DEFAULT_CATEGORIES, DEFAULT_COMPLAINT_CATEGORIES, TERMINAL_STATUSES, PILLAR_CONTACT_ROLES, PILLAR_LABELS, type Pillar, type SdkConfig } from '@siagasos/shared';
 import { withTenant } from '../db.js';
 import { ApiError, parse } from '../lib/errors.js';
 import { enforce, hit } from '../lib/rateLimit.js';
@@ -10,6 +10,7 @@ import { publish } from '../lib/realtime.js';
 import { dispatchSosWhatsApp } from '../lib/sosRecipients.js';
 import { config } from '../config.js';
 import { dispatchSosPush } from '../lib/responders.js';
+import { dispatchPkPush } from '../lib/polmas.js';
 import { contactsRouter, responderRouter } from './responder.js';
 import { regionsRouter } from './regions.js';
 import { completeMediaUpload, createMediaSchema, createMediaUpload, listReadyMedia } from '../lib/media.js';
@@ -45,6 +46,10 @@ sdkRouter.get('/config', (req, res) => {
     recipient_text: c.recipient_text ?? `Laporan dikirim ke tim keamanan ${k.appName}, bukan ke polisi/110.`,
     fallback_phone: c.fallback_phone ?? '110',
     live_location_interval_s: c.live_location_interval_s ?? 15,
+    pillar: (k.pillar as Pillar | null) ?? null,
+    pillar_label: k.pillar ? PILLAR_LABELS[k.pillar as Pillar] ?? null : null,
+    // Tanpa pilar: gabungan jabatan umum supaya SDK tetap bisa menampilkan dropdown.
+    contact_roles: [...(k.pillar ? PILLAR_CONTACT_ROLES[k.pillar as Pillar] ?? [] : ['Pemilik', 'Satpam', 'Keluarga', 'Bhabinkamtibmas'])],
   };
   res.set('Cache-Control', 'private, max-age=300').json(body);
 });
@@ -127,11 +132,13 @@ sdkRouter.post('/reports', async (req, res) => {
   });
 
   res.status(result.replay ? 200 : 201).set('Idempotent-Replayed', String(result.replay)).json(publicReport(result.report));
-  // Setelah commit & respons: WA ke Penerima SOS + kontak darurat. Tidak ditunggu, tidak memblokir jalur SOS.
+  // Setelah commit & respons, tidak ditunggu & tidak memblokir jalur SOS:
+  // push FCM + sirene ke app Polmas Keamanan milik Nomor Darurat yang dipanggil (kanal utama, docs/POLMAS_KEAMANAN.md),
+  // push ke satpam yang login di app klien (POS), dan WA hanya bila SOS_WHATSAPP=true (rollback).
   if (!result.replay) {
-    void dispatchSosWhatsApp(result.report, k.appName);
-    // Push alarm + sirene ke HP satpam yang login dengan nomor di kontak darurat laporan ini.
+    void dispatchPkPush(result.report, k.appName);
     void dispatchSosPush(result.report, k.appName);
+    if (config.sosWhatsApp) void dispatchSosWhatsApp(result.report, k.appName);
   }
 });
 

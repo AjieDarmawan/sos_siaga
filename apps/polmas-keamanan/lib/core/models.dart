@@ -47,6 +47,17 @@ class Me {
   Region? get scope => Region.from(raw['scope']);
   bool get needsArea => raw['needs_area'] == true;
 
+  /// Siapa penerima ini menurut Nomor Darurat, mis. "Satpam · Toko Roti Sinar Jaya (UMKM)" atau
+  /// "Bhabinkamtibmas · Kec. Bogor Tengah". Bukan dari GPS.
+  String get identity {
+    final kec = roles.where((r) => r.id == roleId).firstOrNull?.kecamatan;
+    return switch (roleKey) {
+      'penerima' => unit ?? roleLabel,
+      'bhabinkamtibmas' => ['Bhabinkamtibmas', if (kec != null) 'Kec. ${kec.name}' else ?unit].join(' · '),
+      _ => [roleLabel, ?unit, if (scope != null) 'Kec. ${scope!.name}'].join(' · '),
+    };
+  }
+
   /// Penerima darurat & Bhabinkamtibmas bisa menanggapi; aksi per laporan tetap ditentukan server (`actions`).
   bool get canRespond => raw['can_respond'] == true;
   bool get isOfficer => raw['is_officer'] == true;

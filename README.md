@@ -93,6 +93,10 @@ Halaman: registrasi 3 langkah, verifikasi email, status verifikasi + unggah doku
 ### Server klien
 `GET /v1/reports` (`?kind=sos|pengaduan`), `GET|PATCH /v1/reports/:id`, `POST /v1/webhooks/test`, `DELETE /v1/reporters/:ref` (hapus permanen semua laporan + Nomor Darurat satu pengguna akhir, UU PDP; → `{deleted:{reports,media,emergency_contacts}}`, 30/jam per app). Kunci test hanya melihat/menghapus data test.
 
+Pilar app: `POST|PATCH /portal/apps {pillar: umkm|warga|kantor|sekolah|komunitas}` (dropdown "Aplikasi ini untuk apa?" di portal; UMKM, Lingkungan, Perkantoran, Pendidikan, Komunitas). `/v1/sdk/config` mengembalikan `pillar`, `pillar_label`, `contact_roles` (jabatan Nomor Darurat per pilar).
+
+Emergency tidak lagi mengirim WhatsApp (set `SOS_WHATSAPP=true` hanya untuk rollback); penerima mendapat push FCM + sirene di app Polmas Keamanan.
+
 Retensi: `PATCH /portal/apps/:id {retention_days: 30..3650 | null}`. Job pembersihan menghapus laporan live yang sudah ditutup lebih lama dari itu, dan laporan test 30 hari setelah ditutup.
 
 ### Portal
@@ -105,7 +109,8 @@ Retensi: `PATCH /portal/apps/:id {retention_days: 30..3650 | null}`. Job pembers
 ### Polmas Keamanan (`/v1/pk`)
 Login dengan nomor yang ada di Nomor Darurat app sumber mana pun (atau akun `pnpm pk:user`). Data lintas tenant lewat `withPlatform()`, dibatasi ke: SOS/laporan yang memanggil nomor pengguna, laporan pengguna sendiri, yang pernah ditanggapinya, dan laporan di kecamatannya dari app bertanda `apps.polmas_source`.
 - Auth: `POST /auth/check {phone}` → `{has_password, name, contacts[]}` (404 `phone_not_registered`), `POST /auth/setup {phone,password≥8}` (login pertama dari Nomor Darurat, 409 bila sudah punya password), `POST /auth/login`, `POST /auth/logout`. Salah 5× → kunci 15 menit (423).
-- Profil: `GET /me` (peran, wilayah, `can_respond`), `POST /me/role {role_id}`, `GET /me/area?lat&lng` (usulan wilayah dari GPS), `PUT /me/area`, `GET /regions?parent=`
+- Perangkat: `POST /me/device {fcm_token, platform}` (push SOS via FCM project Polmas Keamanan, env `PK_FCM_SERVICE_ACCOUNT`), `POST /me/device/remove {fcm_token}` (logout).
+- Profil: `GET /me` (peran, wilayah, `can_respond`), `PATCH /me {name}`, `POST /me/role {role_id}`, `GET /me/area?lat&lng` (usulan wilayah dari GPS), `PUT /me/area`, `GET /regions?parent=`
 - Data: `GET /dashboard`, `GET /reports` & `GET /history` (`scope=kecamatan|me`, `kind=sos|laporan`, `status=baru|diproses|…`, `kelurahan`, `q`, `from`, `to`, `before`, `limit`), `GET /reports/:id` (media URL 15 mnt, timeline, `actions`), `GET /map?days&kind`, `GET /videos`, `GET /news`
 - Tanggapan: `POST /reports/:id/responses {action: terima|hubungi|verifikasi|tangani|selesai|tidak_valid|catatan, note}`: penerima untuk laporan yang memanggil nomornya, Bhabinkamtibmas untuk kecamatannya. Lewat `changeReport` → timeline, realtime, webhook, `status_message` di SDK pelapor.
 - Panggilan: `GET /inbox` (SOS terbuka ≤ 30 mnt untuk saya + jumlah belum dibaca, dipolling app tiap 4 dtk), `POST /reports/:id/call {accepted|ignored}`, `GET /notifications`, `POST /notifications/read-all`

@@ -145,7 +145,7 @@ class _ReportListState extends State<ReportList> {
       children.add(EmptyState(icon: Icons.inbox_rounded, title: widget.emptyTitle, body: widget.emptyBody));
     } else {
       DateTime? lastDay;
-      final from = AppScope.of(context).me?.areaLocation;
+      final from = AppScope.of(context).here;
       if (widget.layout == ReportLayout.table) children.add(ReportTable(reports: List.of(_items), from: from));
       for (final (i, r) in widget.layout == ReportLayout.table ? const <(int, Report)>[] : _items.indexed) {
         final d = DateTime(r.createdAt.year, r.createdAt.month, r.createdAt.day);

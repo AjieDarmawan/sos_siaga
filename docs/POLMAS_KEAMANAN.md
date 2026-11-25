@@ -1,70 +1,138 @@
-# Polmas Keamanan: aplikasi penerima Nomor Darurat
+# PRD Polmas Keamanan v2: aplikasi penerima SOS untuk Nomor Darurat
 
-> Konsep dari user (25 Nov 2026), jangan diubah tanpa konfirmasi. PRD lengkap: "PRD Polmas Keamanan" (@Ruki, 25 Nov 2026).
-> Kode: Flutter `apps/polmas-keamanan`, API `/v1/pk/*` di `apps/api` (`src/routes/polmas.ts`, `src/lib/polmas.ts`), DB `siagasos` yang sama.
+> Disusun dari arahan user 25 Nov 2026 (menggantikan v1 di file ini). PRD awal: "PRD Polmas Keamanan" (@Ruki).
+> Kode: Flutter `apps/polmas-keamanan`, API `/v1/pk/*` di `apps/api`, DB `siagasos` yang sama.
+> Status: **disetujui konsepnya, menunggu jawaban pertanyaan §9 sebelum eksekusi.**
 
-## 1. Inti konsep
+## 1. Gambaran besar
 
-Aplikasi klien yang memasang SDK SiagaSOS punya tombol SOS **dan menu Nomor Darurat**. Polmas Keamanan adalah
-**aplikasi untuk pemilik nomor-nomor darurat itu**: mereka login dengan nomor tersebut, lalu menerima dan menanggapi
-SOS dari kios/warga yang mencantumkan nomornya.
+**SiagaSOS** = SDK + platform SaaS yang dipasang klien di aplikasinya. Klien dikelompokkan dalam **5 pilar**:
 
-```
- App sumber (pasang SDK SiagaSOS)            Nomor Darurat yang diisi            Login di Polmas Keamanan
- ─────────────────────────────────           ────────────────────────            ────────────────────────
- commerceOS POS (kios/kasir)          ──►    pemilik toko, satpam          ──►   lihat SOS kios tsb, terima, tangani
- polmas / tata-warga mobile (warga)   ──►    ketua RT, RW, satpam,         ──►   lihat SOS warga tsb + laporan
-                                             Bhabinkamtibmas (berwilayah)        kecamatan (Bhabinkamtibmas)
- app lain (kantor, sekolah, UMKM, …)  ──►    koordinator, guru, orang tua  ──►   sama
-```
-
-1. Kasir/warga mengisi Nomor Darurat di app sumber → SDK menyinkronkan ke `emergency_contacts` (`PUT /v1/sdk/contacts`,
-   termasuk `role` dan `area` wilayah tugas, migrasi 010).
-2. Kasir/warga menekan SOS → `reports.emergency_contacts` menyimpan snapshot nomor yang dipanggil.
-3. Pemilik nomor membuka Polmas Keamanan → login dengan nomor itu → layar panggilan SOS masuk, daftar, detail, peta,
-   bukti foto/video, lalu aksi Terima / Hubungi / Verifikasi / Tangani / Selesai.
-4. Setiap tanggapan lewat `changeReport` → timeline, realtime dashboard tenant, webhook, dan status di SDK pelapor
-   ("Satpam Agus sedang menangani…").
-
-## 2. Siapa boleh login
-
-| Sumber nomor | Boleh login | Catatan |
+| Pilar | Contoh aplikasi klien | `apps.polmas_source` (kode) |
 |---|---|---|
-| Ada di `emergency_contacts` aktif, app mana pun | ✅ | jalur utama |
-| Akun `pk_users` dibuat admin (`pnpm pk:user`) | ✅ | untuk Bhabinkamtibmas / warga tanpa kontak, dan data demo |
-| Nomor lain | ❌ | "Nomor belum terdaftar sebagai Nomor Darurat" (tanpa daftar mandiri, sesuai PRD) |
+| UMKM | commerceOS (POS kios/toko) | `umkm` |
+| Lingkungan | polmas / tata-warga mobile | `warga` → ditampilkan "Lingkungan" |
+| Perkantoran | (klien kantor) | `kantor` → "Perkantoran" |
+| Pendidikan | (klien sekolah) | `sekolah` → "Pendidikan" |
+| Komunitas | (klien komunitas) | `komunitas` |
 
-- Login: nomor → password. **Login pertama** nomor dari Nomor Darurat = membuat password (akun `pk_users` dibuat
-  otomatis). Berikutnya login biasa; nomor & password tersimpan terenkripsi di perangkat (login cepat).
-- Tanpa OTP/WA (PRD: tanpa WhatsApp/SMS API; sejalan dengan keputusan login satpam tanpa OTP 2026-11-23). Risiko: orang
-  yang tahu nomor bisa mengklaim lebih dulu → dibatasi rate limit, dicatat di `pk_audit`. Opsi pengetatan nanti: OTP
-  lewat push/WA, atau konfirmasi pemilik kios.
-- Sesi 12 jam (`pks_…`, hanya hash di DB).
+SDK di aplikasi klien punya tiga aksi: **EWS Alert / Emergency** (SOS), **Call 110**, dan **Laporan Kejadian**.
+Di dalam Laporan Kejadian ada menu **Nomor Darurat** (nama, jabatan, nomor, wilayah tugas), yang dipetakan ke pilar
+aplikasinya.
 
-## 3. Peran & hak
+**Polmas Keamanan** = aplikasi **penerima** untuk pemilik Nomor Darurat (pemilik toko, satpam, ketua RT/RW,
+Bhabinkamtibmas, guru, dst.).
 
-Peran diturunkan dari isian Nomor Darurat (disinkron ke `pk_user_roles` setiap login) + peran buatan admin.
+## 2. Perubahan alur SOS (inti)
 
-| Peran | Dari | Melihat | Menanggapi |
-|---|---|---|---|
-| `penerima` (pemilik toko, satpam, RT, RW, keluarga, …) | `emergency_contacts.role` bebas | SOS & laporan yang mencantumkan nomornya | ✅ laporan yang mencantumkan nomornya |
-| `bhabinkamtibmas` | `role` mengandung "bhabin", wilayah dari `area.district` | + semua laporan di kecamatannya | ✅ semua di kecamatannya |
-| `warga` / `kantor` / `umkm` / `sekolah` / `komunitas` | admin | laporan kecamatannya (identitas disamarkan) | ❌ |
+| | Sebelum | Sesudah (Polmas Keamanan) |
+|---|---|---|
+| Pelapor tekan Emergency | sirene di HP pelapor + WhatsApp ke Nomor Darurat | **push FCM + sirene di HP penerima** (app Polmas Keamanan) |
+| Penerima | hanya membaca WA | login di app, layar panggilan SOS, lihat bukti, tindak lanjut |
+| Status ke pelapor | tidak ada | tindak lanjut tampil di SDK pelapor (riwayat laporan) |
 
-- Satu nomor bisa punya beberapa peran/wilayah (mis. satpam di 2 kios + warga) → pindah peran di Profil.
-- Laporan yang memanggil nomor pengguna **selalu** terlihat (tidak perlu `apps.polmas_source`).
-- Tampilan per kecamatan hanya memuat laporan dari app yang ditandai `apps.polmas_source` (persetujuan berbagi).
-- Identitas & lokasi persis pelapor hanya untuk penerima yang dipanggil, Bhabinkamtibmas, dan pelapor sendiri.
+Prinsip tetap: jalur `POST /v1/sdk/reports` tidak bergantung pada FCM/WA (dikirim async setelah tersimpan).
 
-## 4. Alur layar (PRD §4, §7.3)
+## 3. Siapa yang login
 
-Splash Merah Putih → Login nomor → Password (atau Buat password di login pertama) → Konfirmasi wilayah (GPS, isi
-otomatis, bisa dikoreksi) → Beranda (kartu angka + tab Berita/Laporan/Video/Lokasi/Waktu) · Laporan · Riwayat (Saya /
-Kecamatan) · Analisa (+ Evaluasi) · Profil. Panggilan SOS masuk = layar penuh merah (polling `/v1/pk/inbox` tiap 4 dtk
-saat app terbuka; push FCM menyusul).
+- Nomor yang terdaftar sebagai **Nomor Darurat** di aplikasi klien mana pun (`emergency_contacts`). Tanpa daftar mandiri.
+- Login: nomor → password (login pertama = buat password). Nomor & password diingat di perangkat (login cepat).
+- **Peran & wilayah TIDAK diambil dari GPS saat login.** Keduanya diambil dari isian Nomor Darurat:
+  - peran = jabatan kontak (Satpam, Pemilik toko, Ketua RT, Bhabinkamtibmas, Guru, …),
+  - pilar = pilar aplikasi yang mendaftarkan nomor itu,
+  - wilayah = `emergency_contacts.area` (wajib untuk Bhabinkamtibmas, opsional untuk lainnya).
+  → Langkah "Konfirmasi wilayah" di login **dihapus**.
+- Satu nomor bisa terdaftar di banyak kios/warga/pilar → semua SOS yang memanggil nomornya masuk ke app yang sama;
+  peran ditampilkan per sumber.
 
-## 5. Status
+## 4. Fitur
 
-- API `/v1/pk` + migrasi 011 (+ 012 untuk peran `penerima` & login dari Nomor Darurat), seed demo `pnpm seed:pk`.
-- Flutter: sedang dibangun. Lihat log di `PROGRESS.md`.
-- Belum: push FCM (app tertutup), antrean offline (FR-13), ekspor PDF (FR-21).
+### 4.1 Panggilan SOS masuk (FCM + sirene)
+- SOS yang mencantumkan nomor penerima → push FCM prioritas tinggi (kanal `polmas_sos`, suara sirene), juga saat app
+  tertutup / layar terkunci → layar panggilan penuh (Terima / Abaikan).
+- Bhabinkamtibmas juga menerima SOS dari kecamatan wilayah tugasnya.
+- Saat app terbuka: polling 4 dtk tetap ada sebagai cadangan.
+
+### 4.2 Beranda (homepage)
+- Header sama di semua layar (navy + gelombang merah): sapaan, **peran penerima** (mis. "Satpam · Toko Roti Sinar Jaya",
+  "Bhabinkamtibmas · Kec. Bogor Tengah"), pilar, lonceng.
+- Kartu angka: SOS hari ini, Laporan baru, Dalam penanganan, Selesai.
+- **Daftar Tindak Lanjut** berisi kolom (tampilan kartu di HP, tabel geser bila dipilih):
+
+| Kolom | Isi | Sumber |
+|---|---|---|
+| Berita | judul/uraian kejadian | SOS/laporan |
+| No HP | nomor pelapor (ketuk = telepon) | SOS |
+| Ekosistem | pilar + aplikasi asal (mis. "UMKM · commerceOS") | app sumber |
+| Dari Siapa | nama pelapor + tempat (kios/rumah) | SOS |
+| Foto/Video | gambar mini bukti, putar video | media laporan |
+| Location | alamat/kelurahan + jarak, ketuk = peta | GPS laporan |
+| Waktu | waktu kejadian / SOS | SOS |
+| Status | Darurat / Diproses / Selesai | laporan |
+| Tindak Lanjut | tanggapan terakhir penerima + catatan | penerima |
+
+### 4.3 Detail & tindak lanjut
+- Peta, bukti foto/video/suara, langkah status (Diterima → Diverifikasi → Ditangani → Selesai), tombol aksi.
+- Setiap tindak lanjut tercatat (siapa, kapan, catatan) dan kembali ke pelapor + dashboard klien.
+
+### 4.4 Riwayat & Analisa
+- Riwayat: Saya / Wilayah, cari & filter.
+- Analisa: tren harian, per kelurahan, per pilar, jenis kejadian, jam rawan, waktu respons, % selesai, perbandingan
+  periode sebelumnya, ekspor PDF.
+
+## 5. Perubahan di SDK & API (akibat §2)
+- API: kirim FCM ke perangkat Polmas Keamanan milik nomor yang dipanggil (`pk_sessions.fcm_token`), catat di timeline.
+- WA SOS & sirene lokal di SDK: lihat pertanyaan §9.
+- Nomor Darurat di SDK: jabatan & wilayah sesuai pilar (lihat §9).
+
+## 6. Tampilan
+- Mengikuti mockup user (splash, login, beranda, detail, riwayat, analisa, SOS masuk, profil).
+- Header/app bar seragam di semua layar.
+
+## 7. Sudah ada (v1, 25 Nov 2026)
+API `/v1/pk` + migrasi 011/012, login dari Nomor Darurat, peran `penerima`, panggilan via polling, beranda/detail/
+riwayat/analisa/profil sesuai mockup, smoke 134 cek.
+
+## 8. Belum / akan dikerjakan
+FCM + sirene saat app tertutup, hapus langkah wilayah GPS, peran & wilayah dari Nomor Darurat di header, kolom
+Tindak Lanjut lengkap + foto, label pilar baru, header seragam, perbaikan luapan teks kartu/tabel.
+
+## 9. Keputusan user (25 Nov 2026)
+
+1. **WhatsApp & sirene lokal dihapus total.** Emergency tidak lagi mengirim WA ke Nomor Darurat dan tidak membunyikan
+   sirene di HP pelapor. Satu-satunya kanal = push FCM + sirene di app Polmas Keamanan. (Nomor darurat yang belum
+   pasang/login app tidak mendapat kabar: konsekuensi yang diterima.)
+2. **Tindak Lanjut**: Berita, No HP, Ekosistem, Dari Siapa, Foto/Video, Location, Waktu terisi **otomatis** dari SOS.
+   Penerima mengisi **Status** + catatan **Tindak Lanjut** (boleh melampirkan foto/video dari HP-nya).
+3. **Jabatan Nomor Darurat dibatasi per pilar** (dropdown di SDK):
+
+   | Pilar | Jabatan |
+   |---|---|
+   | UMKM | Pemilik toko, Karyawan, Satpam, Bhabinkamtibmas |
+   | Lingkungan | Ketua RT, Ketua RW, Satpam, Bhabinkamtibmas, Keluarga |
+   | Perkantoran | Pimpinan, Koordinator keamanan, Satpam, Polsek |
+   | Pendidikan | Orang tua, Guru, Satpam, Kepala sekolah |
+   | Komunitas | Bhabinkamtibmas, Keamanan, Security, Ketua komunitas |
+
+4. **FCM memakai project Firebase baru** khusus Polmas Keamanan. Kode disiapkan sekarang; file konfigurasi
+   (`google-services.json`, `GoogleService-Info.plist`, service account untuk API) dikirim user.
+5. **Pilar dipilih saat membuat app di portal SiagaSOS** (saran user): form "Buat app / API key" punya dropdown
+   "Aplikasi ini untuk apa?" → UMKM / Lingkungan / Perkantoran / Pendidikan / Komunitas, disimpan di
+   `apps.polmas_source`. Dipakai untuk kolom Ekosistem, daftar jabatan Nomor Darurat di SDK, dan analitik per pilar.
+
+6. **Wilayah hanya untuk Nomor Darurat berjabatan Bhabinkamtibmas** (klarifikasi user): saat jabatan itu dipilih di
+   SDK, muncul pemilih provinsi → desa yang terisi otomatis dari lokasi HP pelapor (sudah ada di SDK). App Polmas
+   Keamanan **tidak membaca wilayah lagi**: Bhabinkamtibmas memakai wilayah dari isian itu, penerima lain (satpam,
+   pemilik toko, RT, dll.) tidak punya wilayah dan hanya menerima SOS yang memanggil nomornya. Lokasi HP penerima hanya
+   dipakai untuk menghitung jarak ke SOS ("± 350 m").
+
+## 10. Urutan eksekusi
+1. Portal + API: dropdown pilar di app, `pillar` + daftar jabatan di `/v1/sdk/config`.
+2. API: hentikan WA SOS; FCM ke perangkat Polmas Keamanan (`POST /v1/pk/me/device`, env `PK_FCM_SERVICE_ACCOUNT`).
+3. SDK Flutter (+ Android): sirene lokal tidak lagi dibunyikan; dropdown jabatan per pilar.
+Status 25 Nov 2026: 1 ✅, 2 ✅ (Firebase `siagasos-a61e9`, service account di `apps/api/.env` `PK_FCM_SERVICE_ACCOUNT`,
+`google-services.json` di app), 3 ✅ Flutter + Android (sirene lokal dimatikan; dropdown jabatan dari `contact_roles`),
+4 ✅ (lihat PROGRESS.md). iOS app belum punya `GoogleService-Info.plist`.
+
+4. App: hapus langkah wilayah GPS, header peran dari Nomor Darurat, header/app bar seragam, kolom Tindak Lanjut + foto,
+   label pilar, FCM (aktif setelah file Firebase ada), perbaikan luapan teks.

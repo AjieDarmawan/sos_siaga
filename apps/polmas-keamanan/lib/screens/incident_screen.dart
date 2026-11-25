@@ -112,9 +112,7 @@ class _IncidentScreenState extends State<IncidentScreen> {
   PreferredSizeWidget _appBar(Report? r) {
     final acts = _actions;
     return AppBar(
-      centerTitle: true,
-      backgroundColor: context.pageBg,
-      title: Text('Detail Laporan', style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800)),
+      title: const Text('Detail Laporan'),
       actions: [
         if (r != null)
           PopupMenuButton<String>(
@@ -161,7 +159,7 @@ class _IncidentScreenState extends State<IncidentScreen> {
     final complaint = d['complaint'] as Map?;
     final loc = r.location;
     final trail = ((d['trail'] as List?) ?? const []).cast<Map>();
-    final dist = r.distanceFrom(AppScope.of(context).me?.areaLocation);
+    final dist = r.distanceFrom(AppScope.of(context).here);
     final notes = timeline.where((e) => (e['note'] as String?)?.isNotEmpty == true).length;
     return Scaffold(
       backgroundColor: context.pageBg,

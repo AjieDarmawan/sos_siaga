@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { z } from 'zod';
-import { KEY_MODES, PLATFORMS, toWhatsAppNumber, type KeyMode } from '@siagasos/shared';
+import { KEY_MODES, PILLARS, PLATFORMS, toWhatsAppNumber, type KeyMode } from '@siagasos/shared';
 import { pool, q, withTenant, type Db } from '../../db.js';
 import { ApiError, forbidden, notFound, parse } from '../../lib/errors.js';
 import { generateKey } from '../../lib/keys.js';
@@ -38,6 +38,8 @@ const appSchema = z.object({
     .optional(),
   /** Hari penyimpanan laporan live setelah ditutup; null = tanpa batas. */
   retention_days: z.number().int().min(30).max(3650).nullable().optional(),
+  /** Pilar aplikasi (dropdown "Aplikasi ini untuk apa?"): ekosistem di Polmas Keamanan & analitik per pilar. */
+  pillar: z.enum(PILLARS).nullable().optional(),
 });
 
 const canManage = requireRole('owner', 'admin');
@@ -53,7 +55,7 @@ async function loadApp(u: PortalUser, rawId: unknown) {
 function serializeApp(a: any, keys: any[] = []) {
   return {
     id: a.id, name: a.name, allowed_origins: a.allowed_origins, allowed_bundle_ids: a.allowed_bundle_ids,
-    webhook_url: a.webhook_url, auto_create_sources: a.auto_create_sources, sdk_config: a.sdk_config, retention_days: a.retention_days ?? null,
+    webhook_url: a.webhook_url, auto_create_sources: a.auto_create_sources, sdk_config: a.sdk_config, retention_days: a.retention_days ?? null, pillar: a.polmas_source ?? null,
     disabled: a.disabled_at != null, disabled_reason: a.disabled_reason, created_at: a.created_at,
     keys: keys.map(serializeKey),
   };
@@ -102,10 +104,10 @@ appsRouter.post('/', canManage, async (req, res) => {
   try {
     await c.query('BEGIN');
     const { rows } = await c.query(
-      `INSERT INTO apps (account_id, name, allowed_origins, allowed_bundle_ids, webhook_url, auto_create_sources, sdk_config, retention_days)
-       VALUES ($1,$2,$3,$4,$5, coalesce($6, true), $7, $8) RETURNING *`,
+      `INSERT INTO apps (account_id, name, allowed_origins, allowed_bundle_ids, webhook_url, auto_create_sources, sdk_config, retention_days, polmas_source)
+       VALUES ($1,$2,$3,$4,$5, coalesce($6, true), $7, $8, $9) RETURNING *`,
       [u.accountId, body.name, body.allowed_origins, body.allowed_bundle_ids, body.webhook_url ?? null, body.auto_create_sources ?? null, JSON.stringify(body.sdk_config ?? {}),
-        body.retention_days ?? null],
+        body.retention_days ?? null, body.pillar ?? null],
     );
     const app = rows[0];
     const keys: Record<string, unknown> = { test: await createPair(c, app.id, 'test') };
@@ -139,11 +141,13 @@ appsRouter.patch('/:id', canManage, async (req, res) => {
        webhook_url = CASE WHEN $5 THEN $6 ELSE webhook_url END,
        auto_create_sources = coalesce($7, auto_create_sources),
        sdk_config = CASE WHEN $8::jsonb IS NULL THEN sdk_config ELSE $8::jsonb END,
-       retention_days = CASE WHEN $9 THEN $10::int ELSE retention_days END
+       retention_days = CASE WHEN $9 THEN $10::int ELSE retention_days END,
+       polmas_source = CASE WHEN $11 THEN $12::text ELSE polmas_source END
      WHERE id = $1 RETURNING *`,
     [app.id, body.name ?? null, body.allowed_origins ?? null, body.allowed_bundle_ids ?? null,
       'webhook_url' in body, body.webhook_url ?? null, body.auto_create_sources ?? null,
-      body.sdk_config ? JSON.stringify(body.sdk_config) : null, 'retention_days' in body, body.retention_days ?? null],
+      body.sdk_config ? JSON.stringify(body.sdk_config) : null, 'retention_days' in body, body.retention_days ?? null,
+      'pillar' in body, body.pillar ?? null],
   );
   invalidateKeyCache();
   res.json(serializeApp(rows[0]));

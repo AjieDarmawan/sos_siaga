@@ -31,7 +31,11 @@ Future<void> _pump(WidgetTester tester, Widget child, {double scale = 1.3}) asyn
   await tester.pumpWidget(
     MediaQuery(
       data: MediaQueryData(size: const Size(390, 844), textScaler: TextScaler.linear(scale)),
-      child: MaterialApp(home: Scaffold(body: SingleChildScrollView(padding: const EdgeInsets.all(16), child: child))),
+      child: MaterialApp(
+        home: Scaffold(
+          body: SingleChildScrollView(padding: const EdgeInsets.all(16), child: child),
+        ),
+      ),
     ),
   );
   await tester.pump(const Duration(milliseconds: 500));

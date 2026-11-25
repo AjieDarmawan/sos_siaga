@@ -501,8 +501,18 @@ class SdkConfig {
     required this.recipientText,
     required this.fallbackPhone,
     required this.liveLocationIntervalS,
+    this.pillar,
+    this.pillarLabel,
+    this.contactRoles = const [],
   });
   final String appName;
+
+  /// Pilar app yang dipilih di portal: umkm | warga (Lingkungan) | kantor | sekolah | komunitas; null = belum dipilih.
+  final String? pillar;
+  final String? pillarLabel;
+
+  /// Pilihan jabatan Nomor Darurat sesuai pilar (dari server). Kosong = pakai [defaultEmergencyContactRoles].
+  final List<String> contactRoles;
   final List<String> categories;
   final List<String> complaintCategories;
   final String buttonText;
@@ -531,6 +541,9 @@ class SdkConfig {
         fallbackPhone: j['fallback_phone'] as String? ?? '110',
         liveLocationIntervalS:
             (j['live_location_interval_s'] as num? ?? 15).toInt(),
+        pillar: j['pillar'] as String?,
+        pillarLabel: j['pillar_label'] as String?,
+        contactRoles: (j['contact_roles'] as List?)?.cast<String>() ?? const [],
       );
 }
 

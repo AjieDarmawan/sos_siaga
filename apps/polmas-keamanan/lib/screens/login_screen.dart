@@ -8,7 +8,7 @@ import '../core/models.dart';
 import '../theme/tokens.dart';
 import '../widgets/brand.dart';
 import '../widgets/common.dart';
-import 'area_screen.dart';
+import 'home_shell.dart';
 
 /// Login dua langkah (FR-01, FR-02): nomor telepon terdaftar (Nomor Darurat) → password, atau buat password pada
 /// login pertama. Setelah keluar, nomor & password terisi otomatis dari perangkat (login cepat) dengan tautan
@@ -132,7 +132,8 @@ class _LoginScreenState extends State<LoginScreen> {
         await state.login(_normalized!, _password.text);
       }
       if (!mounted) return;
-      Navigator.of(context).pushReplacement(MaterialPageRoute(builder: (_) => const AreaScreen(fromLogin: true)));
+      // Peran & wilayah dari Nomor Darurat (bukan GPS), jadi langsung ke Beranda.
+      Navigator.of(context).pushReplacement(MaterialPageRoute(builder: (_) => const HomeShell()));
     } on ApiException catch (e) {
       // Salah password: kolom bergetar, pesan merah, isian tidak dihapus.
       setState(() => _error = e.message);
