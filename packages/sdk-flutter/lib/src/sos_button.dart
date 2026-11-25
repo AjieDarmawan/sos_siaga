@@ -31,6 +31,7 @@ class SOSButton extends StatefulWidget {
   final SiagaSOS client;
   final String category;
   final String? message;
+
   /// Override durasi tahan; null = ikut pengaturan app di portal.
   final int? holdSeconds;
   final double size;
@@ -38,6 +39,7 @@ class SOSButton extends StatefulWidget {
   final String? label;
   final void Function(ActiveReport report)? onSent;
   final void Function(SiagaSOSError error)? onError;
+
   /// Dipanggil saat pengguna menekan "Telepon `nomor`" (mis. pakai url_launcher `tel:`).
   final void Function(String phone)? onCallFallback;
 
@@ -45,7 +47,8 @@ class SOSButton extends StatefulWidget {
   State<SOSButton> createState() => _SOSButtonState();
 }
 
-class _SOSButtonState extends State<SOSButton> with SingleTickerProviderStateMixin {
+class _SOSButtonState extends State<SOSButton>
+    with SingleTickerProviderStateMixin {
   late final AnimationController _hold = AnimationController(vsync: this);
   SdkConfig? _cfg;
   ActiveReport? _report;
@@ -55,9 +58,13 @@ class _SOSButtonState extends State<SOSButton> with SingleTickerProviderStateMix
   @override
   void initState() {
     super.initState();
-    widget.client.getConfig().then((c) => mounted ? setState(() => _cfg = c) : null).catchError((_) {});
+    widget.client
+        .getConfig()
+        .then((c) => mounted ? setState(() => _cfg = c) : null)
+        .catchError((_) {});
     _sub = widget.client.status.listen((r) {
-      if (mounted && (_report == null || _report!.localId == r.localId)) setState(() => _report = r);
+      if (mounted && (_report == null || _report!.localId == r.localId))
+        setState(() => _report = r);
     });
     _hold.addStatusListener((s) {
       if (s == AnimationStatus.completed) _fire();
@@ -77,7 +84,8 @@ class _SOSButtonState extends State<SOSButton> with SingleTickerProviderStateMix
   Future<void> _fire() async {
     setState(() => _sending = true);
     try {
-      final r = await widget.client.trigger(category: widget.category, message: widget.message);
+      final r = await widget.client
+          .trigger(category: widget.category, message: widget.message);
       HapticFeedback.heavyImpact();
       if (mounted) setState(() => _report = r);
       if (r.id != null) widget.onSent?.call(r);
@@ -122,7 +130,8 @@ class _SOSButtonState extends State<SOSButton> with SingleTickerProviderStateMix
     return Column(mainAxisSize: MainAxisSize.min, children: [
       Semantics(
         button: true,
-        label: 'Tombol darurat. Tahan $_seconds detik untuk mengirim laporan SOS.',
+        label:
+            'Tombol darurat. Tahan $_seconds detik untuk mengirim laporan SOS.',
         value: _statusText,
         child: GestureDetector(
           onTapDown: (_) => _down(),
@@ -133,7 +142,8 @@ class _SOSButtonState extends State<SOSButton> with SingleTickerProviderStateMix
             builder: (context, _) => SizedBox.square(
               dimension: widget.size,
               child: CustomPaint(
-                painter: _RingPainter(progress: _hold.value, color: widget.color),
+                painter:
+                    _RingPainter(progress: _hold.value, color: widget.color),
                 child: Center(
                   child: AnimatedContainer(
                     duration: const Duration(milliseconds: 150),
@@ -142,16 +152,26 @@ class _SOSButtonState extends State<SOSButton> with SingleTickerProviderStateMix
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
                       color: _active ? const Color(0xFF475569) : widget.color,
-                      boxShadow: [BoxShadow(color: widget.color.withValues(alpha: 0.45), blurRadius: 24, spreadRadius: 2)],
+                      boxShadow: [
+                        BoxShadow(
+                            color: widget.color.withValues(alpha: 0.45),
+                            blurRadius: 24,
+                            spreadRadius: 2)
+                      ],
                     ),
                     alignment: Alignment.center,
                     padding: const EdgeInsets.all(16),
                     child: _sending
                         ? const CircularProgressIndicator(color: Colors.white)
                         : Text(
-                            _active ? _statusText : (widget.label ?? cfg?.buttonText ?? 'SOS'),
+                            _active
+                                ? _statusText
+                                : (widget.label ?? cfg?.buttonText ?? 'SOS'),
                             textAlign: TextAlign.center,
-                            style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: _active ? 15 : widget.size * 0.17),
+                            style: TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.w800,
+                                fontSize: _active ? 15 : widget.size * 0.17),
                           ),
                   ),
                 ),
@@ -161,15 +181,31 @@ class _SOSButtonState extends State<SOSButton> with SingleTickerProviderStateMix
         ),
       ),
       const SizedBox(height: 10),
-      if (!_active) Text(_statusText, style: Theme.of(context).textTheme.bodyMedium),
+      if (!_active)
+        Text(_statusText, style: Theme.of(context).textTheme.bodyMedium),
       if (widget.client.mode == SosMode.test)
-        Padding(padding: const EdgeInsets.only(top: 6), child: Text('MODE TEST', style: TextStyle(color: Colors.amber.shade800, fontWeight: FontWeight.w700, fontSize: 11))),
+        Padding(
+            padding: const EdgeInsets.only(top: 6),
+            child: Text('MODE TEST',
+                style: TextStyle(
+                    color: Colors.amber.shade800,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 11))),
       if (_report?.status == SosStatus.open)
-        TextButton(onPressed: () => widget.client.cancel(_report!.localId, reason: 'Salah tekan'), child: const Text('Batalkan (salah tekan)')),
+        TextButton(
+            onPressed: () =>
+                widget.client.cancel(_report!.localId, reason: 'Salah tekan'),
+            child: const Text('Batalkan (salah tekan)')),
       if (cfg != null && cfg.recipientText.isNotEmpty)
-        Padding(padding: const EdgeInsets.only(top: 4), child: Text(cfg.recipientText, textAlign: TextAlign.center, style: Theme.of(context).textTheme.bodySmall)),
+        Padding(
+            padding: const EdgeInsets.only(top: 4),
+            child: Text(cfg.recipientText,
+                textAlign: TextAlign.center,
+                style: Theme.of(context).textTheme.bodySmall)),
       if (cfg != null && widget.onCallFallback != null)
-        TextButton(onPressed: () => widget.onCallFallback!(cfg.fallbackPhone), child: Text('Darurat polisi? Telepon ${cfg.fallbackPhone}')),
+        TextButton(
+            onPressed: () => widget.onCallFallback!(cfg.fallbackPhone),
+            child: Text('Darurat polisi? Telepon ${cfg.fallbackPhone}')),
     ]);
   }
 }
@@ -182,13 +218,28 @@ class _RingPainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     final c = size.center(Offset.zero);
     final r = size.width / 2 - 5;
-    canvas.drawCircle(c, r, Paint()..color = color.withValues(alpha: 0.18)..style = PaintingStyle.stroke..strokeWidth = 8);
+    canvas.drawCircle(
+        c,
+        r,
+        Paint()
+          ..color = color.withValues(alpha: 0.18)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 8);
     if (progress > 0) {
-      canvas.drawArc(Rect.fromCircle(center: c, radius: r), -math.pi / 2, 2 * math.pi * progress, false,
-          Paint()..color = color..style = PaintingStyle.stroke..strokeWidth = 8..strokeCap = StrokeCap.round);
+      canvas.drawArc(
+          Rect.fromCircle(center: c, radius: r),
+          -math.pi / 2,
+          2 * math.pi * progress,
+          false,
+          Paint()
+            ..color = color
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = 8
+            ..strokeCap = StrokeCap.round);
     }
   }
 
   @override
-  bool shouldRepaint(_RingPainter old) => old.progress != progress || old.color != color;
+  bool shouldRepaint(_RingPainter old) =>
+      old.progress != progress || old.color != color;
 }

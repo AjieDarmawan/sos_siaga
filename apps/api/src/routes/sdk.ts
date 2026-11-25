@@ -49,7 +49,7 @@ sdkRouter.get('/config', (req, res) => {
     pillar: (k.pillar as Pillar | null) ?? null,
     pillar_label: k.pillar ? PILLAR_LABELS[k.pillar as Pillar] ?? null : null,
     // Tanpa pilar: gabungan jabatan umum supaya SDK tetap bisa menampilkan dropdown.
-    contact_roles: [...(k.pillar ? PILLAR_CONTACT_ROLES[k.pillar as Pillar] ?? [] : ['Pemilik', 'Satpam', 'Keluarga', 'Bhabinkamtibmas'])],
+    contact_roles: [...(k.pillar ? PILLAR_CONTACT_ROLES[k.pillar as Pillar] ?? [] : ['Pemilik', 'Satpam', 'Bhabinkamtibmas'])],
   };
   res.set('Cache-Control', 'private, max-age=300').json(body);
 });

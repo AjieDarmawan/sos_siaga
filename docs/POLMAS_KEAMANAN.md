@@ -109,11 +109,12 @@ Tindak Lanjut lengkap + foto, label pilar baru, header seragam, perbaikan luapan
    | Pilar | Jabatan |
    |---|---|
    | UMKM | Pemilik toko, Karyawan, Satpam, Bhabinkamtibmas |
-   | Lingkungan | Ketua RT, Ketua RW, Satpam, Bhabinkamtibmas, Keluarga |
+   | Lingkungan | Ketua RT, Ketua RW, Satpam, Bhabinkamtibmas |
    | Perkantoran | Pimpinan, Koordinator keamanan, Satpam, Polsek |
    | Pendidikan | Orang tua, Guru, Satpam, Kepala sekolah |
    | Komunitas | Bhabinkamtibmas, Keamanan, Security, Ketua komunitas |
 
+   Tanpa pilihan "Lainnya"/isian bebas dan tanpa "Keluarga"; teks batas "maks. 5 aktif" tidak ditampilkan di form.
 4. **FCM memakai project Firebase baru** khusus Polmas Keamanan. Kode disiapkan sekarang; file konfigurasi
    (`google-services.json`, `GoogleService-Info.plist`, service account untuk API) dikirim user.
 5. **Pilar dipilih saat membuat app di portal SiagaSOS** (saran user): form "Buat app / API key" punya dropdown

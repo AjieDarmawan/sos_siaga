@@ -44,7 +44,7 @@ export const PILLAR_EXAMPLES: Record<Pillar, string> = {
 /** Jabatan Nomor Darurat per pilar (dropdown di SDK). Bhabinkamtibmas berwilayah (isian wilayah tugas). */
 export const PILLAR_CONTACT_ROLES: Record<Pillar, readonly string[]> = {
   umkm: ['Pemilik toko', 'Karyawan', 'Satpam', 'Bhabinkamtibmas'],
-  warga: ['Ketua RT', 'Ketua RW', 'Satpam', 'Bhabinkamtibmas', 'Keluarga'],
+  warga: ['Ketua RT', 'Ketua RW', 'Satpam', 'Bhabinkamtibmas'],
   kantor: ['Pimpinan', 'Koordinator keamanan', 'Satpam', 'Polsek'],
   sekolah: ['Orang tua', 'Guru', 'Satpam', 'Kepala sekolah'],
   komunitas: ['Bhabinkamtibmas', 'Keamanan', 'Security', 'Ketua komunitas'],

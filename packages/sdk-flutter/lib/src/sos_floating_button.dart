@@ -3239,10 +3239,10 @@ class _ContactsSheetState extends State<_ContactsSheet> {
   /// Level yang sedang dipilih di daftar (null = form).
   int? _picking;
 
+  /// Hanya jabatan dari pilar app (tanpa "Lainnya"/isian bebas: keputusan user 2026-11-25).
   List<String> get _roleOptions => [
         for (final r in widget.roles)
           if (r != _other) r,
-        _other
       ];
   bool get _needsArea => _role != null && widget.areaRoles.contains(_role);
   String? get _roleValue {
@@ -3509,7 +3509,7 @@ class _ContactsSheetState extends State<_ContactsSheet> {
                   color: theme.colorScheme.surfaceContainerHighest,
                   borderRadius: BorderRadius.circular(14)),
               child: Text(
-                  'Belum ada nomor darurat. Tambahkan pemilik, satpam, RT/RW, Bhabinkamtibmas, atau keluarga (maks. $maxActiveEmergencyContacts aktif). Saat kamu menekan SOS, mereka mendapat panggilan + sirene di aplikasi Polmas Keamanan.',
+                  'Belum ada nomor darurat. Tambahkan pemilik, satpam, RT/RW, atau Bhabinkamtibmas. Saat kamu menekan SOS, mereka mendapat panggilan + sirene di aplikasi Polmas Keamanan.',
                   style: theme.textTheme.bodySmall?.copyWith(height: 1.4)),
             )
           else

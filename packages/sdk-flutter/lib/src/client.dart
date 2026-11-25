@@ -206,7 +206,8 @@ class SiagaSOS {
     SosLocation? loc;
     try {
       // Pengaduan tidak darurat dan form sudah punya kolom lokasi: jangan menahan kirim lama menunggu GPS.
-      final wait = kind == ReportKind.pengaduan && locationTimeout > _complaintLocationTimeout
+      final wait = kind == ReportKind.pengaduan &&
+              locationTimeout > _complaintLocationTimeout
           ? _complaintLocationTimeout
           : locationTimeout;
       loc = await locationProvider?.call().timeout(wait);
@@ -439,8 +440,8 @@ class SiagaSOS {
     try {
       final loc = await provider().timeout(locationTimeout);
       if (loc == null) return null;
-      final d = await _request('GET',
-          '/v1/sdk/regions/reverse?lat=${loc.lat}&lng=${loc.lng}');
+      final d = await _request(
+          'GET', '/v1/sdk/regions/reverse?lat=${loc.lat}&lng=${loc.lng}');
       return RegionArea.fromJson(d);
     } catch (_) {
       return null;
@@ -660,7 +661,8 @@ class SiagaSOS {
       final sending = _http.send(req);
       const chunk = 64 * 1024;
       for (var i = 0; i < bytes.length; i += chunk) {
-        req.sink.add(Uint8List.sublistView(bytes, i, min(i + chunk, bytes.length)));
+        req.sink
+            .add(Uint8List.sublistView(bytes, i, min(i + chunk, bytes.length)));
         onProgress?.call(min(i + chunk, bytes.length) / bytes.length);
         await Future<void>.delayed(Duration.zero);
       }
@@ -668,9 +670,11 @@ class SiagaSOS {
       res = await sending.timeout(const Duration(minutes: 3));
       await res.stream.drain<void>().timeout(const Duration(seconds: 30));
     } on TimeoutException {
-      throw const SiagaSOSError(0, 'upload_timeout', 'Unggah terlalu lama, periksa koneksi');
+      throw const SiagaSOSError(
+          0, 'upload_timeout', 'Unggah terlalu lama, periksa koneksi');
     } catch (_) {
-      throw const SiagaSOSError(0, 'upload_network_error', 'Koneksi terputus saat mengunggah');
+      throw const SiagaSOSError(
+          0, 'upload_network_error', 'Koneksi terputus saat mengunggah');
     }
     if (res.statusCode >= 300)
       throw SiagaSOSError(
