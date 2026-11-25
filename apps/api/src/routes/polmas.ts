@@ -10,6 +10,7 @@ import { changeReport, onReportCreated } from '../lib/reports.js';
 import { listReadyMedia } from '../lib/media.js';
 import { mediaEnabled, presignGet } from '../lib/objectStorage.js';
 import { config } from '../config.js';
+import { PK_FCM, fcmConfigured } from '../lib/fcm.js';
 import {
   PK_BASE, PK_COLUMNS, PK_FROM, PK_LAST_RESPONSE, ROLE_LABEL, SESSION_TTL_H, SLA_MIN, SOURCE_LABEL, STATUS_SQL,
   audit, canRespondAny, canRespondTo, contactRows, hashToken, isOfficer, mineWhere, newSessionToken, normPhone, scopeOf,
@@ -214,6 +215,8 @@ async function mePayload(pk: PkContext) {
     ecosystems: eco.map((e) => ({ source: e.source, label: SOURCE_LABEL[e.source] ?? e.source, app_name: e.app_name })),
     needs_area: !pk.area?.district,
     can_respond: canRespondAny(pk),
+    // false = server tidak punya kredensial FCM Polmas (PK_FCM_SERVICE_ACCOUNT): SOS hanya muncul saat app dibuka.
+    server_push: fcmConfigured(PK_FCM),
     is_officer: isOfficer(pk),
   };
 }

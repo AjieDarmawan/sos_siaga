@@ -367,6 +367,7 @@ async function main() {
   const pkLogin = await call('POST', '/v1/pk/auth/login', { body: { phone: pkPhone, password: 'satpam-rahasia-1' } });
   ok(pkLogin.status === 201, 'PK: login nomor + password');
   const pkT = pkLogin.data.token as string;
+  ok(typeof pkLogin.data.me.server_push === 'boolean', 'PK: /me memberi tahu apakah server bisa mengirim push SOS');
   const pkAnon = await call('GET', '/v1/pk/me');
   ok(pkAnon.status === 401, 'PK: tanpa token ditolak');
   const pkDev = await call('POST', '/v1/pk/me/device', { token: pkT, body: { fcm_token: `smoke-pk-fcm-${pkPhone}`, platform: 'android' } });

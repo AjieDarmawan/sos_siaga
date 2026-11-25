@@ -227,7 +227,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 spacing: 6,
                 runSpacing: 6,
                 children: [
-                  _Badge(state.receivesSos ? 'HP ini menerima SOS' : 'Notifikasi SOS belum aktif', on: state.receivesSos),
+                  _Badge(
+                    me.serverPush == false
+                        ? 'Server belum mengirim push SOS'
+                        : state.receivesSos
+                        ? 'HP ini menerima SOS'
+                        : 'Notifikasi SOS belum aktif',
+                    on: state.receivesSos && me.serverPush != false,
+                  ),
                   if (me.scope != null) _Badge('Kec. ${me.scope!.name}'),
                   if (me.isDemo) const _Badge('Akun demo'),
                 ],
@@ -317,7 +324,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     _Row(
                       icon: Icons.phone_android_outlined,
                       value: 'Perangkat terdaftar',
-                      sub: state.receivesSos ? 'HP ini aktif menerima SOS' : 'Notifikasi belum aktif di HP ini',
+                      sub: me.serverPush == false
+                          ? 'Server belum dikonfigurasi push (SOS hanya muncul saat app dibuka)'
+                          : state.receivesSos
+                          ? 'HP ini aktif menerima SOS'
+                          : 'Notifikasi belum aktif di HP ini',
                       onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const _DevicesScreen())),
                     ),
                     if (me.isDemo) _Row(icon: Icons.science_outlined, value: 'Simulasi SOS masuk (demo)', onTap: _simulate),

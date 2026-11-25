@@ -66,6 +66,9 @@ class Me {
 
   /// Penerima darurat & Bhabinkamtibmas bisa menanggapi; aksi per laporan tetap ditentukan server (`actions`).
   bool get canRespond => raw['can_respond'] == true;
+
+  /// Server bisa mengirim push FCM (kredensial Firebase Polmas terpasang). null = server lama.
+  bool? get serverPush => raw['server_push'] as bool?;
   bool get isOfficer => raw['is_officer'] == true;
   ({double lat, double lng})? get areaLocation {
     final l = raw['area_location'];
