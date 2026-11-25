@@ -445,14 +445,14 @@ void main() {
     await tester.pump();
     await tester.tap(find.byKey(const ValueKey('siagasos-contact-add')));
     await tester.pump();
-    expect(find.textContaining('Nomor WhatsApp tidak valid'), findsOneWidget);
+    expect(find.textContaining('Nomor HP tidak valid'), findsOneWidget);
     await tester.enterText(find.byKey(const ValueKey('siagasos-contact-name')), 'Istri');
     await tester.enterText(find.byKey(const ValueKey('siagasos-contact-phone')), '0813-3333-4444');
     await tester.pump();
     // Status wajib dipilih dari dropdown.
     await tester.tap(find.byKey(const ValueKey('siagasos-contact-add')));
     await tester.pump();
-    expect(find.text('Pilih status kontak.'), findsOneWidget);
+    expect(find.text('Pilih jabatan kontak.'), findsOneWidget);
     await tester.tap(find.byKey(const ValueKey('siagasos-contact-role')));
     await pumpFrames(tester, 8);
     await tester.tap(find.text('Keluarga').last);
