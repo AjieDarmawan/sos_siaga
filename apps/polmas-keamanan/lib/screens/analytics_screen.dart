@@ -294,7 +294,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
       catTotals[m['category'] as String] = (catTotals[m['category']] ?? 0) + (m['n'] as int);
     }
     final topCats = (catTotals.entries.toList()..sort((a, b) => b.value.compareTo(a.value))).take(4).map((e) => e.key).toList();
-    final sources = eco.map((e) => e['source'] as String).toSet().toList();
+    final sources = eco.map((e) => e['source'] as String?).toSet().toList();
     final maxCell = matrix.isEmpty ? 1 : matrix.map((m) => m['n'] as int).reduce(math.max);
     final sla = ((s['sla_min'] as Map?)?['sos'] as num?)?.toDouble() ?? 15;
     final meds = eco.where((e) => e['median_response_s'] != null).toList()
@@ -398,7 +398,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                     TableRow(
                       children: [
                         Text(
-                          eco.firstWhere((e) => e['source'] == src)['label'] as String,
+                          src == null ? 'Lainnya' : eco.firstWhere((e) => e['source'] == src)['label'] as String,
                           style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: context.ink2),
                         ),
                         for (final c in topCats)

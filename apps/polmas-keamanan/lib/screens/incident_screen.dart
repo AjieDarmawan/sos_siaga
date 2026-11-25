@@ -529,12 +529,6 @@ class _Steps extends StatelessWidget {
                     child: Stack(
                       alignment: Alignment.center,
                       children: [
-                        if (i > 0)
-                          Positioned(
-                            left: 0,
-                            right: null,
-                            child: FractionallySizedBox(widthFactor: 0.5, child: Container(height: 2)),
-                          ),
                         Row(
                           children: [
                             Expanded(

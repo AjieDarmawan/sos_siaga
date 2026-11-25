@@ -888,13 +888,14 @@ polmasRouter.get('/analytics/summary', async (req, res) => {
     trend: out.trend.map((t) => ({ day: (t.day as Date).toISOString().slice(0, 10), sos: t.sos, laporan: t.laporan })),
     by_kelurahan: out.byKelurahan.map((k) => ({ ...k, prev_n: prevKel.get(k.code ?? '') ?? 0 })),
     by_category: out.byCategory,
-    by_source: out.bySource.map((s) => ({ ...s, label: SOURCE_LABEL[s.source] ?? s.source })),
+    by_source: out.bySource.map((s) => ({ ...s, label: SOURCE_LABEL[s.source] ?? 'Lainnya' })),
     // Ekosistem = pilar + nama app sumber (mis. "UMKM · commerceOS"), dengan persen dari total dan median respons.
     by_ecosystem: out.byEcosystem.map((e) => ({
-      ...e, label: SOURCE_LABEL[e.source] ?? e.source, pct: total ? Math.round((e.n / total) * 100) : 0,
+      // App tanpa pilar Polmas (mis. POS yang mencantumkan nomor ini di Nomor Darurat): label = nama app.
+      ...e, label: SOURCE_LABEL[e.source] ?? e.app_name ?? 'Lainnya', pct: total ? Math.round((e.n / total) * 100) : 0,
       top_categories: out.matrix.filter((m) => m.source === e.source).sort((a, b) => b.n - a.n).slice(0, 2).map((m) => m.category),
     })),
-    matrix: out.matrix.map((m) => ({ ...m, label: SOURCE_LABEL[m.source] ?? m.source })),
+    matrix: out.matrix.map((m) => ({ ...m, label: SOURCE_LABEL[m.source] ?? 'Lainnya' })),
     funnel: out.funnel,
     officers: out.officers.map((o) => ({ ...o, user_id: undefined })),
     heatmap: out.heat, // dow 1 = Senin … 7 = Minggu

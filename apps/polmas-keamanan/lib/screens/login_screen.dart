@@ -481,7 +481,8 @@ class _NavyButton extends StatelessWidget {
 class _DashFormatter extends TextInputFormatter {
   @override
   TextEditingValue formatEditUpdate(TextEditingValue oldValue, TextEditingValue newValue) {
-    final t = dashLocal(newValue.text);
+    // "+62" sudah tercetak di depan: awalan 0 / 62 yang diketik atau ditempel dibuang.
+    final t = dashLocal(newValue.text.replaceAll(RegExp(r'[^0-9]'), '').replaceFirst(RegExp(r'^(62|0)'), ''));
     return TextEditingValue(text: t, selection: TextSelection.collapsed(offset: t.length));
   }
 }

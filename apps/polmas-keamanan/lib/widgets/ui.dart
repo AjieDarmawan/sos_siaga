@@ -340,10 +340,7 @@ class ReportCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final dist = r.distanceFrom(here);
     final last = r.lastResponse;
-    final place = [
-      ?(r.locationText ?? r.sourcePlace),
-      if (r.kelurahan != null) 'Kel. ${r.kelurahan!.name}',
-    ].join(', ');
+    final place = placeText(r);
     final who = [r.reporterName, ?r.sourcePlace].join(' · ');
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
@@ -458,6 +455,13 @@ class ReportCard extends StatelessWidget {
       ),
     );
   }
+}
+
+/// Alamat kejadian + kelurahan, tanpa mengulang kelurahan bila alamat sudah memuatnya.
+String placeText(Report r) {
+  final base = r.locationText ?? r.sourcePlace;
+  final kel = r.kelurahan;
+  return [?base, if (kel != null && !(base ?? '').toLowerCase().contains('kel.')) 'Kel. ${kel.name}'].join(', ');
 }
 
 /// "Bripka Andi Saputra (Unit R2-07)" → "Bripka Andi Saputra".

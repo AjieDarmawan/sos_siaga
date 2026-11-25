@@ -113,10 +113,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   const SizedBox(height: 12),
                   Row(
                     children: [
-                      _Stat(color: PK.red, value: c?['sos_today'], label: 'SOS hari ini'),
-                      _Stat(color: const Color(0xFF4F7BD9), value: c?['new_reports'], label: 'Laporan baru'),
-                      _Stat(color: PK.amber, value: c?['in_progress'], label: 'Dalam penanganan'),
-                      _Stat(color: PK.green, value: c?['resolved_7d'], label: 'Selesai 7 hari', last: true),
+                      _Stat(color: PK.red, value: c?['sos_today'], label: 'SOS\nhari ini'),
+                      _Stat(color: const Color(0xFF4F7BD9), value: c?['new_reports'], label: 'Laporan\nbaru'),
+                      _Stat(color: PK.amber, value: c?['in_progress'], label: 'Dalam\npenanganan'),
+                      _Stat(color: PK.green, value: c?['resolved_7d'], label: 'Selesai\n7 hari', last: true),
                     ],
                   ),
                   SectionHead('Tindak Lanjut Terbaru', trailing: ViewToggle(table: _table, onChanged: (v) => setState(() => _table = v))),
@@ -195,7 +195,7 @@ class _SosAlertState extends State<_SosAlert> with SingleTickerProviderStateMixi
   Widget build(BuildContext context) {
     final r = widget.r;
     final dist = r.distanceFrom(widget.here);
-    final place = [?(r.locationText ?? r.sourcePlace), if (r.kelurahan != null) 'Kel. ${r.kelurahan!.name}'].join(', ');
+    final place = placeText(r);
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -380,7 +380,12 @@ class _Stat extends StatelessWidget {
             style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, height: 1.1, color: context.ink, fontFeatures: const [FontFeature.tabularFigures()]),
           ),
           const SizedBox(height: 2),
-          Text(label, style: TextStyle(fontSize: 10.5, height: 1.25, fontWeight: FontWeight.w600, color: context.ink2)),
+          // Dua baris tetap; mengecil bila huruf perangkat besar supaya kata tidak terpotong di tengah.
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: Text(label, maxLines: 2, style: TextStyle(fontSize: 10.5, height: 1.25, fontWeight: FontWeight.w600, color: context.ink2)),
+          ),
         ],
       ),
     ),
