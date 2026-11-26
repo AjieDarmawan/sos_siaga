@@ -1,0 +1,37 @@
+#!/usr/bin/env bash
+# Tolak push ke GitHub (repo publik) bila commit yang dikirim memuat kunci service account Firebase.
+# GitLab (privat) boleh menyimpan kunci sementara (apps/api/siagasos-a61e9-*.json) agar deploy produksi bisa push SOS.
+# Pasang: git config core.hooksPath scripts/git-hooks
+set -euo pipefail
+
+remote_url="$2"
+[[ "$remote_url" == *github.com* ]] || exit 0
+
+KEY_PATHS=('apps/api/siagasos-a61e9-*.json' 'apps/api/*service-account*.json' '*firebase-adminsdk*.json')
+zero=0000000000000000000000000000000000000000
+blocked=0
+
+while read -r local_ref local_sha remote_ref remote_sha; do
+  [[ "$local_sha" == "$zero" ]] && continue # hapus branch
+  if [[ "$remote_sha" == "$zero" ]]; then
+    range_args=("$local_sha" --not --remotes="$1") # branch baru: riwayat yang belum ada di remote ini
+  else
+    range_args=("$remote_sha..$local_sha")
+  fi
+  hits=$(git log --format='%h %s' "${range_args[@]}" -- "${KEY_PATHS[@]}" 2>/dev/null || true)
+  if [[ -n "$hits" ]]; then
+    echo "✘ Push ke GitHub ditolak: commit berikut memuat kunci Firebase (repo GitHub publik):" >&2
+    echo "$hits" | sed 's/^/    /' >&2
+    blocked=1
+  fi
+done
+
+if [[ $blocked -eq 1 ]]; then
+  cat >&2 <<'EOF'
+  Pilihan:
+    - Jadikan repo GitHub privat, lalu jalankan push dengan: git push --no-verify github <branch>
+    - Atau push ke GitHub dari branch yang tidak memuat commit kunci.
+EOF
+  exit 1
+fi
+exit 0

@@ -145,6 +145,10 @@ Ganti `pk_test_` ke `pk_live_` setelah perusahaan disetujui. Kode lain tidak per
 
 Event: `report.created`, `report.status_changed`, `report.cancelled`. Header `X-SOS-Signature: t=<unix>,v1=<hex>`, dengan `v1 = HMAC_SHA256(webhook_secret, "<t>.<raw body>")`. Retry eksponensial (30 dtk → maks 6 jam per jeda) hingga 24 jam.
 
+## Kunci Firebase & dua remote
+
+GitLab (`origin`, privat) boleh menyimpan kunci FCM Polmas `apps/api/siagasos-a61e9-*.json` sementara agar deploy produksi bisa mengirim push SOS. GitHub (`github`) **publik**: pasang pengaman sekali per laptop, `git config core.hooksPath scripts/git-hooks`. Hook `pre-push` menolak push ke GitHub bila ada commit yang memuat file kunci. Solusi permanen: jadikan repo GitHub privat, atau isi `PK_FCM_SERVICE_ACCOUNT=base64:<JSON>` di env server lalu keluarkan file kunci dari repo.
+
 ## Build rilis app mobile (pasti tersambung ke produksi)
 
 - **Polmas Digital** (penerima SOS): `apps/polmas-keamanan/scripts/build_release.sh aab|apk`. Build rilis selalu ke `https://sos.tip2.co`, HTTP biasa dimatikan, tanda tangan dari `android/key.properties`. Skrip menolak build bila server produksi belum bisa mengirim push (`/v1/pk/status`), project Firebase server ≠ `google-services.json`, atau (untuk `aab`) kunci unggah belum ada.
