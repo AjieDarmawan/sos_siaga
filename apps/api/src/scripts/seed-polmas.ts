@@ -27,10 +27,10 @@ const CENTER = { lat: -6.5971, lng: 106.7973 };
 const PASSWORD = 'demo1234';
 
 const SOURCES = [
-  { source: 'warga', app: 'Polmas Warga (Demo)', place: 'RW 05 Paledang', alamat: 'Kel. Paledang, Kec. Bogor Tengah, Kota Bogor' },
-  { source: 'kantor', app: 'Polmas Kantor (Demo)', place: 'Gedung Graha Pajajaran', alamat: 'Jl. Pajajaran, Kec. Bogor Tengah, Kota Bogor' },
+  { source: 'warga', app: 'Polmas Lingkungan (Demo)', place: 'RW 05 Paledang', alamat: 'Kel. Paledang, Kec. Bogor Tengah, Kota Bogor' },
+  { source: 'kantor', app: 'Polmas Perkantoran (Demo)', place: 'Gedung Graha Pajajaran', alamat: 'Jl. Pajajaran, Kec. Bogor Tengah, Kota Bogor' },
   { source: 'umkm', app: 'Polmas UMKM (Demo)', place: 'Toko Roti Sinar Jaya', alamat: 'Jl. Suryakencana, Kec. Bogor Tengah, Kota Bogor' },
-  { source: 'sekolah', app: 'Polmas Sekolah (Demo)', place: 'SDN Pengadilan 1', alamat: 'Jl. Pengadilan, Kec. Bogor Tengah, Kota Bogor' },
+  { source: 'sekolah', app: 'Polmas Pendidikan (Demo)', place: 'SDN Pengadilan 1', alamat: 'Jl. Pengadilan, Kec. Bogor Tengah, Kota Bogor' },
   { source: 'komunitas', app: 'Polmas Komunitas (Demo)', place: 'Komunitas Ojol Suryakencana', alamat: 'Jl. Suryakencana, Kec. Bogor Tengah, Kota Bogor' },
 ] as const;
 
@@ -132,7 +132,11 @@ async function ensureApps(accountId: string) {
   const out: Record<string, { id: string; sourceId: string; name: string }> = {};
   await withTenant(accountId, async (c) => {
     for (const s of SOURCES) {
-      let app = (await c.query(`SELECT id FROM apps WHERE account_id = $1 AND name = $2`, [accountId, s.app])).rows[0];
+      // Dicari lewat bundle demo (bukan nama) supaya ganti nama tidak membuat app ganda; nama disamakan label pilar.
+      let app = (await c.query(
+        `SELECT id FROM apps WHERE account_id = $1 AND (name = $2 OR $3 = ANY(allowed_bundle_ids)) ORDER BY created_at LIMIT 1`,
+        [accountId, s.app, `id.polmas.demo.${s.source}`])).rows[0];
+      if (app) await c.query(`UPDATE apps SET name = $2 WHERE id = $1 AND name <> $2`, [app.id, s.app]);
       if (!app) {
         app = (await c.query(
           `INSERT INTO apps (account_id, name, allowed_bundle_ids, polmas_source) VALUES ($1,$2,$3,$4) RETURNING id`,
