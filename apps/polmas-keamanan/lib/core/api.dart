@@ -53,9 +53,10 @@ class Api {
     } on TimeoutException {
       throw ApiException(0, 'timeout', 'Koneksi lambat. Periksa sinyal lalu coba lagi.');
     } on SocketException {
-      throw ApiException(0, 'offline', 'Tidak ada koneksi internet.');
+      // Bisa karena internet mati atau server tidak terjangkau (mis. build uji yang mengarah ke localhost).
+      throw ApiException(0, 'offline', 'Tidak bisa terhubung ke server ${Uri.parse(apiUrl).host}. Periksa koneksi internet.');
     } on http.ClientException {
-      throw ApiException(0, 'offline', 'Tidak bisa terhubung ke server.');
+      throw ApiException(0, 'offline', 'Tidak bisa terhubung ke server ${Uri.parse(apiUrl).host}.');
     }
     if (res.statusCode == 204) return null;
     dynamic data;
