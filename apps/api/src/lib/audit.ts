@@ -2,7 +2,7 @@ import { q, type Db } from '../db.js';
 
 export interface AuditEntry {
   accountId?: string | null;
-  actorKind: 'user' | 'platform_admin' | 'system' | 'server';
+  actorKind: 'user' | 'platform_admin' | 'system' | 'server' | 'partner';
   actorId?: string | null;
   action: string;
   targetType?: string;

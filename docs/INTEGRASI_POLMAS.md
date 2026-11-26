@@ -1,6 +1,7 @@
 # Rencana integrasi: klien SiagaSOS → Polmas Digital
 
 > Status: DRAFT v0.1 (23 Nov 2026). Belum ada kode. Keputusan terbuka di §8 perlu dijawab dulu.
+> **Update 26 Nov 2026:** `/partner/v1` list, detail (+ media, timeline, track), actions sudah jalan (migrasi 016, lihat README §Mitra dan STATUS keputusan 25). Berbagi memakai pilar app (`apps.polmas_source`), wilayah dari `reports.kecamatan_code`. Belum: `/stream`, `/stats`, `satuan.wilayah_kode` di Polmas.
 > Repo terkait: `siagasos` (repo ini), `../polmas` (dashboard Polri), `../tata-warga-mobile` + `../tata-warga-be` (klien pilot pertama).
 
 ## 1. Alur yang dituju

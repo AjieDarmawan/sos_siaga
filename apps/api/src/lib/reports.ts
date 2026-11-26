@@ -64,7 +64,7 @@ export async function loadReport(c: Db, id: string, appId?: string) {
   return rows[0];
 }
 
-export interface Actor { kind: 'user' | 'reporter' | 'server' | 'system' | 'responder'; id?: string | null; name?: string | null }
+export interface Actor { kind: 'user' | 'reporter' | 'server' | 'system' | 'responder' | 'partner'; id?: string | null; name?: string | null }
 
 /** Satu-satunya jalur ubah status: menulis timeline, broadcast realtime, dan antre webhook. */
 export async function changeReport(c: Db, id: string, input: { status?: ReportStatus; note?: string }, actor: Actor, appId?: string) {

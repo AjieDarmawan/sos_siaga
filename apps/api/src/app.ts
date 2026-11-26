@@ -17,6 +17,7 @@ import { reportsRouter } from './routes/portal/reports.js';
 import { teamRouter } from './routes/portal/team.js';
 import { adminRouter } from './routes/admin.js';
 import { polmasRouter } from './routes/polmas.js';
+import { partnerRouter } from './routes/partner.js';
 
 export function createApp() {
   const app = express();
@@ -46,6 +47,9 @@ export function createApp() {
   app.use('/v1/sdk', sdkRouter);
   // Aplikasi Polmas Keamanan (token pks_…); dipasang sebelum /v1 supaya tidak lewat auth secret key.
   app.use('/v1/pk', cors({ origin: false }), polmasRouter);
+  // /v1/partner = alias yang lewat proxy produksi (sos.tip2.co hanya meneruskan /v1, /portal, /admin ke API).
+  // Wajib sebelum app.use('/v1') karena router /v1 memasang secretKeyAuth untuk semua path di bawahnya.
+  app.use(['/partner/v1', '/v1/partner'], cors({ origin: false }), partnerRouter);
   app.use('/v1', cors({ origin: false }), serverRouter);
 
   const portalCors = cors({ origin: config.portalOrigins, credentials: false, maxAge: 600 });

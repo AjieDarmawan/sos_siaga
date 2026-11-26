@@ -240,7 +240,7 @@ Status data: ✅ API sudah ada · 🟡 ada tapi perlu diubah · ⬜ belum ada.
 - Repo `../polmas`: halaman Laporan & SOS dirombak jadi pusat komando (peta SOS langsung, statistik, strip SOS geser, arus laporan, panel detail dengan kontak pelapor + media TKP dari MinIO). Data contoh tetap ada, ditambah SOS nyata dari DB SiagaSOS lewat proxy server Polmas `/api/sos` → `/v1/reports` (kunci `sk_live_` per app di `polmas/.env.local`), polling 5 dtk + bunyi saat SOS baru.
 - Aksi petugas Polmas → `PATCH /v1/reports/:id` (acknowledged / in_progress / resolved / false_alarm + catatan "[satuan · petugas]"). "Teruskan ke 110" = in_progress + catatan (diingat di browser).
 - Dibuat 2 kunci secret live baru untuk app demo (kunci lama tetap aktif) dan 3 SOS live contoh di Kota Bogor (Aplikasi Kurir).
-- Belum: API mitra `/partner/v1` dengan cakupan wilayah di server (docs/INTEGRASI_POLMAS.md tahap 1–3). Sekarang cakupan Polsek masih di UI (kecamatan terdekat ±4 km).
+- 🟡 (2026-11-26: `/partner/v1` sudah ada, lihat log di bawah; cakupan per satuan belum) API mitra `/partner/v1` dengan cakupan wilayah di server (docs/INTEGRASI_POLMAS.md tahap 1–3). Sekarang cakupan Polsek masih di UI (kecamatan terdekat ±4 km).
 
 ### 2026-11-23 · Laporan pengaduan di tombol melayang
 - API: migrasi `003_report_kind.sql` (`reports.kind`), `createReportSchema.kind` (pengaduan wajib uraian ≥ 5), `complaint_categories` di `/v1/sdk/config` + portal `sdk_config`, kuota pengaduan terpisah (5/jam per reporter), tanpa email darurat, `/locations` → `accepted:false`, filter `?kind=` di `/v1/reports`. Smoke **72/72** (+5 cek pengaduan).
@@ -369,3 +369,21 @@ Status data: ✅ API sudah ada · 🟡 ada tapi perlu diubah · ⬜ belum ada.
 - **Tanpa tulisan demo & nama app mentah (2026-11-26):** label DEMO, "Akun demo", "(demo)" dihapus dari app; laporan dari app tanpa pilar Polmas (mis. POSTIP Kasir) tidak menampilkan chip ekosistem, analitik mengelompokkannya "Lainnya"; akhiran "(Demo)/(Android)/(iOS)" dibuang dari nama app. Smoke 154/154, test 11/11.
 - Git: repo GitHub `AjieDarmawan/sos_siaga` **publik**; commit GitLab `ca2e26b` berisi kunci privat Firebase sehingga riwayat GitLab tidak boleh digabung ke GitHub. GitLab `dev` mendapat commit yang sama + penghapusan file kunci; GitHub `dev` tetap tanpa commit kunci. Kunci `siagasos-a61e9` tetap perlu dirotasi.
 - **Nama & pilar app (2026-11-26):** seed demo memakai nama sesuai label pilar (Polmas Lingkungan/Perkantoran/UMKM/Pendidikan/Komunitas (Demo)), dicari lewat bundle supaya tidak ganda. Lokal: POSTIP Kasir (`com.tip.kasir`) diberi pilar UMKM. **Produksi:** `commerceos-pos-mobile/env/siagasos.prod.json` menunjuk `https://api.siagasos.id` (NXDOMAIN) dengan kunci lokal (ditolak `sos.tip2.co`) → build produksi POS tidak bisa mengirim SOS. Perlu: daftarkan app POSTIP Kasir (bundle `com.tip.kasir`, pilar UMKM) di portal `sos.tip2.co`, isi kunci `pk_live_` + base URL `https://sos.tip2.co` di file itu.
+
+### 2026-11-26 — Fix: push SOS Polmas tanpa sirene di build rilis
+- Penyebab: resource shrinker rilis (default Flutter) membuang `res/raw/sos_siren` karena hanya dirujuk lewat URI string di `MainActivity` → kanal `polmas_sos_v2` tanpa suara. Debug tidak kena (shrinker mati).
+- Fix: `apps/polmas-keamanan/android/app/src/main/res/raw/keep.xml` (`tools:keep="@raw/sos_siren"`), plus cek di `scripts/build_release.sh` bahwa paket memuat `res/raw/sos_siren`.
+- Terverifikasi `aapt2 dump resources`: tanpa keep.xml `raw/sos_siren` hilang; dengan keep.xml ada.
+- Jebakan: HP yang terlanjur memasang APK rusak mungkin perlu uninstall → install ulang bila sirene belum bunyi (kanal menyimpan pengaturan suaranya).
+
+### 2026-11-26 — Polmas Digital disamakan lagi dengan mockup Opsi A v2
+- Tab & judul layar ke-3 kembali **Analitik** (sempat tertulis "Dashboard"), judul kolom tabel Tindak Lanjut "Location" → **Lokasi**.
+- Cari laporan: placeholder "Cari berita, nama, nomor HP…". API `GET /v1/pk/reports?q=` kini juga mencocokkan nomor HP pelapor (digit saja, `0…` → `62…`, minimal 4 digit) **khusus Bhabinkamtibmas**; penerima lain tidak, karena bagi mereka nomor disamarkan.
+- `pnpm smoke` 157 cek lolos (+1: penerima tidak bisa mencari lewat nomor), `pnpm -r typecheck` dan `flutter analyze` bersih. Belum ada cek smoke jalur positif (smoke belum punya akun Bhabinkamtibmas).
+
+### 2026-11-26 — API mitra `/partner/v1`: SOS + lampiran tampil di dashboard Polmas Digital (:5177 `#/sos`)
+- Masalah: konsol SOS Polmas hanya membaca app yang kunci `sk_live`-nya ditulis manual di `polmas/.env.local` (3 app); laporan app pilar Polmas (UMKM, Lingkungan, dst.) tidak muncul.
+- **API**: migrasi `016_partners.sql` (`partners`, `partner_keys`, policy `partner_read`, actor_kind `partner` di `report_events` & `audit_logs`), `withPartner()` di `src/db.ts`, `src/routes/partner.ts` (list, detail + media/timeline/track, actions), skrip `pnpm partner:create`. Smoke **170 cek lolos** (+13 cek mitra: tanpa pilar tidak dibagikan, test tidak dibagikan, cakupan wilayah, 403 di luar izin, tindakan ke timeline + status SDK).
+- **Polmas** (`../polmas`): `server/sos.ts` memakai `SIAGASOS_PARTNER_KEY` (kunci "Polmas Digital", cakupan nasional, sudah diisi di `.env.local`), tetap menggabungkan `SIAGASOS_SECRET_KEYS` untuk app tanpa pilar (dedupe per id); tombol status dikirim sebagai `aksi` mitra; nama app tanpa akhiran (Demo)/(Android). Terverifikasi login `kapolres.bogor-kota`: 227 laporan dari 8 app, detail membawa URL media yang bisa dibuka.
+- Jebakan: smoke berulang cepat kena rate limit `pk-setup-ip` (10/jam per IP) → hapus `rl:pk-*-ip:::1:*` di Redis db 9 (dev saja). Smoke yang gagal di tengah bisa meninggalkan app smoke "Gedung Alfa Web" berpilar `umkm` (lalu tampil di Polmas).
+- ⬜ `/partner/v1/stream` (SSE) dan `/stats`, `satuan.wilayah_kode` di Polmas → kirim `X-Partner-Scope` per satuan (cakupan sekarang masih dikunci di UI).

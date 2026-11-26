@@ -412,6 +412,9 @@ async function main() {
   const pkCnt = await call('GET', '/v1/pk/reports?scope=me&status=selesai', { token: pkT });
   ok(pkCnt.data.counts?.selesai >= 1 && pkCnt.data.counts.semua >= pkCnt.data.counts.selesai && pkCnt.data.items.every((r: any) => r.status === 'selesai'),
     'PK: daftar membawa jumlah per status (chip) yang mengabaikan filter status');
+  const pkQPhone = await call('GET', `/v1/pk/reports?q=${encodeURIComponent('0800 7777')}`, { token: pkT });
+  ok(pkQPhone.status === 200 && !pkQPhone.data.items.some((r: any) => r.id === pkSos.data.id),
+    'PK: cari nomor HP pelapor hanya untuk Bhabinkamtibmas (penerima tidak bisa menebak pelapor lewat nomor)');
   const pkAn = await call('GET', '/v1/pk/analytics/summary?period=7d', { token: pkT });
   const pkEv = await call('GET', '/v1/pk/analytics/evaluation?period=7d', { token: pkT });
   ok(pkAn.status === 200 && pkAn.data.trend.length === 7 && pkAn.data.totals.sos >= 1 && pkEv.status === 200 && pkEv.data.current.selesai >= 1,
@@ -469,7 +472,11 @@ async function main() {
   const lst = await call('GET', '/v1/pk/reports?scope=me&limit=50', { token: pkT });
   ok(lst.data.items.find((r: any) => r.id === s2)?.handler?.is_me === false, 'PK: daftar membawa penanggung jawab');
   await call('POST', '/v1/pk/auth/logout', { token: pkT2 });
+  const pkStillIn = await call('GET', '/v1/pk/me', { token: pkT });
+  ok(pkStillIn.status === 200, 'PK: sesi tetap berlaku selama nomor masih di Nomor Darurat');
   await call('PUT', '/v1/sdk/contacts', { headers: sdkH(pkLive), body: { reporter: { ref: 'kasir_pk' }, contacts: [] } });
+  const pkGoneSess = await call('GET', '/v1/pk/me', { token: pkT });
+  ok(pkGoneSess.status === 401, 'PK: nomor dicabut dari Nomor Darurat → sesi yang masih berjalan langsung tidak berlaku');
   await call('POST', '/v1/pk/auth/logout', { token: pkT });
   await call('POST', '/v1/pk/auth/logout', { token: pkSetup.data.token });
   const pkGone = await call('POST', '/v1/pk/auth/login', { body: { phone: pkPhone, password: 'satpam-baru-123' } });
@@ -526,6 +533,53 @@ async function main() {
   ok(bApp.status === 404, 'akses app akun lain → 404');
   const rlsRaw = await pool.query(`SELECT count(*)::int AS n FROM reports`);
   ok(rlsRaw.rows[0].n === 0, 'RLS: query tanpa konteks tenant melihat 0 baris');
+
+  // ---------------------------------------------------------------- API mitra /partner/v1 (Polmas Digital)
+  {
+    const { createPartner } = await import('../lib/partners.js');
+    const nat = await createPartner(`Smoke Mitra ${Date.now()}`);
+    const kab = (await pool.query(`SELECT kode FROM wilayah WHERE level = 2 AND EXISTS (SELECT 1 FROM wilayah w3 WHERE w3.parent = wilayah.kode) ORDER BY kode LIMIT 1`)).rows[0].kode as string;
+    const [kecA, kecB] = (await pool.query(`SELECT kode FROM wilayah WHERE parent = $1 ORDER BY kode LIMIT 2`, [kab])).rows.map((r) => r.kode as string);
+    const reg = await createPartner(`Smoke Mitra Kab ${Date.now()}`, kab);
+    const ph = (k: string, h: Record<string, string> = {}) => ({ authorization: `Bearer ${k}`, ...h });
+
+    ok((await call('GET', '/partner/v1/reports', { headers: ph('ptk_live_' + 'x'.repeat(40)) })).status === 401, 'Mitra: kunci tidak dikenal ditolak');
+    const before = await call('GET', '/partner/v1/reports?limit=200', { headers: ph(nat.key) });
+    ok(before.status === 200 && !before.data.data.some((r: any) => r.id === liveRep.data.id), 'Mitra: laporan dari app tanpa pilar Polmas tidak dibagikan');
+    await call('PATCH', `/portal/apps/${appId}`, { token: A.token, body: { pillar: 'umkm' } });
+    const shared = await call('POST', '/v1/sdk/reports', { headers: sdkH(pkLive, { 'Idempotency-Key': uuid() }),
+      body: { ...payload, reporter: { ref: 'warga_77', name: 'Siti', phone: '0812 7000 1111' } } });
+    // Wilayah biasanya diisi worker dari GPS; di smoke ditetapkan langsung (area_checked_at agar worker tidak menimpa).
+    await withPlatform((c) => c.query(`UPDATE reports SET kecamatan_code = $2, area_checked_at = now() WHERE id = $1`, [shared.data.id, kecA]));
+    const list = await call('GET', '/partner/v1/reports?limit=200', { headers: ph(nat.key) });
+    const row = list.data.data.find((r: any) => r.id === shared.data.id);
+    ok(row && row.pillar === 'umkm' && row.reporter.phone === '0812 7000 1111' && !('ref' in row.reporter) && !('device' in row) && row.media_count,
+      'Mitra: laporan live app berpilar terlihat dengan nama & nomor pelapor, tanpa reporter_ref/device');
+    ok(!list.data.data.some((r: any) => r.mode !== 'live'), 'Mitra: laporan test tidak pernah dibagikan');
+    const inKab = await call('GET', '/partner/v1/reports?limit=200', { headers: ph(reg.key) });
+    ok(inKab.data.data.some((r: any) => r.id === shared.data.id) && inKab.data.data.every((r: any) => r.kecamatan?.code.startsWith(kab + '.')),
+      'Mitra berwilayah: hanya laporan di dalam kab/kota-nya (tanpa wilayah tidak terlihat)');
+    const otherKec = await call('GET', '/partner/v1/reports?limit=200', { headers: ph(reg.key, { 'X-Partner-Scope': kecB! }) });
+    ok(otherKec.status === 200 && !otherKec.data.data.some((r: any) => r.id === shared.data.id), 'Mitra: X-Partner-Scope kecamatan lain tidak melihat laporan');
+    ok((await call('GET', `/partner/v1/reports/${shared.data.id}`, { headers: ph(reg.key, { 'X-Partner-Scope': kecB! }) })).status === 404,
+      'Mitra: detail di luar cakupan → 404');
+    ok((await call('GET', '/partner/v1/reports', { headers: ph(reg.key, { 'X-Partner-Scope': '99' }) })).status === 403, 'Mitra: cakupan di luar izin mitra ditolak');
+    const det = await call('GET', `/partner/v1/reports/${shared.data.id}`, { headers: ph(reg.key, { 'X-Partner-Scope': kecA!, 'X-Partner-Actor': 'Bripka Andi' }) });
+    ok(det.status === 200 && Array.isArray(det.data.media) && Array.isArray(det.data.timeline) && det.data.kecamatan?.code === kecA,
+      'Mitra: detail membawa media (URL baca), timeline, dan wilayah');
+    const act = await call('POST', `/partner/v1/reports/${shared.data.id}/actions`, {
+      headers: ph(reg.key, { 'X-Partner-Actor': 'Bripka Andi', 'X-Partner-Unit': 'Polsek Uji' }), body: { action: 'dispatch', unit: 'R2-07' } });
+    ok(act.status === 201 && act.data.status === 'in_progress' && act.data.status_message === 'Polsek Uji menuju lokasi (unit R2-07).',
+      'Mitra: kirim unit → in_progress + status di SDK pelapor');
+    const tl = await call('GET', `/portal/reports/${shared.data.id}`, { token: A.token });
+    ok(tl.data.timeline.some((e: any) => e.actor_kind === 'partner' && /Polsek Uji · Bripka Andi/.test(e.note ?? '')), 'Mitra: tindakan tampil di timeline portal klien');
+    const st = await call('GET', `/v1/sdk/reports/${shared.data.id}`, { headers: sdkH(pkLive) });
+    ok(st.status !== 200 || st.data.status === 'in_progress', 'Mitra: status baru terlihat dari SDK');
+    const badNote = await call('POST', `/partner/v1/reports/${shared.data.id}/actions`, { headers: ph(nat.key), body: { action: 'note' } });
+    ok(badNote.status === 422, 'Mitra: catatan kosong ditolak');
+    await call('PATCH', `/portal/apps/${appId}`, { token: A.token, body: { pillar: null } });
+    await pool.query(`UPDATE partners SET disabled_at = now() WHERE id = ANY($1)`, [[nat.id, reg.id]]);
+  }
 
   // ---------------------------------------------------------------- revoke + suspend
   const rot = await call('POST', `/portal/apps/${appId}/keys/${live.data.publishable.id}/revoke`, { token: A.token });

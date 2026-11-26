@@ -15,7 +15,8 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "seed:pk": "tsx --env-file=.env src/scripts/seed-polmas.ts",
-    "pk:user": "tsx --env-file=.env src/scripts/pk-user.ts"
+    "pk:user": "tsx --env-file=.env src/scripts/pk-user.ts",
+    "partner:create": "tsx --env-file=.env src/scripts/partner-create.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.600.0",

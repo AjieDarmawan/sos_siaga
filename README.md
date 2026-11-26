@@ -60,14 +60,15 @@ Media laporan disimpan di MinIO/S3 (`S3_*` di `apps/api/.env`, bucket privat `so
 
 Halaman: registrasi 3 langkah, verifikasi email, status verifikasi + unggah dokumen, App & kunci API (rotasi/cabut, origin, webhook, tampilan tombol, source, log webhook), Tim, dan Dashboard laporan (daftar + peta realtime + bunyi alert + timeline).
 
-## Tiga kelompok API
+## Kelompok API
 
 | Prefix | Auth | Dipanggil oleh |
 |---|---|---|
 | `/v1/sdk` | `X-SOS-Key: pk_...` + cek `Origin` / `X-SOS-Bundle` | SDK web & mobile |
 | `/v1` | `Authorization: Bearer sk_...` | Backend klien |
 | `/portal`, `/admin` | JWT login (admin: password + TOTP) | Portal, dashboard, panel admin |
-| `/v1/pk` | `Authorization: Bearer pks_...` (nomor HP + password, 12 jam) | App Polmas Keamanan |
+| `/v1/pk` | `Authorization: Bearer pks_...` (nomor HP + password; sesi 30 hari, diperpanjang tiap dipakai, berakhir bila nomor dicabut dari Nomor Darurat) | App Polmas Keamanan |
+| `/partner/v1` | `Authorization: Bearer ptk_live_...` (kunci mitra, opsional `X-Partner-Scope`, `X-Partner-Actor`, `X-Partner-Unit`) | Server Polmas Digital (dashboard :5177), tidak pernah dari browser |
 
 ### SDK
 | Method | Path | |
@@ -112,11 +113,18 @@ Login dengan nomor yang ada di Nomor Darurat app sumber mana pun (atau akun `pnp
 - Auth: `POST /auth/check {phone}` → `{has_password, name, contacts[]}` (404 `phone_not_registered`), `POST /auth/setup {phone,password≥8}` (login pertama dari Nomor Darurat, 409 bila sudah punya password), `POST /auth/login`, `POST /auth/logout`. Salah 5× → kunci 15 menit (423).
 - Perangkat: `POST /me/device {fcm_token, platform, device_name?}` (push SOS via FCM project Polmas Keamanan, env `PK_FCM_SERVICE_ACCOUNT`), `POST /me/device/remove {fcm_token}` (logout), `GET /me/devices` (nama HP + `token_tail`, token tidak dikirim), `POST /me/devices/:id/remove`.
 - Profil: `GET /me` (peran, wilayah, `ecosystems[]`, `can_respond`), `PATCH /me {name}`, `GET /me/stats?days=30` (ditangani, selesai, median respons saya), `POST /me/password {current_password, new_password≥8}` (sesi lain dicabut), `POST /me/role {role_id}`, `GET /me/area?lat&lng` (usulan wilayah dari GPS), `PUT /me/area`, `GET /regions?parent=`
-- Data: `GET /dashboard`, `GET /reports` & `GET /history` (`scope=kecamatan|me`, `kind=sos|laporan`, `status=baru|diproses|…`, `kelurahan`, `q`, `from`, `to`, `before`, `limit`), `GET /reports/:id` (media URL 15 mnt, timeline, `actions`). Tiap laporan: `code` (tiket pendek, mis. `SOS-2511-3F9A`), `video_s`, `audio_s`; daftar juga `thumb_urls[]` (≤ 3 foto), dan `counts {semua, baru, diproses, selesai}` untuk chip status (halaman pertama), `GET /map?days&kind`, `GET /videos`, `GET /news`
+- Data: `GET /dashboard`, `GET /reports` & `GET /history` (`scope=kecamatan|me`, `kind=sos|laporan`, `status=baru|diproses|…`, `kelurahan`, `q` (berita/kategori/nama/kelurahan; nomor HP pelapor hanya untuk Bhabinkamtibmas), `from`, `to`, `before`, `limit`), `GET /reports/:id` (media URL 15 mnt, timeline, `actions`). Tiap laporan: `code` (tiket pendek, mis. `SOS-2511-3F9A`), `video_s`, `audio_s`; daftar juga `thumb_urls[]` (≤ 3 foto), dan `counts {semua, baru, diproses, selesai}` untuk chip status (halaman pertama), `GET /map?days&kind`, `GET /videos`, `GET /news`
 - Tanggapan: `POST /reports/:id/responses {action: terima|hubungi|verifikasi|tangani|selesai|tidak_valid|catatan|ambil_alih, note}`. Satu laporan punya satu penanggung jawab (`handler {name, is_me, since}` = Terima/Ambil alih terakhir): penerima lain hanya `hubungi`, `catatan`, `ambil_alih` (aksi lain → 409 `handled_by_other` dengan nama penanggung jawab); Bhabinkamtibmas tetap penuh. Migrasi 015.: penerima untuk laporan yang memanggil nomornya, Bhabinkamtibmas untuk kecamatannya. Lewat `changeReport` → timeline, realtime, webhook, `status_message` di SDK pelapor.
 - Panggilan: `GET /inbox` (SOS terbuka ≤ 30 mnt untuk saya + jumlah belum dibaca + `open_reports` untuk badge tab Laporan, dipolling app tiap 4 dtk), `POST /reports/:id/call {accepted|ignored}`, `GET /notifications`, `POST /notifications/read-all`
 - Analisa: `GET /analytics/summary?period=7d|30d|90d|custom&from&to&source=umkm|warga|kantor|sekolah|komunitas` (total + `median_response_s`, tren, kategori, `by_ecosystem` (pilar + nama app, %, median respons, kategori teratas), `matrix` ekosistem × kategori, `by_kelurahan` + `prev_n`, `funnel`, `officers`, heatmap, `by_hour`, `weekly` + median, `patrol_hint`), `GET /analytics/evaluation?period=…&source=…` (waktu respons rata-rata & median, % selesai, tertunda, periode sebelumnya, daftar belum ditanggapi)
 - Demo: `POST /demo/sos {source}` (akun `is_demo` saja). Data demo: `pnpm seed:pk`; akun manual: `PK_PASSWORD=… pnpm pk:user <nomor> "<nama>" <peran> [kecamatan] ["unit"]`.
+
+### Mitra (`/partner/v1`)
+Polmas Digital membaca laporan lintas tenant: hanya **live** dari app yang memilih **pilar Polmas** di portal, dibatasi RLS `partner_read` (migrasi 016) ke cakupan wilayah mitra (`partners.max_scope`, NULL = nasional; `X-Partner-Scope` boleh mempersempit, di luar izin → 403). Laporan tanpa kecamatan hanya terlihat cakupan nasional. Tidak dibagikan: `reporter.ref`, device, metadata.
+- `GET /reports?status=&kind=&since=&before=&limit≤200` (+ `media_count`, `kecamatan`/`kelurahan`, `pillar`, `next_before`)
+- `GET /reports/:id`: `media[]` (URL baca 15 mnt), `timeline`, `track` (lokasi live). Setiap baca tercatat di `audit_logs` (actor `partner`).
+- `POST /reports/:id/actions {action: acknowledge|forward_110|dispatch|resolve|false_alarm|note, note?, unit?}` → `changeReport` di konteks tenant pemilik laporan: timeline (`actor_kind=partner`), realtime portal, webhook, `status_message` di SDK ("Polsek X menuju lokasi (unit R2-07).").
+- Kunci: `pnpm --filter @siagasos/api partner:create "Polmas Digital" [kode_wilayah]` (nama yang sudah ada = kunci baru). Belum: `/stream` (SSE) dan `/stats`.
 
 ### Admin
 `POST /admin/auth/login`, `GET /admin/accounts?status=pending_review|all|…&search=` (+ `counts` per status, `drafting` = belum mengajukan), `GET /admin/accounts/:id`, `GET /admin/documents/:id/url` (signed URL 5 menit), `PATCH /admin/documents/:id`, `POST /admin/accounts/:id/decision`, `POST /admin/apps/:id/{disable,enable}`, `GET /admin/stats`.
