@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../core/app_state.dart';
 import '../theme/tokens.dart';
+import '../widgets/dialogs.dart';
 import 'analytics_screen.dart';
 import 'dashboard_screen.dart';
 import 'profile_screen.dart';
@@ -41,7 +42,11 @@ class _HomeShellState extends State<HomeShell> {
 
   static const _items = [
     (Icons.home_outlined, Icons.home_rounded, 'Beranda'),
-    (Icons.assignment_turned_in_outlined, Icons.assignment_turned_in_rounded, 'Laporan'),
+    (
+      Icons.assignment_turned_in_outlined,
+      Icons.assignment_turned_in_rounded,
+      'Laporan',
+    ),
     (Icons.bar_chart_rounded, Icons.bar_chart_rounded, 'Analitik'),
     (Icons.person_outline_rounded, Icons.person_rounded, 'Profil'),
   ];
@@ -55,41 +60,56 @@ class _HomeShellState extends State<HomeShell> {
       const AnalyticsScreen(),
       const ProfileScreen(),
     ];
-    return Scaffold(
-      backgroundColor: context.pageBg,
-      body: Column(
-        children: [
-          if (!state.online) const _OfflineBanner(),
-          Expanded(
-            child: IndexedStack(
-              index: _i,
-              children: [for (final (i, p) in pages.indexed) _visited.contains(i) ? p : const SizedBox.shrink()],
+    return PopScope(
+      // Kembali: tab lain → Beranda dulu; di Beranda → konfirmasi tutup app (tidak langsung keluar).
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) {
+        if (didPop) return;
+        if (_i != 0) {
+          _go(0);
+        } else {
+          confirmExitApp(context);
+        }
+      },
+      child: Scaffold(
+        backgroundColor: context.pageBg,
+        body: Column(
+          children: [
+            if (!state.online) const _OfflineBanner(),
+            Expanded(
+              child: IndexedStack(
+                index: _i,
+                children: [
+                  for (final (i, p) in pages.indexed)
+                    _visited.contains(i) ? p : const SizedBox.shrink(),
+                ],
+              ),
             ),
-          ),
-        ],
-      ),
-      bottomNavigationBar: DecoratedBox(
-        decoration: BoxDecoration(
-          color: context.surface,
-          border: Border(top: BorderSide(color: context.hairline)),
+          ],
         ),
-        child: SafeArea(
-          top: false,
-          child: SizedBox(
-            height: 64,
-            child: Row(
-              children: [
-                for (final (i, (off, on, label)) in _items.indexed)
-                  Expanded(
-                    child: _NavItem(
-                      icon: _i == i ? on : off,
-                      label: label,
-                      selected: _i == i,
-                      badge: i == 1 ? state.openReports : 0,
-                      onTap: () => _go(i),
+        bottomNavigationBar: DecoratedBox(
+          decoration: BoxDecoration(
+            color: context.surface,
+            border: Border(top: BorderSide(color: context.hairline)),
+          ),
+          child: SafeArea(
+            top: false,
+            child: SizedBox(
+              height: 64,
+              child: Row(
+                children: [
+                  for (final (i, (off, on, label)) in _items.indexed)
+                    Expanded(
+                      child: _NavItem(
+                        icon: _i == i ? on : off,
+                        label: label,
+                        selected: _i == i,
+                        badge: i == 1 ? state.openReports : 0,
+                        onTap: () => _go(i),
+                      ),
                     ),
-                  ),
-              ],
+                ],
+              ),
             ),
           ),
         ),
@@ -99,7 +119,13 @@ class _HomeShellState extends State<HomeShell> {
 }
 
 class _NavItem extends StatelessWidget {
-  const _NavItem({required this.icon, required this.label, required this.selected, required this.onTap, this.badge = 0});
+  const _NavItem({
+    required this.icon,
+    required this.label,
+    required this.selected,
+    required this.onTap,
+    this.badge = 0,
+  });
   final IconData icon;
   final String label;
   final bool selected;
@@ -122,7 +148,12 @@ class _NavItem extends StatelessWidget {
               Container(
                 width: 28,
                 height: 3,
-                decoration: const BoxDecoration(color: PK.gold, borderRadius: BorderRadius.vertical(bottom: Radius.circular(3))),
+                decoration: const BoxDecoration(
+                  color: PK.gold,
+                  borderRadius: BorderRadius.vertical(
+                    bottom: Radius.circular(3),
+                  ),
+                ),
               ),
             Padding(
               padding: const EdgeInsets.only(top: 10),
@@ -132,11 +163,24 @@ class _NavItem extends StatelessWidget {
                     isLabelVisible: badge > 0,
                     backgroundColor: PK.red,
                     offset: const Offset(10, -4),
-                    label: Text(badge > 99 ? '99+' : '$badge', style: const TextStyle(fontSize: 9.5, fontWeight: FontWeight.w800)),
+                    label: Text(
+                      badge > 99 ? '99+' : '$badge',
+                      style: const TextStyle(
+                        fontSize: 9.5,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
                     child: Icon(icon, size: 22, color: color),
                   ),
                   const SizedBox(height: 4),
-                  Text(label, style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w700, color: color)),
+                  Text(
+                    label,
+                    style: TextStyle(
+                      fontSize: 10.5,
+                      fontWeight: FontWeight.w700,
+                      color: color,
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -155,7 +199,12 @@ class _OfflineBanner extends StatelessWidget {
     child: Container(
       width: double.infinity,
       color: PK.gold,
-      padding: EdgeInsets.fromLTRB(16, MediaQuery.of(context).padding.top + 6, 16, 6),
+      padding: EdgeInsets.fromLTRB(
+        16,
+        MediaQuery.of(context).padding.top + 6,
+        16,
+        6,
+      ),
       child: const Row(
         children: [
           Icon(Icons.cloud_off_rounded, size: 18, color: PK.text),
@@ -163,7 +212,11 @@ class _OfflineBanner extends StatelessWidget {
           Expanded(
             child: Text(
               'Koneksi terputus. Mencoba menyambung ulang…',
-              style: TextStyle(color: PK.text, fontWeight: FontWeight.w600, fontSize: 14),
+              style: TextStyle(
+                color: PK.text,
+                fontWeight: FontWeight.w600,
+                fontSize: 14,
+              ),
             ),
           ),
         ],

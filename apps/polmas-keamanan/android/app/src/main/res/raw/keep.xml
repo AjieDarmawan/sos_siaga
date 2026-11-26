@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Build rilis menjalankan resource shrinker. sos_siren hanya dirujuk lewat URI string di MainActivity
+     (android.resource://…/raw/sos_siren) dan nama suara di payload FCM, jadi shrinker menganggapnya tak dipakai
+     dan membuangnya: kanal polmas_sos_v2 jadi tanpa suara. File ini memaksa sos_siren tetap ikut. -->
+<resources xmlns:tools="http://schemas.android.com/tools"
+    tools:keep="@raw/sos_siren" />

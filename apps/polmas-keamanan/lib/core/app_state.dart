@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:device_info_plus/device_info_plus.dart';
 import 'package:flutter/foundation.dart';
@@ -79,6 +80,14 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
     try {
       savedPhone = await _secure.read(key: 'pk_phone');
       hasSavedPassword = (await _secure.read(key: 'pk_password')) != null;
+      // Sesi tetap tersimpan sampai pengguna menekan Keluar: buka app → langsung Beranda (server memperpanjang sesi
+      // 30 hari tiap dipakai; bila ditolak, login ulang otomatis dengan nomor & sandi tersimpan).
+      final token = await _secure.read(key: 'pk_token');
+      final meJson = await _secure.read(key: 'pk_me');
+      if (token != null && meJson != null) {
+        api.token = token;
+        me = Me(jsonDecode(meJson) as Map);
+      }
     } catch (_) {
       // Keystore rusak setelah restore backup: anggap belum ada kredensial.
       savedPhone = null;
@@ -108,6 +117,7 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
 
   Future<void> updateName(String name) async {
     me = Me(await api.patch('/me', {'name': name}) as Map);
+    await _saveSession();
     notifyListeners();
   }
 
@@ -127,6 +137,7 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
   Future<void> _onSession(Map r, String phone, String password, bool remember) async {
     api.token = r['token'] as String;
     me = Me(r['me'] as Map);
+    await _saveSession();
     // Login cepat (FR-02): nomor & password disimpan terenkripsi di perangkat (Keystore/Keychain) bila
     // "Ingat di perangkat ini" dicentang. Tanpa itu sesi tetap jalan, tapi tidak bisa login ulang otomatis.
     if (remember) {
@@ -154,16 +165,38 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
       final r = await api.post('/auth/login', {'phone': phone, 'password': pw}) as Map;
       api.token = r['token'] as String;
       me = Me(r['me'] as Map);
+      await _saveSession();
       unawaited(_registerDevice());
       return true;
-    } catch (_) {
+    } on ApiException catch (e) {
+      // Internet putus / server sibuk: tetap masuk, dicoba lagi pada request berikutnya. Hanya penolakan nyata
+      // (sandi diganti, nomor dicabut dari Nomor Darurat, akun dinonaktifkan) yang mengeluarkan pengguna.
+      if (e.isNetwork || e.status >= 500 || e.status == 429) return false;
       return _expire();
+    } catch (_) {
+      return false;
     }
+  }
+
+  /// Simpan token & profil terenkripsi (Keystore/Keychain) supaya app yang dibuka ulang tetap masuk.
+  Future<void> _saveSession() async {
+    try {
+      await _secure.write(key: 'pk_token', value: api.token);
+      await _secure.write(key: 'pk_me', value: jsonEncode(me?.raw));
+    } catch (_) {}
+  }
+
+  Future<void> _clearSession() async {
+    try {
+      await _secure.delete(key: 'pk_token');
+      await _secure.delete(key: 'pk_me');
+    } catch (_) {}
   }
 
   bool _expire() {
     api.token = null;
     me = null;
+    unawaited(_clearSession());
     _poll?.cancel();
     notifyListeners();
     return false;
@@ -171,11 +204,13 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
 
   Future<void> refreshMe() async {
     me = Me(await api.get('/me') as Map);
+    await _saveSession();
     notifyListeners();
   }
 
   Future<void> switchRole(String roleId) async {
     me = Me(await api.post('/me/role', {'role_id': roleId}) as Map);
+    await _saveSession();
     _ringing.clear();
     bump();
   }
@@ -239,6 +274,7 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
     api.token = null;
     me = null;
     unread = 0;
+    await _clearSession();
     lastLogoutManual = true;
     _poll?.cancel();
     notifyListeners();

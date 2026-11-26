@@ -281,7 +281,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
                         style: const TextStyle(color: Colors.white, fontSize: 13),
                         cursorColor: Colors.white,
                         decoration: const InputDecoration(
-                          hintText: 'Cari berita, nama, kelurahan…',
+                          hintText: 'Cari berita, nama, nomor HP…',
                           hintStyle: TextStyle(color: PK.headerMute, fontSize: 13),
                           border: InputBorder.none,
                           enabledBorder: InputBorder.none,
@@ -407,7 +407,7 @@ class ReportTable extends StatelessWidget {
     (Icons.layers_outlined, 'Ekosistem', 120.0),
     (Icons.person_outline_rounded, 'Dari Siapa', 150.0),
     (Icons.smart_display_outlined, 'Foto/Video', 120.0),
-    (Icons.location_on_outlined, 'Location', 170.0),
+    (Icons.location_on_outlined, 'Lokasi', 170.0),
     (Icons.calendar_today_outlined, 'Waktu', 100.0),
     (Icons.check_circle_outline_rounded, 'Status', 100.0),
     (Icons.assignment_turned_in_outlined, 'Tindak Lanjut', 200.0),

@@ -70,7 +70,29 @@ class SiagaSOS {
     // kirim sisa antrian dari sesi sebelumnya
     scheduleMicrotask(flush);
     // Nomor Darurat: kirim perubahan yang belum tersinkron, atau pulihkan dari server di perangkat baru.
-    scheduleMicrotask(() => syncEmergencyContacts().catchError((_) => false));
+    scheduleMicrotask(_syncContactsOrRetry);
+  }
+
+  Timer? _contactsRetry;
+  int _contactsRetryN = 0;
+
+  /// Sinkron Nomor Darurat; gagal (offline / server sibuk / sedang deploy) → coba lagi otomatis dengan jeda bertahap
+  /// 10 dtk, 30 dtk, 1 mnt, 5 mnt, lalu tiap 15 mnt selama klien hidup. Tanpa ini nomor baru baru sampai ke server
+  /// setelah app dibuka ulang, sehingga penerima belum bisa login di Polmas Digital.
+  Future<void> _syncContactsOrRetry() async {
+    var ok = false;
+    try {
+      ok = await syncEmergencyContacts();
+    } catch (_) {}
+    if (ok || _disposed || (user?.ref ?? '').isEmpty) {
+      _contactsRetryN = 0;
+      return;
+    }
+    const delays = [10, 30, 60, 300, 900];
+    _contactsRetry?.cancel();
+    _contactsRetry = Timer(
+        Duration(seconds: delays[min(_contactsRetryN++, delays.length - 1)]),
+        _syncContactsOrRetry);
   }
 
   final String apiKey;
@@ -363,10 +385,12 @@ class SiagaSOS {
       await _contactsSync.save([
         {'state': 'dirty'}
       ]);
-      return await syncEmergencyContacts();
-    } catch (_) {
-      return false;
-    }
+      if (await syncEmergencyContacts()) return true;
+    } catch (_) {}
+    // Belum sampai ke server: coba lagi otomatis di latar.
+    _contactsRetryN = 0;
+    unawaited(Future(_syncContactsOrRetry).catchError((_) {}));
+    return false;
   }
 
   /// Samakan Nomor Darurat perangkat dengan server. Ada perubahan lokal yang belum terkirim → PUT (ganti total).
@@ -702,6 +726,7 @@ class SiagaSOS {
   void dispose() {
     _disposed = true;
     _retry?.cancel();
+    _contactsRetry?.cancel();
     for (final id in [..._pollers.keys, ..._locators.keys]) {
       _stop(id);
     }

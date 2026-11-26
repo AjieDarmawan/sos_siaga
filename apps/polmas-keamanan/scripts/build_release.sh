@@ -55,5 +55,8 @@ else
   flutter build apk --release --dart-define=API_URL="$API_URL"
   OUT=build/app/outputs/flutter-apk/app-release.apk
 fi
+# 5. Sirene kanal SOS harus ikut (resource shrinker membuangnya bila res/raw/keep.xml hilang → push tanpa suara).
+unzip -l "$OUT" | grep -q "res/raw/sos_siren" || fail "res/raw/sos_siren tidak ada di $OUT: push SOS akan tanpa sirene (cek res/raw/keep.xml)."
+ok "Sirene res/raw/sos_siren ada di paket"
 VERSION=$(grep '^version:' pubspec.yaml | awk '{print $2}')
 ok "Selesai: $OUT (versi $VERSION, server $API_URL)"

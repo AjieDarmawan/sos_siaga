@@ -3,6 +3,8 @@ import 'package:flutter/services.dart';
 
 import '../theme/tokens.dart';
 import '../widgets/ui.dart';
+import '../core/app_state.dart';
+import 'home_shell.dart';
 import 'login_screen.dart';
 
 /// Splash (mockup A1): navy radial, lambang emas dalam lingkaran putus-putus berputar, "POLMAS / DIGITAL",
@@ -27,10 +29,14 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
   void _go() {
     if (_left || !mounted) return;
     _left = true;
+    final state = AppScope.read(context);
+    final resume = state.loggedIn;
+    // Profil disegarkan di latar; gagal (offline) tidak apa-apa, sesi tetap.
+    if (resume) state.refreshMe().catchError((_) {});
     Navigator.of(context).pushReplacement(
       PageRouteBuilder(
         transitionDuration: PK.splashOut,
-        pageBuilder: (_, _, _) => const LoginScreen(),
+        pageBuilder: (_, _, _) => resume ? const HomeShell() : const LoginScreen(),
         transitionsBuilder: (context, a, _, child) => FadeTransition(opacity: CurvedAnimation(parent: a, curve: Curves.easeOut), child: child),
       ),
     );

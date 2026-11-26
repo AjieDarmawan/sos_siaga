@@ -10,7 +10,7 @@ import { changeReport, onReportCreated } from '../lib/reports.js';
 import { listReadyMedia } from '../lib/media.js';
 import { mediaEnabled, presignGet } from '../lib/objectStorage.js';
 import { config } from '../config.js';
-import { PK_FCM, fcmConfigured, fcmProject } from '../lib/fcm.js';
+import { PK_FCM, fcmConfigured, fcmProblem, fcmProject } from '../lib/fcm.js';
 import {
   PK_BASE, PK_COLUMNS, PK_FROM, PK_LAST_RESPONSE, ROLE_LABEL, SESSION_TTL_H, SLA_MIN, SOURCE_LABEL, STATUS_SQL,
   audit, canRespondAny, canRespondTo, contactRows, hashToken, isOfficer, mineWhere, newSessionToken, normPhone, scopeOf,
@@ -145,7 +145,10 @@ polmasRouter.post('/auth/login', async (req, res) => {
  * Firebase mana. Tidak memuat rahasia.
  */
 polmasRouter.get('/status', (_req, res) => {
-  res.set('Cache-Control', 'no-store').json({ server_push: fcmConfigured(PK_FCM), fcm_project: fcmProject(PK_FCM), fcm_channel: PK_FCM.channel });
+  res.set('Cache-Control', 'no-store').json({
+    server_push: fcmConfigured(PK_FCM), fcm_project: fcmProject(PK_FCM), fcm_channel: PK_FCM.channel,
+    fcm_problem: fcmProblem(PK_FCM), // mis. "file tidak ditemukan: /app/apps/api/…json" / "env PK_FCM_SERVICE_ACCOUNT kosong"
+  });
 });
 
 // ---------------------------------------------------------------- middleware sesi
@@ -155,7 +158,11 @@ async function loadContext(sessionId: string): Promise<PkContext | null> {
     `SELECT s.id AS session_id, u.id AS user_id, u.phone, u.name, u.is_demo, u.area, u.area_lat, u.area_lng,
             ro.id AS role_id, ro.role, ro.kecamatan_code, ro.kelurahan_code, ro.unit
      FROM pk_sessions s JOIN pk_users u ON u.id = s.user_id JOIN pk_user_roles ro ON ro.id = s.role_id
-     WHERE s.id = $1 AND s.revoked_at IS NULL AND s.expires_at > now() AND u.disabled_at IS NULL`, [sessionId]));
+     WHERE s.id = $1 AND s.revoked_at IS NULL AND s.expires_at > now() AND u.disabled_at IS NULL
+       -- Peran dari Nomor Darurat hanya berlaku selama nomor masih tercantum aktif (sesi panjang tidak boleh melewati ini).
+       AND (NOT ro.from_contact OR EXISTS (
+         SELECT 1 FROM emergency_contacts e JOIN apps a ON a.id = e.app_id
+         WHERE e.phone = u.phone AND e.active AND a.disabled_at IS NULL))`, [sessionId]));
   const x = r.rows[0];
   if (!x) return null;
   return {
@@ -170,8 +177,10 @@ async function requirePk(req: Request, res: Response, next: NextFunction) {
   const token = h.startsWith('Bearer pks_') ? h.slice(7) : '';
   if (!token) return next(new ApiError(401, 'unauthorized', 'Sesi tidak ada. Silakan masuk.'));
   const sid = await withPlatform((c) => c.query(
-    `UPDATE pk_sessions SET last_seen_at = now() WHERE token_hash = $1 AND revoked_at IS NULL AND expires_at > now() RETURNING id`,
-    [hashToken(token)]).then((r) => r.rows[0]?.id as string | undefined));
+    // Sesi geser: setiap dipakai diperpanjang SESSION_TTL_H lagi, jadi petugas tidak keluar sendiri selama aktif.
+    `UPDATE pk_sessions SET last_seen_at = now(), expires_at = greatest(expires_at, now() + make_interval(hours => $2))
+     WHERE token_hash = $1 AND revoked_at IS NULL AND expires_at > now() RETURNING id`,
+    [hashToken(token), SESSION_TTL_H]).then((r) => r.rows[0]?.id as string | undefined));
   const ctx = sid ? await loadContext(sid) : null;
   if (!ctx) return next(new ApiError(401, 'session_expired', 'Sesi berakhir. Silakan masuk lagi.'));
   res.locals.pk = ctx;
@@ -450,7 +459,15 @@ async function listReports(req: Request, res: Response, defaults: Partial<z.infe
   if (f.q) {
     params.push(`%${f.q.replace(/[%_\\]/g, '\\$&')}%`);
     const p = `$${params.length}`;
-    where.push(`(r.message ILIKE ${p} OR r.category ILIKE ${p} OR r.reporter_name ILIKE ${p} OR r.complaint_details->>'title' ILIKE ${p} OR wl.nama ILIKE ${p})`);
+    const or = [`r.message ILIKE ${p}`, `r.category ILIKE ${p}`, `r.reporter_name ILIKE ${p}`, `r.complaint_details->>'title' ILIKE ${p}`, `wl.nama ILIKE ${p}`];
+    // Cari nomor HP pelapor ("0812-3456", "+62 812…") hanya untuk petugas: bagi yang lain nomor disamarkan,
+    // jadi pencarian nomor akan membocorkan siapa pelapornya.
+    const digits = f.q.replace(/[^0-9]/g, '');
+    if (isOfficer(pk) && /^[0-9+\-\s().]+$/.test(f.q) && digits.length >= 4) {
+      params.push(`%${digits.startsWith('0') ? '62' + digits.slice(1) : digits}%`);
+      or.push(`pk_norm_phone(r.reporter_phone) LIKE $${params.length}`);
+    }
+    where.push(`(${or.join(' OR ')})`);
   }
   if (f.from) { params.push(f.from); where.push(`r.created_at >= ($${params.length}::date)::timestamp AT TIME ZONE 'Asia/Jakarta'`); }
   if (f.to) { params.push(f.to); where.push(`r.created_at < ($${params.length}::date + 1)::timestamp AT TIME ZONE 'Asia/Jakarta'`); }

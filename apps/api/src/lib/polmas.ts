@@ -18,7 +18,9 @@ export const ROLE_LABEL: Record<PkRole, string> = {
   penerima: 'Penerima darurat', warga: 'Warga', kantor: 'Kantor', umkm: 'UMKM', sekolah: 'Sekolah', komunitas: 'Komunitas', bhabinkamtibmas: 'Bhabinkamtibmas',
 };
 
-export const SESSION_TTL_H = 12;
+/** Sesi berlaku 30 hari sejak terakhir dipakai (diperpanjang tiap request); hanya berakhir bila tak dipakai selama itu,
+ * pengguna menekan Keluar, kata sandi diganti, atau nomor dicabut dari Nomor Darurat. */
+export const SESSION_TTL_H = 24 * 30;
 /** Batas waktu respons pertama untuk menandai laporan terlambat (usulan, menunggu SLA resmi). */
 export const SLA_MIN = { sos: 15, pengaduan: 24 * 60 } as const;
 
@@ -261,9 +263,12 @@ export async function syncContactRoles(c: Db, userId: string, phone: string) {
   }
   const stale = have.filter((h) => !want.some((w) => w.role === h.role && w.kec === h.kecamatan_code)).map((h) => h.id);
   if (stale.length) {
+    // Nomor sudah tidak ada di Nomor Darurat mana pun: semua peran turunannya dihapus (sesi ikut terhapus, cascade).
+    // Masih tercantum di tempat lain: peran yang sedang dipakai sesi aktif dibiarkan sampai sesi itu selesai.
     await c.query(
       `DELETE FROM pk_user_roles r WHERE r.id = ANY($1::uuid[])
-         AND NOT EXISTS (SELECT 1 FROM pk_sessions s WHERE s.role_id = r.id AND s.revoked_at IS NULL AND s.expires_at > now())`, [stale]);
+         AND ($2::boolean OR NOT EXISTS (SELECT 1 FROM pk_sessions s WHERE s.role_id = r.id AND s.revoked_at IS NULL AND s.expires_at > now()))`,
+      [stale, rows.length === 0]);
   }
   return rows;
 }

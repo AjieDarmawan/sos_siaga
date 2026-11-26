@@ -1,4 +1,5 @@
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import jwt from 'jsonwebtoken';
 import { logger } from '../logger.js';
 
@@ -25,25 +26,54 @@ export const PK_FCM: FcmProfile = { env: 'PK_FCM_SERVICE_ACCOUNT', channel: 'pol
 
 interface ServiceAccount { project_id: string; client_email: string; private_key: string; token_uri?: string }
 
-const accounts = new Map<string, ServiceAccount | null>();
+const accounts = new Map<string, ServiceAccount>();
+/** Gagal baca terakhir per env: dicoba ulang setelah 30 dtk (file bisa baru muncul setelah deploy / env baru dipasang). */
+const failures = new Map<string, { at: number; reason: string }>();
 const tokens = new Map<string, { token: string; exp: number }>();
+const RETRY_MS = 30_000;
 
 function loadAccount(profile: FcmProfile = POS_FCM, env = process.env): ServiceAccount | null {
-  if (accounts.has(profile.env)) return accounts.get(profile.env)!;
+  const ok = accounts.get(profile.env);
+  if (ok) return ok;
+  const failed = failures.get(profile.env);
+  if (failed && Date.now() - failed.at < RETRY_MS) return null;
   const raw = (env[profile.env] ?? '').trim();
-  let account: ServiceAccount | null;
+  let reason: string;
   try {
+    if (!raw) throw new Error(`env ${profile.env} kosong`);
     // Tiga bentuk nilai env: isi JSON langsung, `base64:<JSON di-base64>` (satu baris, aman ditempel di panel hosting),
-    // atau path file JSON di server.
-    const json = raw.startsWith('{') ? raw : raw.startsWith('base64:') ? Buffer.from(raw.slice(7), 'base64').toString('utf8') : raw ? readFileSync(raw, 'utf8') : '';
-    account = json ? (JSON.parse(json) as ServiceAccount) : null;
-    if (account && !(account.project_id && account.client_email && account.private_key)) throw new Error('field service account tidak lengkap');
+    // atau path file JSON di server (relatif terhadap folder kerja proses API).
+    let json: string;
+    if (raw.startsWith('{')) json = raw;
+    else if (raw.startsWith('base64:')) json = Buffer.from(raw.slice(7), 'base64').toString('utf8');
+    else {
+      const path = resolve(raw);
+      if (!existsSync(path)) throw new Error(`file tidak ditemukan: ${path}`);
+      json = readFileSync(path, 'utf8');
+    }
+    let account: ServiceAccount;
+    try {
+      account = JSON.parse(json) as ServiceAccount;
+    } catch {
+      throw new Error('isi bukan JSON service account yang valid');
+    }
+    if (!(account.project_id && account.client_email && account.private_key)) throw new Error('field service account tidak lengkap');
+    accounts.set(profile.env, account);
+    failures.delete(profile.env);
+    return account;
   } catch (err) {
-    logger.error({ err: (err as Error).message, env: profile.env }, 'service account FCM tidak bisa dibaca, push SOS nonaktif');
-    account = null;
+    reason = (err as Error).message;
   }
-  accounts.set(profile.env, account);
-  return account;
+  if (failures.get(profile.env)?.reason !== reason) {
+    logger.error({ err: reason, env: profile.env }, 'service account FCM tidak bisa dibaca, push SOS nonaktif');
+  }
+  failures.set(profile.env, { at: Date.now(), reason });
+  return null;
+}
+
+/** Alasan kredensial FCM belum terbaca (tanpa rahasia), untuk /v1/pk/status; null bila siap. */
+export function fcmProblem(profile: FcmProfile = POS_FCM): string | null {
+  return loadAccount(profile) ? null : failures.get(profile.env)?.reason ?? 'belum dibaca';
 }
 
 export const fcmConfigured = (profile: FcmProfile = POS_FCM) => loadAccount(profile) !== null;

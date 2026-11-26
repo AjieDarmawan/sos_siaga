@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../theme/tokens.dart';
 
@@ -34,13 +35,20 @@ Future<bool> showConfirmDialog(
                   color: accent.withValues(alpha: context.isDark ? 0.22 : 0.1),
                   borderRadius: BorderRadius.circular(18),
                 ),
-                child: Icon(icon, color: context.isDark && danger ? PK.redSoft : accent, size: 36),
+                child: Icon(
+                  icon,
+                  color: context.isDark && danger ? PK.redSoft : accent,
+                  size: 36,
+                ),
               ),
               const SizedBox(height: 18),
               Text(
                 title,
                 textAlign: TextAlign.center,
-                style: t.titleLarge?.copyWith(fontSize: 21, fontWeight: FontWeight.w800),
+                style: t.titleLarge?.copyWith(
+                  fontSize: 21,
+                  fontWeight: FontWeight.w800,
+                ),
               ),
               const SizedBox(height: 10),
               Text(
@@ -57,10 +65,17 @@ Future<bool> showConfirmDialog(
                       child: FilledButton(
                         onPressed: () => Navigator.pop(context, false),
                         style: FilledButton.styleFrom(
-                          backgroundColor: context.isDark ? PK.darkLine : const Color(0xFFEEF0F4),
+                          backgroundColor: context.isDark
+                              ? PK.darkLine
+                              : const Color(0xFFEEF0F4),
                           foregroundColor: context.ink,
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(PK.rButton)),
-                          textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(PK.rButton),
+                          ),
+                          textStyle: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                          ),
                         ),
                         child: Text(cancelLabel),
                       ),
@@ -75,8 +90,13 @@ Future<bool> showConfirmDialog(
                         style: FilledButton.styleFrom(
                           backgroundColor: accent,
                           foregroundColor: Colors.white,
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(PK.rButton)),
-                          textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(PK.rButton),
+                          ),
+                          textStyle: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w700,
+                          ),
                         ),
                         child: Text(confirmLabel),
                       ),
@@ -91,4 +111,17 @@ Future<bool> showConfirmDialog(
     },
   );
   return ok == true;
+}
+
+/// Tombol kembali di layar utama: tanya dulu sebelum menutup app (SOS tetap masuk lewat notifikasi).
+Future<void> confirmExitApp(BuildContext context) async {
+  final ok = await showConfirmDialog(
+    context,
+    icon: Icons.exit_to_app_rounded,
+    title: 'Tutup aplikasi?',
+    message: 'Anda tetap masuk dan SOS tetap diterima lewat notifikasi selama tidak menekan Keluar di Profil.',
+    confirmLabel: 'Tutup',
+    danger: false,
+  );
+  if (ok) await SystemNavigator.pop();
 }
