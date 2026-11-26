@@ -275,7 +275,6 @@ class _IncidentScreenState extends State<IncidentScreen> {
                     Expanded(
                       child: Text(r.headline, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800, height: 1.3)),
                     ),
-                    if (r.isDemo) const DemoTag(),
                   ],
                 ),
                 const SizedBox(height: 8),
@@ -358,7 +357,7 @@ class _IncidentScreenState extends State<IncidentScreen> {
                     padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
                     child: Column(
                       children: [
-                        _Info(icon: Icons.layers_outlined, label: 'Ekosistem', value: [r.ecosystemLabel, ?r.ecosystemApp].join(' · ')),
+                        if (r.hasEcosystem) _Info(icon: Icons.layers_outlined, label: 'Ekosistem', value: [r.ecosystemLabel, ?r.ecosystemApp].join(' · ')),
                         _Info(icon: Icons.person_outline_rounded, label: 'Dari siapa', value: r.reporterName, sub: r.sourcePlace),
                         _Info(
                           icon: Icons.phone_outlined,

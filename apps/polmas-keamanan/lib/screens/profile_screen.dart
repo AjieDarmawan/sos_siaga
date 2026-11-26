@@ -138,7 +138,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final state = AppScope.read(context);
     try {
       await state.api.post('/demo/sos', {'source': source});
-      if (mounted) showToast(context, 'SOS demo dikirim. Tunggu panggilan masuk…');
+      if (mounted) showToast(context, 'SOS simulasi dikirim. Tunggu panggilan masuk…');
       Future.delayed(const Duration(seconds: 1), state.pollNow);
     } on ApiException catch (e) {
       if (mounted) showToast(context, e.message, error: true);
@@ -236,7 +236,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     on: state.receivesSos && me.serverPush != false,
                   ),
                   if (me.scope != null) _Badge('Kec. ${me.scope!.name}'),
-                  if (me.isDemo) const _Badge('Akun demo'),
                 ],
               ),
             ],
@@ -331,7 +330,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           : 'Notifikasi belum aktif di HP ini',
                       onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const _DevicesScreen())),
                     ),
-                    if (me.isDemo) _Row(icon: Icons.science_outlined, value: 'Simulasi SOS masuk (demo)', onTap: _simulate),
+                    if (me.isDemo) _Row(icon: Icons.science_outlined, value: 'Simulasi SOS masuk', onTap: _simulate),
                   ],
                 ),
                 const SizedBox(height: 10),

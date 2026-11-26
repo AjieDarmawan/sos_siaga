@@ -487,7 +487,7 @@ class ReportTable extends StatelessWidget {
                                 ? Text('Disamarkan', style: TextStyle(fontSize: 11, color: context.ink2))
                                 : Text(fmtPhone(r.reporterPhone!), style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: context.brand)),
                           ),
-                          cell(2, two(r.ecosystemLabel, r.ecosystemApp)),
+                          cell(2, r.hasEcosystem ? two(r.ecosystemLabel, r.ecosystemApp) : Text('–', style: TextStyle(color: context.ink2))),
                           cell(3, two(r.reporterName, r.sourcePlace)),
                           cell(
                             4,

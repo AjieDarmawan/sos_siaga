@@ -212,10 +212,6 @@ class _SosCallScreenState extends State<SosCallScreen>
                                   fontWeight: FontWeight.w800,
                                 ),
                               ),
-                              if (r.isDemo) ...[
-                                const SizedBox(width: 10),
-                                const DemoTag(),
-                              ],
                             ],
                           ),
                           const Spacer(),

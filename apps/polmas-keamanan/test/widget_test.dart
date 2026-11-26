@@ -21,10 +21,15 @@ void main() {
 
   group('model', () {
     test('nomor tiket & ekosistem', () {
-      final r = Report({'id': 'abcd1234-0000', 'kind': 'sos', 'code': 'SOS-2511-ABCD', 'source_label': 'UMKM', 'app_name': 'commerceOS', 'created_at': '2026-11-25T10:00:00Z'});
+      final r = Report({'id': 'abcd1234-0000', 'kind': 'sos', 'code': 'SOS-2511-ABCD', 'source': 'umkm', 'source_label': 'UMKM', 'app_name': 'commerceOS (Android)', 'created_at': '2026-11-25T10:00:00Z'});
       expect(r.code, 'SOS-2511-ABCD');
       expect(r.ecosystemLabel, 'UMKM');
       expect(r.ecosystemApp, 'commerceOS');
+      // App tanpa pilar Polmas (mis. POS biasa): ekosistem disembunyikan, nama app tidak tampil.
+      final pos = Report({'id': 'x', 'kind': 'sos', 'source_label': 'POSTIP Kasir (Android)', 'app_name': 'POSTIP Kasir (Android)', 'created_at': '2026-11-25T10:00:00Z'});
+      expect(pos.hasEcosystem, isFalse);
+      expect(pos.ecosystemApp, isNull);
+      expect(cleanAppName('Polmas Warga (Demo)'), 'Polmas Warga');
     });
 
     test('status SOS baru = Darurat merah, laporan baru = Baru navy', () {

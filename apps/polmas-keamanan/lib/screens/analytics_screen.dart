@@ -329,8 +329,11 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                             TextSpan(
                               children: [
                                 TextSpan(text: e['label'] as String, style: const TextStyle(fontWeight: FontWeight.w800)),
-                                if (e['app_name'] != e['label'])
-                                  TextSpan(text: '  ${e['app_name']}', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: context.ink2)),
+                                if (e['source'] != null && cleanAppName(e['app_name'] as String) != e['label'])
+                                  TextSpan(
+                                    text: '  ${cleanAppName(e['app_name'] as String)}',
+                                    style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: context.ink2),
+                                  ),
                               ],
                             ),
                             style: TextStyle(fontSize: 12.5, color: context.ink),

@@ -50,7 +50,7 @@ class Me {
   /// Ekosistem yang dilayani (Profil): pilar + nama app, dari Nomor Darurat (+ app di kecamatan untuk Bhabinkamtibmas).
   List<({String source, String label, String app})> get ecosystems => ((raw['ecosystems'] as List?) ?? const [])
       .cast<Map>()
-      .map((e) => (source: e['source'] as String, label: e['label'] as String, app: e['app_name'] as String))
+      .map((e) => (source: e['source'] as String, label: e['label'] as String, app: cleanAppName(e['app_name'] as String)))
       .toList();
 
   /// Siapa penerima ini menurut Nomor Darurat, mis. "Satpam · Toko Roti Sinar Jaya (UMKM)" atau
@@ -91,6 +91,9 @@ class PhoneCheck {
       .where((s) => s.isNotEmpty)
       .toList();
 }
+
+/// Nama app untuk ditampilkan: tanpa akhiran teknis "(Demo)", "(Android)", "(iOS)".
+String cleanAppName(String s) => s.replaceAll(RegExp(r'\s*\((demo|android|ios)\)', caseSensitive: false), '').trim();
 
 /// Status tampilan (PRD): Darurat/Baru → Diterima → Diverifikasi → Ditangani → Selesai.
 enum PkStatus { baru, diterima, diverifikasi, ditangani, selesai, tidakValid, dibatalkan }
@@ -171,9 +174,16 @@ class Report {
   String get code => raw['code'] as String? ?? id.substring(0, 8).toUpperCase();
   String? get appName => raw['app_name'] as String?;
 
+  /// App sumber punya pilar Polmas (UMKM, Lingkungan, …). Tanpa pilar (mis. POS biasa) kolom Ekosistem disembunyikan.
+  bool get hasEcosystem => raw['source'] != null;
+
   /// Kolom Ekosistem: pilar (UMKM, Lingkungan, …) + nama app sumber (commerceOS, tata-warga, …).
   String get ecosystemLabel => sourceLabel;
-  String? get ecosystemApp => appName == sourceLabel ? null : appName;
+  String? get ecosystemApp {
+    if (!hasEcosystem || appName == null) return null;
+    final a = cleanAppName(appName!);
+    return a.isEmpty || a == sourceLabel ? null : a;
+  }
 
   /// Jarak dari titik pengguna (lokasi saat konfirmasi wilayah), mis. "± 350 m".
   String? distanceFrom(({double lat, double lng})? me) {

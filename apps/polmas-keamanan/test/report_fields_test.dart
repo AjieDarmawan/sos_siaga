@@ -15,7 +15,7 @@ Report _sample({bool phone = true, Map? last}) => Report({
   'message': 'Diduga terjadi pencurian motor di depan rumah warga, pelaku terekam CCTV dan kabur ke arah pasar.',
   'status': 'ditangani',
   'source': 'umkm',
-  'source_label': 'Polmas UMKM',
+  'source_label': 'UMKM',
   'app_name': 'commerceOS POS Toko Roti Sinar Jaya',
   'location_text': 'Jl. Suryakencana No. 120, depan gerbang pasar',
   'kelurahan': {'code': '32.71.03.1002', 'name': 'Paledang'},

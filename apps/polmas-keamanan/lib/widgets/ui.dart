@@ -382,8 +382,7 @@ class ReportCard extends StatelessWidget {
                 const SizedBox(height: 9),
                 Text(r.headline, style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, height: 1.3, color: context.ink)),
                 const SizedBox(height: 7),
-                EcoChip(label: r.ecosystemLabel, app: r.ecosystemApp),
-                const SizedBox(height: 4),
+                if (r.hasEcosystem) ...[EcoChip(label: r.ecosystemLabel, app: r.ecosystemApp), const SizedBox(height: 4)],
                 _Kv(icon: Icons.person_outline_rounded, child: Text(who)),
                 if (r.reporterPhone != null)
                   _Kv(

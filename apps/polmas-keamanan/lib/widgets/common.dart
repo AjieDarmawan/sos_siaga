@@ -726,24 +726,6 @@ class _ToastState extends State<_Toast> with SingleTickerProviderStateMixin {
   }
 }
 
-/// Pita "DEMO": data fase 1 fiktif harus ditandai jelas.
-class DemoTag extends StatelessWidget {
-  const DemoTag({super.key});
-  @override
-  Widget build(BuildContext context) => Semantics(
-    label: 'Mode demo, data fiktif',
-    excludeSemantics: true,
-    child: Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-      decoration: BoxDecoration(color: PK.gold, borderRadius: BorderRadius.circular(6)),
-      child: const Text(
-        'DEMO',
-        style: TextStyle(color: PK.text, fontSize: 12, fontWeight: FontWeight.w800, letterSpacing: 1),
-      ),
-    ),
-  );
-}
-
 /// Judul bagian kecil di daftar.
 class SectionTitle extends StatelessWidget {
   const SectionTitle(this.text, {super.key, this.trailing});

@@ -420,7 +420,7 @@ async function main() {
   ok(pkAn.data.funnel?.selesai >= 1 && pkAn.data.officers?.some((o: any) => o.is_me && o.selesai >= 1)
     && typeof pkAn.data.totals.median_response_s === 'number' && Array.isArray(pkAn.data.by_ecosystem) && 'patrol_hint' in pkAn.data,
     'PK: analitik mockup (alur status, per petugas, median respons, ekosistem, saran patroli)');
-  ok(pkAn.data.by_ecosystem.every((e: any) => typeof e.label === 'string'), 'PK: ekosistem selalu berlabel (app tanpa pilar → nama app)');
+  ok(pkAn.data.by_ecosystem.every((e: any) => typeof e.label === 'string'), 'PK: ekosistem selalu berlabel (app tanpa pilar → Lainnya)');
   const pkAnSrc = await call('GET', '/v1/pk/analytics/summary?period=7d&source=umkm', { token: pkT });
   const pkAnBad = await call('GET', '/v1/pk/analytics/summary?period=7d&source=xx', { token: pkT });
   ok(pkAnSrc.status === 200 && pkAnSrc.data.source === 'umkm' && pkAnBad.status === 422, 'PK: filter ekosistem di analitik (nilai asing ditolak)');

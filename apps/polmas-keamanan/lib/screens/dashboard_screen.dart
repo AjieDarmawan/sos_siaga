@@ -92,7 +92,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     ],
                   ),
                 ),
-                if (me.isDemo) const Padding(padding: EdgeInsets.only(right: 8), child: DemoTag()),
                 HeaderIconButton(
                   icon: Icons.notifications_none_rounded,
                   tooltip: state.openReports > 0 ? '${state.openReports} laporan belum ditanggapi' : 'Laporan baru',
@@ -246,7 +245,7 @@ class _SosAlertState extends State<_SosAlert> with SingleTickerProviderStateMixi
                 const SizedBox(height: 11),
                 Text(r.headline, style: const TextStyle(fontSize: 16.5, fontWeight: FontWeight.w800)),
                 const SizedBox(height: 6),
-                EcoChip(label: r.ecosystemLabel, app: r.ecosystemApp, onDark: true),
+                if (r.hasEcosystem) EcoChip(label: r.ecosystemLabel, app: r.ecosystemApp, onDark: true),
                 const SizedBox(height: 4),
                 _line(Icons.person_outline_rounded, [r.reporterName, ?r.sourcePlace].join(' · ')),
                 if (place.isNotEmpty || dist != null) _line(Icons.location_on_outlined, [if (place.isNotEmpty) place, ?dist].join(' · ')),

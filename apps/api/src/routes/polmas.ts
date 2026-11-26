@@ -919,8 +919,8 @@ polmasRouter.get('/analytics/summary', async (req, res) => {
     by_source: out.bySource.map((s) => ({ ...s, label: SOURCE_LABEL[s.source] ?? 'Lainnya' })),
     // Ekosistem = pilar + nama app sumber (mis. "UMKM · commerceOS"), dengan persen dari total dan median respons.
     by_ecosystem: out.byEcosystem.map((e) => ({
-      // App tanpa pilar Polmas (mis. POS yang mencantumkan nomor ini di Nomor Darurat): label = nama app.
-      ...e, label: SOURCE_LABEL[e.source] ?? e.app_name ?? 'Lainnya', pct: total ? Math.round((e.n / total) * 100) : 0,
+      // App tanpa pilar Polmas (mis. POS yang mencantumkan nomor ini di Nomor Darurat): "Lainnya", nama app tidak dipakai.
+      ...e, label: SOURCE_LABEL[e.source] ?? 'Lainnya', pct: total ? Math.round((e.n / total) * 100) : 0,
       top_categories: out.matrix.filter((m) => m.source === e.source).sort((a, b) => b.n - a.n).slice(0, 2).map((m) => m.category),
     })),
     matrix: out.matrix.map((m) => ({ ...m, label: SOURCE_LABEL[m.source] ?? 'Lainnya' })),
