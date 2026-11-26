@@ -175,6 +175,8 @@ export function serializePk(r: any, pk: PkContext, media?: { image: number; vide
     video_s: r.video_s ?? null,
     audio_s: r.audio_s ?? null,
     last_response: r.last_action ? { action: r.last_action, officer: r.last_officer, note: r.last_note, created_at: r.last_response_at } : null,
+    // Penanggung jawab = penerima terakhir yang menekan Terima / Ambil alih. Penerima lain hanya bisa telepon & catatan.
+    handler: r.handler_officer ? { name: r.handler_officer, is_me: r.handler_user === pk.userId, since: r.handler_at } : null,
     is_demo: r.app_name?.includes('(Demo)') ?? false,
   };
 }
@@ -191,9 +193,12 @@ export const PK_COLUMNS = `
   ARRAY(SELECT m.storage_key FROM report_media m WHERE m.report_id = r.id AND m.status = 'ready' AND m.kind = 'image' ORDER BY m.created_at LIMIT 3) AS thumb_keys,
   (SELECT m.duration_s FROM report_media m WHERE m.report_id = r.id AND m.status = 'ready' AND m.kind = 'video' ORDER BY m.created_at LIMIT 1) AS video_s,
   (SELECT m.duration_s FROM report_media m WHERE m.report_id = r.id AND m.status = 'ready' AND m.kind = 'audio' ORDER BY m.created_at LIMIT 1) AS audio_s,
-  lr.action AS last_action, lr.officer AS last_officer, lr.note AS last_note, lr.created_at AS last_response_at`;
+  lr.action AS last_action, lr.officer AS last_officer, lr.note AS last_note, lr.created_at AS last_response_at,
+  hd.user_id AS handler_user, hd.officer AS handler_officer, hd.created_at AS handler_at`;
 export const PK_LAST_RESPONSE = `
-  LEFT JOIN LATERAL (SELECT action, officer, note, created_at FROM pk_responses x WHERE x.report_id = r.id ORDER BY created_at DESC LIMIT 1) lr ON true`;
+  LEFT JOIN LATERAL (SELECT action, officer, note, created_at FROM pk_responses x WHERE x.report_id = r.id ORDER BY created_at DESC LIMIT 1) lr ON true
+  LEFT JOIN LATERAL (SELECT user_id, officer, created_at FROM pk_responses x WHERE x.report_id = r.id AND x.action IN ('terima','ambil_alih')
+                     ORDER BY created_at DESC LIMIT 1) hd ON true`;
 
 export async function audit(c: Db, userId: string | null, action: string, reportId: string | null, detail: unknown, ip?: string) {
   await c.query(`INSERT INTO pk_audit (user_id, action, report_id, detail, ip) VALUES ($1,$2,$3,$4,$5)`,

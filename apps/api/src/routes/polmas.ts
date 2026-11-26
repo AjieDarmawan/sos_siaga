@@ -583,7 +583,7 @@ polmasRouter.get('/reports/:id', async (req, res) => {
     media: out.media.map((m) => ({ id: m.id, kind: m.kind, content_type: m.content_type, duration_s: m.duration_s, url: m.url, created_at: m.created_at })),
     timeline,
     trail: full ? out.trail : [],
-    actions: canRespondTo(pk, out.r) ? allowedActions(out.r) : [],
+    actions: canRespondTo(pk, out.r) ? allowedActions(out.r, pk) : [],
     sla_min: SLA_MIN[out.r.kind === 'pengaduan' ? 'pengaduan' : 'sos'],
   });
 });
@@ -592,18 +592,23 @@ const statusTitle = (s: string | null) => ({
   acknowledged: 'Diterima', in_progress: 'Ditangani', resolved: 'Selesai', cancelled: 'Dibatalkan pelapor', false_alarm: 'Tidak valid', open: 'Dibuka ulang',
 } as Record<string, string>)[s ?? ''] ?? 'Status berubah';
 
-type Action = 'terima' | 'hubungi' | 'verifikasi' | 'tangani' | 'selesai' | 'tidak_valid' | 'catatan';
+type Action = 'terima' | 'hubungi' | 'verifikasi' | 'tangani' | 'selesai' | 'tidak_valid' | 'catatan' | 'ambil_alih';
 const ACTION_TITLE: Record<Action, string> = {
   terima: 'Diterima', hubungi: 'Menghubungi pelapor', verifikasi: 'Diverifikasi', tangani: 'Ditangani',
-  selesai: 'Selesai', tidak_valid: 'Dinyatakan tidak valid', catatan: 'Catatan petugas',
+  selesai: 'Selesai', tidak_valid: 'Dinyatakan tidak valid', catatan: 'Catatan petugas', ambil_alih: 'Diambil alih',
 };
 const ACTION_STATUS: Partial<Record<Action, 'acknowledged' | 'in_progress' | 'resolved' | 'false_alarm'>> = {
   terima: 'acknowledged', tangani: 'in_progress', selesai: 'resolved', tidak_valid: 'false_alarm',
 };
 const TERMINAL = ['resolved', 'cancelled', 'false_alarm'];
 
-function allowedActions(r: { status: string; verified_at: unknown }): Action[] {
+/**
+ * Aksi yang boleh untuk penerima ini. Satu laporan punya satu penanggung jawab (Terima / Ambil alih terakhir):
+ * penerima lain hanya bisa menelepon, mencatat, atau mengambil alih. Bhabinkamtibmas (pengawas wilayah) tetap penuh.
+ */
+function allowedActions(r: { status: string; verified_at: unknown; handler_user?: string | null }, pk: PkContext): Action[] {
   if (TERMINAL.includes(r.status)) return [];
+  if (r.handler_user && r.handler_user !== pk.userId && !isOfficer(pk)) return ['hubungi', 'catatan', 'ambil_alih'];
   const out: Action[] = ['hubungi'];
   if (r.status === 'open') out.push('terima');
   if (!r.verified_at) out.push('verifikasi');
@@ -613,7 +618,7 @@ function allowedActions(r: { status: string; verified_at: unknown }): Action[] {
 }
 
 const responseSchema = z.object({
-  action: z.enum(['terima', 'hubungi', 'verifikasi', 'tangani', 'selesai', 'tidak_valid', 'catatan']),
+  action: z.enum(['terima', 'hubungi', 'verifikasi', 'tangani', 'selesai', 'tidak_valid', 'catatan', 'ambil_alih']),
   note: z.string().trim().max(1000).optional(),
 }).superRefine((b, ctx) => {
   if (b.action === 'catatan' && !b.note) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['note'], message: 'Catatan wajib diisi' });
@@ -633,17 +638,28 @@ polmasRouter.post('/reports/:id/responses', async (req, res) => {
     const r = await loadVisible(c, String(req.params.id), pk);
     if (!canRespondTo(pk, r)) throw new ApiError(403, 'cannot_respond', 'Anda tidak tercatat sebagai penerima laporan ini.');
     if (TERMINAL.includes(r.status)) throw new ApiError(409, 'report_closed', 'Laporan sudah ditutup.');
-    const allowed = allowedActions(r);
-    if (!allowed.includes(body.action)) throw new ApiError(409, 'action_not_allowed', 'Aksi ini tidak berlaku untuk status laporan sekarang.');
+    const allowed = allowedActions(r, pk);
+    if (!allowed.includes(body.action)) {
+      // Penerima lain sudah memegang laporan ini: beri tahu siapa, bukan sekadar "tidak berlaku".
+      if (r.handler_user && r.handler_user !== pk.userId && allowed.includes('ambil_alih')) {
+        throw new ApiError(409, 'handled_by_other', `Laporan ini sedang ditangani ${r.handler_officer}. Ambil alih bila perlu.`);
+      }
+      throw new ApiError(409, 'action_not_allowed', 'Aksi ini tidak berlaku untuk status laporan sekarang.');
+    }
 
     let target = ACTION_STATUS[body.action];
     // Hubungi/verifikasi laporan yang belum diterima otomatis menerimanya dulu (waktu respons pertama tercatat).
-    if (!target && r.status === 'open' && (body.action === 'hubungi' || body.action === 'verifikasi')) target = 'acknowledged';
+    if (!target && r.status === 'open' && (body.action === 'hubungi' || body.action === 'verifikasi' || body.action === 'ambil_alih')) target = 'acknowledged';
     const note = `Polmas Keamanan · ${officer}: ${ACTION_TITLE[body.action]}${body.note ? ` — ${body.note}` : ''}`;
     await changeReport(c, r.id, { status: target && target !== r.status ? target : undefined, note }, { kind: 'responder', name: officer });
     if (body.action === 'verifikasi') await c.query(`UPDATE reports SET verified_at = now() WHERE id = $1`, [r.id]);
     const msg = statusMessage(body.action, isOfficer(pk) ? `Bhabinkamtibmas ${pk.name}` : pk.name);
     if (msg) await c.query(`UPDATE reports SET status_message = $2 WHERE id = $1`, [r.id, msg]);
+    if (!r.handler_user && body.action !== 'terima' && body.action !== 'ambil_alih' && body.action !== 'catatan') {
+      await c.query(
+        `INSERT INTO pk_responses (report_id, account_id, user_id, officer, action, note) VALUES ($1,$2,$3,$4,'terima',NULL)`,
+        [r.id, r.account_id, pk.userId, officer]);
+    }
     await c.query(
       `INSERT INTO pk_responses (report_id, account_id, user_id, officer, action, note) VALUES ($1,$2,$3,$4,$5,$6)`,
       [r.id, r.account_id, pk.userId, officer, body.action, body.note ?? null]);
@@ -657,6 +673,7 @@ polmasRouter.post('/reports/:id/responses', async (req, res) => {
 function statusMessage(a: Action, who: string): string | null {
   switch (a) {
     case 'terima': return `Laporan diterima ${who}.`;
+    case 'ambil_alih': return `Laporan kini ditangani ${who}.`;
     case 'verifikasi': return `Laporan sudah diverifikasi ${who}.`;
     case 'tangani': return `${who} sedang menangani laporan Anda.`;
     case 'selesai': return `Laporan selesai ditangani ${who}.`;

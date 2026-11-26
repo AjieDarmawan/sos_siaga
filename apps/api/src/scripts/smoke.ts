@@ -438,6 +438,37 @@ async function main() {
     'PK: ubah kata sandi (lama wajib benar, sesi lain dicabut, sesi ini tetap)');
   const pkRmDev = await call('POST', `/v1/pk/me/devices/${myDev?.id}/remove`, { token: pkT });
   ok(pkRmDev.status === 204, 'PK: lupakan perangkat dari Profil');
+  // Satu SOS, dua penerima: yang menekan Terima jadi penanggung jawab; yang lain hanya telepon/catatan/ambil alih.
+  const pkPhone2 = `62800${String(Math.floor(Math.random() * 1e7)).padStart(7, '0')}`;
+  await call('PUT', '/v1/sdk/contacts', { headers: sdkH(pkLive), body: { reporter: { ref: 'kasir_pk', name: 'Kasir PK' },
+    contacts: [{ name: 'Pak Joko', role: 'Satpam', phone: pkPhone, active: true }, { name: 'Bu Rina', role: 'Pemilik toko', phone: pkPhone2, active: true }] } });
+  const pk2 = await call('POST', '/v1/pk/auth/setup', { body: { phone: pkPhone2, password: 'pemilik-rahasia-1' } });
+  const pkT2 = pk2.data.token as string;
+  const sos2 = await call('POST', '/v1/sdk/reports', { headers: sdkH(pkLive, { 'Idempotency-Key': uuid() }),
+    body: { ...payload, reporter: { ref: 'kasir_pk', name: 'Kasir PK' }, emergency_contacts: [{ name: 'Pak Joko', phone: pkPhone }, { name: 'Bu Rina', phone: pkPhone2 }] } });
+  const s2 = sos2.data.id as string;
+  await call('POST', `/v1/pk/reports/${s2}/responses`, { token: pkT, body: { action: 'terima' } });
+  const d1 = await call('GET', `/v1/pk/reports/${s2}`, { token: pkT });
+  const d2 = await call('GET', `/v1/pk/reports/${s2}`, { token: pkT2 });
+  ok(d1.data.handler?.is_me === true && d2.data.handler?.is_me === false && /Pak Joko/.test(d2.data.handler?.name)
+    && JSON.stringify(d2.data.actions) === JSON.stringify(['hubungi', 'catatan', 'ambil_alih']),
+    'PK: penanggung jawab = yang menerima; penerima lain hanya telepon/catatan/ambil alih');
+  const tangani2 = await call('POST', `/v1/pk/reports/${s2}/responses`, { token: pkT2, body: { action: 'tangani' } });
+  ok(tangani2.status === 409 && tangani2.data.error.code === 'handled_by_other' && /Pak Joko/.test(tangani2.data.error.message),
+    'PK: penerima lain tidak bisa mengubah status (pesan menyebut penanggung jawab)');
+  const catatan2 = await call('POST', `/v1/pk/reports/${s2}/responses`, { token: pkT2, body: { action: 'catatan', note: 'Saya juga ke sana' } });
+  ok(catatan2.status === 201, 'PK: penerima lain tetap bisa menulis catatan');
+  const alih = await call('POST', `/v1/pk/reports/${s2}/responses`, { token: pkT2, body: { action: 'ambil_alih', note: 'Pak Joko tidak di tempat' } });
+  const d1b = await call('GET', `/v1/pk/reports/${s2}`, { token: pkT });
+  const tangani1 = await call('POST', `/v1/pk/reports/${s2}/responses`, { token: pkT, body: { action: 'tangani' } });
+  ok(alih.status === 201 && alih.data.handler?.is_me === true && d1b.data.handler?.is_me === false && tangani1.status === 409,
+    'PK: ambil alih memindahkan penanggung jawab; penerima pertama kini terkunci');
+  const selesai2 = await call('POST', `/v1/pk/reports/${s2}/responses`, { token: pkT2, body: { action: 'selesai' } });
+  const sdk2 = await call('GET', `/v1/sdk/reports/${s2}`, { headers: sdkH(pkLive) });
+  ok(selesai2.data.status === 'selesai' && /Bu Rina/.test(sdk2.data.status_message ?? ''), 'PK: penanggung jawab baru menyelesaikan, pelapor melihat namanya');
+  const lst = await call('GET', '/v1/pk/reports?scope=me&limit=50', { token: pkT });
+  ok(lst.data.items.find((r: any) => r.id === s2)?.handler?.is_me === false, 'PK: daftar membawa penanggung jawab');
+  await call('POST', '/v1/pk/auth/logout', { token: pkT2 });
   await call('PUT', '/v1/sdk/contacts', { headers: sdkH(pkLive), body: { reporter: { ref: 'kasir_pk' }, contacts: [] } });
   await call('POST', '/v1/pk/auth/logout', { token: pkT });
   await call('POST', '/v1/pk/auth/logout', { token: pkSetup.data.token });

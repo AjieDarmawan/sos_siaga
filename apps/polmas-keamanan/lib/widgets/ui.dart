@@ -390,6 +390,14 @@ class ReportCard extends StatelessWidget {
                     icon: Icons.phone_outlined,
                     child: Text(fmtPhone(r.reporterPhone!), style: TextStyle(fontWeight: FontWeight.w700, color: context.brand)),
                   ),
+                if (r.handlerName != null && r.status != PkStatus.baru)
+                  _Kv(
+                    icon: Icons.verified_user_outlined,
+                    child: Text(
+                      r.handlerIsMe ? 'Ditangani oleh Anda' : 'Ditangani oleh ${officerName(r.handlerName)}',
+                      style: TextStyle(fontWeight: FontWeight.w700, color: r.handlerIsMe ? PK.greenDark : context.ink),
+                    ),
+                  ),
                 if (place.isNotEmpty || dist != null)
                   _Kv(
                     icon: Icons.location_on_outlined,

@@ -152,6 +152,10 @@ class Report {
   int get videoCount => ((raw['media'] as Map?)?['video'] as num?)?.toInt() ?? 0;
   int get imageCount => ((raw['media'] as Map?)?['image'] as num?)?.toInt() ?? 0;
   Map? get lastResponse => raw['last_response'] as Map?;
+
+  /// Penanggung jawab (penerima terakhir yang menekan Terima / Ambil alih); null bila belum ada.
+  String? get handlerName => (raw['handler'] as Map?)?['name'] as String?;
+  bool get handlerIsMe => (raw['handler'] as Map?)?['is_me'] == true;
   bool get isDemo => raw['is_demo'] == true;
 
   /// Foto bukti pertama (URL baca 15 menit) untuk gambar mini kartu; null bila tidak ada foto.

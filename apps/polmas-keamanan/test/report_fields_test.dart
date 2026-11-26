@@ -73,6 +73,16 @@ void main() {
     expect(find.textContaining('Belum ditanggapi', findRichText: true), findsOneWidget);
   });
 
+  testWidgets('kartu: penanggung jawab tampil (orang lain vs saya)', (tester) async {
+    final other = Report({..._sample().raw, 'handler': {'name': 'Bripka Andi Saputra (Unit R2-07)', 'is_me': false}});
+    await _pump(tester, ReportCard(r: other));
+    expect(find.text('Ditangani oleh Bripka Andi Saputra'), findsOneWidget);
+    final mine = Report({..._sample().raw, 'handler': {'name': 'Ajie', 'is_me': true}});
+    await _pump(tester, ReportCard(r: mine));
+    expect(find.text('Ditangani oleh Anda'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('tabel: 9 kolom header seperti contoh', (tester) async {
     await _pump(tester, ReportTable(items: [_sample(), _sample(phone: false)]), scale: 1);
     expect(tester.takeException(), isNull);

@@ -140,7 +140,8 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
       savedPhone = null;
       hasSavedPassword = false;
     }
-    _startPolling();
+    // Polling SOS masuk dimulai oleh HomeShell (startPolling) supaya layar panggilan selalu muncul di atas Beranda,
+    // tidak tertimpa navigasi login → Beranda.
     unawaited(_registerDevice());
     notifyListeners();
   }
@@ -262,7 +263,7 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
 
   // ------------------------------------------------------------ polling SOS masuk
 
-  void _startPolling() {
+  void startPolling() {
     _poll?.cancel();
     _poll = Timer.periodic(const Duration(seconds: 4), (_) => pollNow());
     pollNow();

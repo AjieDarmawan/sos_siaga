@@ -22,8 +22,13 @@ class _HomeShellState extends State<HomeShell> {
   @override
   void initState() {
     super.initState();
-    // Lokasi HP hanya untuk jarak ke lokasi laporan; tidak menentukan wilayah.
-    WidgetsBinding.instance.addPostFrameCallback((_) => AppScope.read(context).refreshPosition());
+    // Lokasi HP hanya untuk jarak ke lokasi laporan; tidak menentukan wilayah. Panggilan SOS masuk mulai dipantau
+    // setelah Beranda tampil, sehingga layar panggilan selalu di atasnya.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final s = AppScope.read(context);
+      s.refreshPosition();
+      s.startPolling();
+    });
   }
 
   void _go(int i) => setState(() => _visited.add(_i = i));

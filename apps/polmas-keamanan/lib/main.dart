@@ -55,7 +55,11 @@ class _PolmasAppState extends State<PolmasApp> {
             transitionsBuilder: (_, a, _, child) => FadeTransition(opacity: a, child: child),
           ),
         )
-        .whenComplete(() => _callOpen = null);
+        .whenComplete(() {
+          _callOpen = null;
+          // SOS lain yang menunggu (mis. pelapor menekan dua kali) langsung tampil setelah panggilan ini selesai.
+          widget.state.pollNow();
+        });
   }
 
   /// Sesi habis & login cepat gagal → kembali ke login.

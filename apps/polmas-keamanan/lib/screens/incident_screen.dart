@@ -89,6 +89,7 @@ class _IncidentScreenState extends State<IncidentScreen> {
     'tidak_valid': 'Laporan ditandai tidak valid',
     'catatan': 'Catatan terkirim ke pelapor',
     'hubungi': 'Panggilan dicatat',
+    'ambil_alih': 'Anda kini menangani laporan ini',
   };
 
   Future<void> _call() async {
@@ -108,7 +109,7 @@ class _IncidentScreenState extends State<IncidentScreen> {
   Future<void> _update() async {
     final note = _note.text.trim();
     final choices = [
-      for (final a in const ['terima', 'verifikasi', 'tangani', 'selesai', 'tidak_valid'])
+      for (final a in const ['terima', 'ambil_alih', 'verifikasi', 'tangani', 'selesai', 'tidak_valid'])
         if (_actions.contains(a)) a,
       if (_actions.contains('catatan') && note.isNotEmpty) 'catatan',
     ];
@@ -159,6 +160,7 @@ class _IncidentScreenState extends State<IncidentScreen> {
     'selesai': 'Selesai',
     'tidak_valid': 'Tidak valid',
     'catatan': 'Kirim catatan saja',
+    'ambil_alih': 'Ambil alih',
   };
   static const _actionHint = {
     'terima': 'Saya menerima laporan ini',
@@ -167,6 +169,7 @@ class _IncidentScreenState extends State<IncidentScreen> {
     'selesai': 'Kejadian sudah ditangani',
     'tidak_valid': 'Laporan palsu atau ganda',
     'catatan': 'Status tidak berubah',
+    'ambil_alih': 'Saya yang menangani laporan ini sekarang',
   };
   static const _actionIcon = {
     'terima': Icons.mark_email_read_outlined,
@@ -175,7 +178,23 @@ class _IncidentScreenState extends State<IncidentScreen> {
     'selesai': Icons.check_circle_outline_rounded,
     'tidak_valid': Icons.block_rounded,
     'catatan': Icons.chat_bubble_outline_rounded,
+    'ambil_alih': Icons.swap_horiz_rounded,
   };
+
+  Future<void> _takeOver() async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Ambil alih laporan?'),
+        content: Text('Laporan ini sedang ditangani ${officerName(Report(_d!).handlerName)}. Setelah diambil alih, Anda yang menangani dan pelapor diberi tahu.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Batal')),
+          FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Ambil alih')),
+        ],
+      ),
+    );
+    if (ok == true) await _respond('ambil_alih', note: _note.text.trim().isEmpty ? null : _note.text.trim());
+  }
 
   Future<void> _invalid() async {
     final ok = await showDialog<bool>(
@@ -282,6 +301,7 @@ class _IncidentScreenState extends State<IncidentScreen> {
               child: ListView(
                 padding: const EdgeInsets.fromLTRB(16, 14, 16, 20),
                 children: [
+                  if (r.handlerName != null) _HandlerBanner(r: r, canTakeOver: _actions.contains('ambil_alih'), onTakeOver: _takeOver),
                   if (loc != null)
                     Container(
                       clipBehavior: Clip.antiAlias,
@@ -898,4 +918,42 @@ Future<void> showCompletedCheck(BuildContext context) async {
       );
     },
   );
+}
+
+/// Spanduk penanggung jawab di atas peta: "Anda menangani laporan ini" (hijau) atau "Ditangani oleh X" + Ambil alih.
+class _HandlerBanner extends StatelessWidget {
+  const _HandlerBanner({required this.r, required this.canTakeOver, required this.onTakeOver});
+  final Report r;
+  final bool canTakeOver;
+  final VoidCallback onTakeOver;
+  @override
+  Widget build(BuildContext context) {
+    final me = r.handlerIsMe;
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.fromLTRB(14, 12, 10, 12),
+      decoration: BoxDecoration(
+        color: me ? const Color(0xFFD1FADF) : (context.isDark ? context.hairline : PK.navySoft),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Row(
+        children: [
+          Icon(me ? Icons.verified_user_rounded : Icons.shield_outlined, color: me ? PK.greenDark : PK.navy),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              me ? 'Anda menangani laporan ini' : 'Ditangani oleh ${officerName(r.handlerName)}',
+              style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w800, color: me ? PK.greenDark : PK.navy),
+            ),
+          ),
+          if (canTakeOver)
+            TextButton(
+              onPressed: onTakeOver,
+              style: TextButton.styleFrom(foregroundColor: PK.navy),
+              child: const Text('Ambil alih', style: TextStyle(fontWeight: FontWeight.w800)),
+            ),
+        ],
+      ),
+    );
+  }
 }
