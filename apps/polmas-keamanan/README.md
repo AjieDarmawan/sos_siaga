@@ -15,11 +15,11 @@ PRD & keputusan: [`docs/POLMAS_KEAMANAN.md`](../../docs/POLMAS_KEAMANAN.md). API
 pnpm migrate && pnpm dev:api      # restart API setelah mengubah .env (PK_FCM_SERVICE_ACCOUNT)
 pnpm seed:pk                      # data demo (butuh pnpm seed:demo sebelumnya)
 
-# HP Android via USB (API di laptop)
+# HP Android via USB (API di laptop: hanya perlu bila memakai API lokal)
 adb reverse tcp:4000 tcp:4000     # ulangi setiap kabel dicabut / HP restart
 cd apps/polmas-keamanan
-flutter run                       # default API_URL=http://localhost:4000
-flutter run --dart-define=API_URL=https://sos.tip2.co
+flutter run                       # default API_URL=https://sos.tip2.co (produksi)
+flutter run --dart-define=API_URL=http://localhost:4000   # API lokal
 ```
 
 Tanpa kabel: `flutter run --dart-define=API_URL=http://<IP-laptop>:4000` (HP & laptop satu Wi-Fi).
