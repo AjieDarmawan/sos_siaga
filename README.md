@@ -149,4 +149,4 @@ Event: `report.created`, `report.status_changed`, `report.cancelled`. Header `X-
 
 - **Polmas Digital** (penerima SOS): `apps/polmas-keamanan/scripts/build_release.sh aab|apk`. Build rilis selalu ke `https://sos.tip2.co`, HTTP biasa dimatikan, tanda tangan dari `android/key.properties`. Skrip menolak build bila server produksi belum bisa mengirim push (`/v1/pk/status`), project Firebase server ≠ `google-services.json`, atau (untuk `aab`) kunci unggah belum ada.
 - **tata-warga** (pelapor SOS, repo `polmas-tatawarga-mobile`): `scripts/build_release_siagasos.sh aab|apk`. Memakai `env/siagasos.prod.json` (tidak ikut git) dan mengecek kunci `pk_live_` diterima produksi untuk bundle `com.tip.rtku`, pilar Polmas terisi, dan push ke Polmas Digital aktif.
-- Server produksi wajib punya `PK_FCM_SERVICE_ACCOUNT` (path file atau isi JSON service account Firebase `siagasos-a61e9`), lalu restart API.
+- Server produksi wajib punya `PK_FCM_SERVICE_ACCOUNT` (isi JSON, `base64:<JSON>` satu baris, atau path file di luar repo) untuk service account Firebase `siagasos-a61e9`, lalu restart API. Cek: `GET /v1/pk/status` → `server_push: true`.

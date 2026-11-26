@@ -33,7 +33,10 @@ function loadAccount(profile: FcmProfile = POS_FCM, env = process.env): ServiceA
   const raw = (env[profile.env] ?? '').trim();
   let account: ServiceAccount | null;
   try {
-    account = raw ? (JSON.parse(raw.startsWith('{') ? raw : readFileSync(raw, 'utf8')) as ServiceAccount) : null;
+    // Tiga bentuk nilai env: isi JSON langsung, `base64:<JSON di-base64>` (satu baris, aman ditempel di panel hosting),
+    // atau path file JSON di server.
+    const json = raw.startsWith('{') ? raw : raw.startsWith('base64:') ? Buffer.from(raw.slice(7), 'base64').toString('utf8') : raw ? readFileSync(raw, 'utf8') : '';
+    account = json ? (JSON.parse(json) as ServiceAccount) : null;
     if (account && !(account.project_id && account.client_email && account.private_key)) throw new Error('field service account tidak lengkap');
   } catch (err) {
     logger.error({ err: (err as Error).message, env: profile.env }, 'service account FCM tidak bisa dibaca, push SOS nonaktif');
